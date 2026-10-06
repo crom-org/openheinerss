@@ -59,6 +59,7 @@ type ClaudeCodeHarness struct {
 	mu      sync.Mutex
 	mode    harness.Mode
 	cfg     harness.SessionConfig
+	env     []string
 	events  chan harness.Event
 	cmd     *exec.Cmd
 	stdin   io.WriteCloser
@@ -114,23 +115,20 @@ func (c *ClaudeCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig
 	c.ctx, c.cancel = context.WithCancel(ctx)
 	c.stopped = false
 
-	// Isola perfil em ~/.openheinerss/profiles/claude-<provider>
-	globalDir, _ := config.GetGlobalDir()
-	providerName := cfg.Provider
-	if providerName == "" {
-		providerName = "default"
-	}
-	profileDir := filepath.Join(globalDir, "profiles", fmt.Sprintf("claude-%s", providerName))
-	_ = os.MkdirAll(profileDir, 0755)
-
 	env := os.Environ()
 	env = append(env,
-		fmt.Sprintf("CLAUDE_CONFIG_DIR=%s", profileDir),
 		"DISABLE_AUTOUPDATER=1",
 		"DISABLE_PROMPT_CACHING=1",
 		"API_TIMEOUT_MS=600000",
 		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
 	)
+
+	globalDir, _ := config.GetGlobalDir()
+	if cfg.Provider != "" && cfg.Provider != "default" {
+		profileDir := filepath.Join(globalDir, "profiles", fmt.Sprintf("claude-%s", cfg.Provider))
+		_ = os.MkdirAll(profileDir, 0755)
+		env = append(env, fmt.Sprintf("CLAUDE_CONFIG_DIR=%s", profileDir))
+	}
 
 	if cfg.Model != "" {
 		env = append(env, fmt.Sprintf("ANTHROPIC_MODEL=%s", cfg.Model))
@@ -138,44 +136,38 @@ func (c *ClaudeCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig
 	for k, v := range cfg.Env {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
+	c.env = env
 
-	var cmd *exec.Cmd
 	if c.mode == harness.ModeSDK {
-		cmd = exec.CommandContext(c.ctx, "node", "-e", NodeWorkerScript)
-	} else {
-		// Modo CLI direto com flag de print/streaming quando apropriado
-		cmd = exec.CommandContext(c.ctx, "claude", "--print")
-	}
+		cmd := exec.CommandContext(c.ctx, "node", "-e", NodeWorkerScript)
+		cmd.Dir = cfg.CWD
+		cmd.Env = env
 
-	cmd.Dir = cfg.CWD
-	cmd.Env = env
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			return fmt.Errorf("falha ao criar stdin pipe: %w", err)
+		}
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return fmt.Errorf("falha ao criar stdout pipe: %w", err)
+		}
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
+			return fmt.Errorf("falha ao criar stderr pipe: %w", err)
+		}
 
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return fmt.Errorf("falha ao criar stdin pipe: %w", err)
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("falha ao criar stdout pipe: %w", err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return fmt.Errorf("falha ao criar stderr pipe: %w", err)
-	}
+		if err := cmd.Start(); err != nil {
+			return fmt.Errorf("falha ao iniciar processo do Claude Code: %w", err)
+		}
 
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("falha ao iniciar processo do Claude Code: %w", err)
-	}
+		c.cmd = cmd
+		c.stdin = stdin
 
-	c.cmd = cmd
-	c.stdin = stdin
+		// Goroutines de leitura e streaming
+		go c.readEvents(stdout)
+		go c.readStderr(stderr)
 
-	// Goroutines de leitura e streaming
-	go c.readEvents(stdout)
-	go c.readStderr(stderr)
-
-	// Se for modo SDK, envia handshake de inicialização
-	if c.mode == harness.ModeSDK {
+		// Se for modo SDK, envia handshake de inicialização
 		initPayload := map[string]interface{}{
 			"method": "init",
 			"params": map[string]interface{}{
@@ -196,11 +188,14 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.stopped || c.stdin == nil {
+	if c.stopped {
 		return fmt.Errorf("processo do Claude Code não está ativo")
 	}
 
 	if c.mode == harness.ModeSDK {
+		if c.stdin == nil {
+			return fmt.Errorf("stdin do Claude Code SDK indisponível")
+		}
 		payload := map[string]interface{}{
 			"method": "prompt",
 			"params": map[string]interface{}{
@@ -213,9 +208,63 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 		return err
 	}
 
-	// Modo CLI: escreve linha direta no terminal do subprocesso
-	_, err := fmt.Fprintf(c.stdin, "%s\n", text)
-	return err
+	// Modo CLI: executa claude -p com streaming em tempo real
+	sessID := c.cfg.SessionID
+	go func() {
+		c.emit(harness.Event{
+			Type: harness.EventThinking,
+			Payload: protocol.ThinkingParams{
+				SessionID: sessID,
+				Delta:     "Consultando Claude Code CLI...",
+			},
+		})
+
+		args := []string{"-p", text}
+		cmd := exec.CommandContext(c.ctx, "claude", args...)
+		cmd.Dir = c.cfg.CWD
+		cmd.Env = c.env
+
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			c.emit(harness.Event{
+				Type: harness.EventError,
+				Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()},
+			})
+			return
+		}
+
+		if err := cmd.Start(); err != nil {
+			c.emit(harness.Event{
+				Type: harness.EventError,
+				Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()},
+			})
+			return
+		}
+
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			c.emit(harness.Event{
+				Type: harness.EventText,
+				Payload: protocol.TextParams{
+					SessionID: sessID,
+					Delta:     line + "\n",
+				},
+			})
+		}
+
+		_ = cmd.Wait()
+
+		c.emit(harness.Event{
+			Type: harness.EventComplete,
+			Payload: protocol.CompleteParams{
+				SessionID: sessID,
+				Reason:    "completed",
+			},
+		})
+	}()
+
+	return nil
 }
 
 func (c *ClaudeCodeHarness) RespondPermission(ctx context.Context, reqID string, allow bool, message string) error {
