@@ -16,3 +16,8 @@ bin/
 
 # Dependências Node
 node_modules/
+
+# Artefatos Python
+*.egg-info/
+build/
+*.whl
