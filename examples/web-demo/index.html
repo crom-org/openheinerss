@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Openheinerss - Web Playground</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --primary: #38bdf8;
+      --success: #4ade80;
+      --warning: #fbbf24;
+      --danger: #f87171;
+    }
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 90vh;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 { margin: 0; font-size: 1.4rem; color: var(--primary); }
+    .status { font-size: 0.9rem; padding: 4px 10px; border-radius: 12px; }
+    .status.connected { background: #065f46; color: var(--success); }
+    .status.disconnected { background: #7f1d1d; color: var(--danger); }
+    
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+      margin: 15px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-right: 8px;
+    }
+    .msg {
+      padding: 10px 14px;
+      border-radius: 8px;
+      max-width: 80%;
+      line-height: 1.5;
+    }
+    .msg.user { align-self: flex-end; background: #0284c7; color: white; }
+    .msg.assistant { align-self: flex-start; background: var(--card); border: 1px solid var(--border); }
+    .thinking { font-style: italic; color: #cbd5e1; background: #1e1b4b; border-left: 3px solid var(--primary); padding: 8px 12px; border-radius: 4px; font-size: 0.9rem; margin-bottom: 6px; }
+    .tool-card { background: #1e293b; border: 1px solid var(--warning); padding: 8px 12px; border-radius: 6px; font-family: monospace; font-size: 0.85rem; }
+    
+    .perm-modal {
+      background: #451a03;
+      border: 1px solid var(--warning);
+      padding: 14px;
+      border-radius: 8px;
+      margin: 10px 0;
+    }
+    .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+    button {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .btn-allow { background: var(--success); color: #022c22; }
+    .btn-deny { background: var(--danger); color: #450a0a; }
+    .btn-send { background: var(--primary); color: #082f49; }
+
+    footer { display: flex; gap: 10px; }
+    input[type="text"] {
+      flex: 1;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: white;
+      font-size: 1rem;
+    }
+    select {
+      background: var(--card);
+      color: white;
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <h1>🎼 Openheinerss Maestro Web Playground</h1>
+      <small style="color: var(--muted)">Conectado via WebSocket ao binário Go Core</small>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <select id="harnessSelect">
+        <option value="mock">Harness: Mock (Simulador)</option>
+        <option value="claude-code">Harness: Claude Code</option>
+        <option value="opencode">Harness: OpenCode</option>
+      </select>
+      <div id="status" class="status disconnected">Desconectado</div>
+    </div>
+  </header>
+
+  <div id="chat"></div>
+
+  <div id="permContainer"></div>
+
+  <footer>
+    <input type="text" id="promptInput" placeholder="Digite uma instrução (ex: Analise o repositório)..." />
+    <button class="btn-send" id="sendBtn">Enviar</button>
+  </footer>
+
+  <script>
+    let ws;
+    let sessionId = null;
+    let reqId = 1;
+
+    const chat = document.getElementById("chat");
+    const statusDiv = document.getElementById("status");
+    const input = document.getElementById("promptInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const harnessSelect = document.getElementById("harnessSelect");
+    const permContainer = document.getElementById("permContainer");
+
+    function connect() {
+      ws = new WebSocket("ws://127.0.0.1:4799");
+      
+      ws.onopen = () => {
+        statusDiv.textContent = "Conectado (:4799)";
+        statusDiv.className = "status connected";
+      };
+
+      ws.onclose = () => {
+        statusDiv.textContent = "Desconectado";
+        statusDiv.className = "status disconnected";
+        setTimeout(connect, 3000);
+      };
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        handleMessage(msg);
+      };
+    }
+
+    function sendRPC(method, params = {}) {
+      const id = reqId++;
+      ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
+      return id;
+    }
+
+    async function ensureSession() {
+      if (sessionId) return sessionId;
+      const h = harnessSelect.value;
+      sendRPC("session.create", {
+        harness: h,
+        cwd: "/",
+        provider: "mock-local"
+      });
+    }
+
+    function handleMessage(msg) {
+      if (msg.result && msg.result.sessionId) {
+        sessionId = msg.result.sessionId;
+        appendMsg("system", `🚀 Sessão iniciada: ${sessionId}`);
+      }
+
+      if (msg.method) {
+        const p = msg.params || {};
+        switch (msg.method) {
+          case "agent.thinking":
+            appendThinking(p.delta);
+            break;
+          case "agent.text":
+            appendAssistantText(p.delta);
+            break;
+          case "agent.tool_call":
+            appendMsg("tool", `⚡ Executando ${p.tool}: ${JSON.stringify(p.input)}`);
+            break;
+          case "agent.tool_result":
+            appendMsg("tool", `✔ Resultado: ${p.output}`);
+            break;
+          case "agent.permission_request":
+            renderPermission(p);
+            break;
+          case "agent.complete":
+            appendMsg("system", `🏁 Turno finalizado (${p.reason || 'ok'})`);
+            break;
+        }
+      }
+    }
+
+    let currentAssistantMsg = null;
+    function appendAssistantText(delta) {
+      if (!currentAssistantMsg) {
+        currentAssistantMsg = document.createElement("div");
+        currentAssistantMsg.className = "msg assistant";
+        chat.appendChild(currentAssistantMsg);
+      }
+      currentAssistantMsg.textContent += delta;
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function appendThinking(delta) {
+      const div = document.createElement("div");
+      div.className = "thinking";
+      div.textContent = "🤔 " + delta;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function appendMsg(type, text) {
+      currentAssistantMsg = null;
+      const div = document.createElement("div");
+      div.className = `msg ${type}`;
+      div.textContent = text;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function renderPermission(p) {
+      permContainer.innerHTML = `
+        <div class="perm-modal">
+          <b>⚠️ Permissão Necessária:</b> O agente deseja executar <code>${p.command || p.tool}</code>
+          <div class="btn-group">
+            <button class="btn-allow" onclick="respondPermission('${p.requestId}', true)">Autorizar</button>
+            <button class="btn-deny" onclick="respondPermission('${p.requestId}', false)">Negar</button>
+          </div>
+        </div>
+      `;
+    }
+
+    window.respondPermission = (requestId, allow) => {
+      permContainer.innerHTML = "";
+      sendRPC("session.permission_respond", {
+        sessionId,
+        requestId,
+        decision: allow ? "allow" : "deny"
+      });
+    };
+
+    sendBtn.addEventListener("click", () => {
+      const text = input.value.trim();
+      if (!text) return;
+      currentAssistantMsg = null;
+      appendMsg("user", text);
+      input.value = "";
+      ensureSession();
+      setTimeout(() => {
+        sendRPC("session.prompt", { sessionId, text });
+      }, 100);
+    });
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") sendBtn.click();
+    });
+
+    connect();
+  </script>
+</body>
+</html>
