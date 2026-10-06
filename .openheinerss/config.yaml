@@ -1,0 +1,5 @@
+# Openheinerss Project Configuration
+version: "1.0"
+default_harness: "mock"
+default_mode: "sdk"
+permission_mode: "ask"

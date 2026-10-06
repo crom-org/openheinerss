@@ -1,0 +1,15 @@
+# Binários Go
+/openheinerss
+/openheinerss.exe
+dist/
+bin/
+
+# Sessões locais e checkpoints
+.openheinerss/sessions/
+.openheinerss/checkpoints/
+
+# IDEs e SO
+.vscode/
+.idea/
+.DS_Store
+*.swp

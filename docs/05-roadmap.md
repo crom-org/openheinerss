@@ -5,7 +5,7 @@ Plano mestre de fases refinado para a construção do projeto, integrando os apr
 ---
 
 ## Fase 1: Fundação do Go Core, Mock Engine & Workspace `.openheinerss` (Semanas 1 e 2)
-- [ ] Inicializar o módulo Go (`go mod init github.com/openheinerss/openheinerss`).
+- [ ] Inicializar o módulo Go (`go mod init github.com/crom-org/openheinerss`).
 - [ ] Estrutura base de pacotes (`cmd/openheinerss`, `pkg/protocol`, `pkg/server`, `pkg/session`, `pkg/harness`, `pkg/config`).
 - [ ] Implementar a estrutura de comandos CLI com Cobra/pflag:
   - `openheinerss serve --stdio` (transporte via pipes padrão)

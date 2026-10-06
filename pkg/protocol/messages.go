@@ -1,0 +1,145 @@
+package protocol
+
+// Métodos de requisição do cliente para o servidor
+const (
+	MethodSessionCreate            = "session.create"
+	MethodSessionPrompt            = "session.prompt"
+	MethodSessionPermissionRespond = "session.permission_respond"
+	MethodSessionAbort             = "session.abort"
+	MethodSessionList              = "session.list"
+	MethodDoctorCheck              = "doctor.check"
+	MethodCatalogList              = "catalog.list"
+)
+
+// Attachment representa anexos de imagem ou arquivos no prompt
+type Attachment struct {
+	MediaType string `json:"mediaType"` // ex: "image/png"
+	Data      string `json:"data"`      // base64
+}
+
+// SessionOptions opções extras de configuração da sessão
+type SessionOptions struct {
+	Effort         string                 `json:"effort,omitempty"`          // "low", "medium", "high", "ultracode"
+	PermissionMode string                 `json:"permissionMode,omitempty"`  // "ask", "always_allow", "plan"
+	SystemPrompt   string                 `json:"systemPrompt,omitempty"`
+	Extra          map[string]interface{} `json:"extra,omitempty"`
+}
+
+// SessionCreateParams parâmetros para session.create
+type SessionCreateParams struct {
+	Harness  string            `json:"harness"`            // "mock", "claude-code", "opencode", etc.
+	Mode     string            `json:"mode,omitempty"`     // "sdk", "cli", etc.
+	CWD      string            `json:"cwd"`                // Diretório de trabalho
+	Provider string            `json:"provider,omitempty"` // "anthropic", "openrouter", "deepseek", etc.
+	Model    string            `json:"model,omitempty"`    // Nome do modelo
+	Env      map[string]string `json:"env,omitempty"`      // Variáveis de ambiente extras
+	Options  SessionOptions    `json:"options,omitempty"`
+}
+
+// SessionCreateResult retorno de session.create
+type SessionCreateResult struct {
+	SessionID string `json:"sessionId"`
+	Harness   string `json:"harness"`
+	Mode      string `json:"mode"`
+	CWD       string `json:"cwd"`
+	Status    string `json:"status"` // "ready", "running"
+}
+
+// SessionPromptParams parâmetros para session.prompt
+type SessionPromptParams struct {
+	SessionID   string       `json:"sessionId"`
+	Text        string       `json:"text"`
+	Attachments []Attachment `json:"images,omitempty"`
+}
+
+// SessionPromptResult retorno de session.prompt
+type SessionPromptResult struct {
+	SessionID string `json:"sessionId"`
+	Accepted  bool   `json:"accepted"`
+}
+
+// PermissionRespondParams parâmetros para session.permission_respond
+type PermissionRespondParams struct {
+	SessionID string `json:"sessionId"`
+	RequestID string `json:"requestId"`
+	Decision  string `json:"decision"` // "allow" ou "deny"
+	Message   string `json:"message,omitempty"`
+}
+
+// PermissionRespondResult retorno de session.permission_respond
+type PermissionRespondResult struct {
+	SessionID string `json:"sessionId"`
+	RequestID string `json:"requestId"`
+	Resolved  bool   `json:"resolved"`
+}
+
+// SessionAbortParams parâmetros para session.abort
+type SessionAbortParams struct {
+	SessionID string `json:"sessionId"`
+}
+
+// SessionAbortResult retorno de session.abort
+type SessionAbortResult struct {
+	SessionID string `json:"sessionId"`
+	Aborted   bool   `json:"aborted"`
+}
+
+// SessionInfo resumo de uma sessão para listagem
+type SessionInfo struct {
+	SessionID string `json:"sessionId"`
+	Harness   string `json:"harness"`
+	Mode      string `json:"mode"`
+	CWD       string `json:"cwd"`
+	Running   bool   `json:"running"`
+	CreatedAt string `json:"createdAt"`
+}
+
+// SessionListResult retorno de session.list
+type SessionListResult struct {
+	Sessions []SessionInfo `json:"sessions"`
+}
+
+// DoctorCheckParams parâmetros para doctor.check
+type DoctorCheckParams struct {
+	Harness string `json:"harness,omitempty"`
+}
+
+// DoctorItem resultado da checagem de um componente do ambiente
+type DoctorItem struct {
+	Name         string `json:"name"`
+	Installed    bool   `json:"installed"`
+	Version      string `json:"version,omitempty"`
+	Path         string `json:"path,omitempty"`
+	Required     bool   `json:"required"`
+	SuggestedFix string `json:"suggestedFix,omitempty"`
+}
+
+// DoctorCheckResult retorno de doctor.check
+type DoctorCheckResult struct {
+	Status  string       `json:"status"` // "ok", "warning", "error"
+	Items   []DoctorItem `json:"items"`
+	Summary string       `json:"summary"`
+}
+
+// ProviderInfo informação sobre provedor compatível
+type ProviderInfo struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Endpoint    string   `json:"endpoint,omitempty"`
+	Models      []string `json:"models,omitempty"`
+	RequiresKey bool     `json:"requiresKey"`
+}
+
+// HarnessCatalogItem item do catálogo de harnesses
+type HarnessCatalogItem struct {
+	ID                 string         `json:"id"`
+	DisplayName        string         `json:"displayName"`
+	SupportedModes     []string       `json:"supportedModes"`
+	SupportedProtocols []string       `json:"supportedProtocols"`
+	DefaultProviders   []ProviderInfo `json:"defaultProviders,omitempty"`
+}
+
+// CatalogListResult retorno de catalog.list
+type CatalogListResult struct {
+	Harnesses []HarnessCatalogItem `json:"harnesses"`
+}
