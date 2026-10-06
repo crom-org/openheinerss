@@ -13,3 +13,6 @@ bin/
 .idea/
 .DS_Store
 *.swp
+
+# Dependências Node
+node_modules/

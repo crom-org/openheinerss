@@ -129,14 +129,17 @@ export class Openheinerss extends EventEmitter {
       }
     });
 
-    this.proc.on("error", (err) => {
+    this.proc.on("error", (err: Error) => {
       this.emit("error", { message: `Falha ao iniciar binário openheinerss: ${err.message}` });
     });
   }
 
   private async initWebSocket(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const WebSocketImpl = typeof WebSocket !== "undefined" ? WebSocket : require("ws");
+      const WebSocketImpl = typeof WebSocket !== "undefined" ? WebSocket : (globalThis as any).WebSocket;
+      if (!WebSocketImpl) {
+        return reject(new Error("Ambiente WebSocket não encontrado"));
+      }
       this.ws = new WebSocketImpl(this.config.wsEndpoint!);
 
       this.ws.onopen = () => resolve();
