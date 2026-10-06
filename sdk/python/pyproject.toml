@@ -7,7 +7,17 @@ name = "openheinerss"
 version = "0.1.0"
 description = "SDK oficial Python para o orquestrador Openheinerss"
 authors = [{ name = "crom-org" }]
+license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = []
-keywords = ["ai", "agents", "claude-code", "opencode", "jsonrpc"]
+keywords = ["ai", "agents", "claude-code", "opencode", "jsonrpc", "openheinerss"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/crom-org/openheinerss"
+Repository = "https://github.com/crom-org/openheinerss"

@@ -3,6 +3,8 @@
   "description": "SDK oficial em PHP para o maestro Openheinerss",
   "type": "library",
   "license": "MIT",
+  "homepage": "https://github.com/crom-org/openheinerss",
+  "keywords": ["ai", "agents", "claude-code", "opencode", "orchestration", "openheinerss"],
   "authors": [
     {
       "name": "crom-org",

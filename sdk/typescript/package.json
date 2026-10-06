@@ -4,10 +4,30 @@
   "description": "SDK oficial em TypeScript/JavaScript para o maestro Openheinerss",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crom-org/openheinerss.git",
+    "directory": "sdk/typescript"
+  },
   "scripts": {
     "build": "tsc"
   },
-  "keywords": ["ai", "agents", "claude-code", "opencode", "orchestration", "json-rpc"],
+  "keywords": [
+    "ai",
+    "agents",
+    "claude-code",
+    "opencode",
+    "orchestration",
+    "json-rpc",
+    "openheinerss"
+  ],
   "author": "crom-org",
   "license": "MIT",
   "peerDependencies": {
