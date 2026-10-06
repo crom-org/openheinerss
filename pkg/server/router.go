@@ -7,6 +7,7 @@ import (
 
 	"github.com/crom-org/openheinerss/pkg/doctor"
 	"github.com/crom-org/openheinerss/pkg/harness"
+	"github.com/crom-org/openheinerss/pkg/mcp"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 	"github.com/crom-org/openheinerss/pkg/session"
 )
@@ -81,6 +82,37 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) protoc
 		_ = json.Unmarshal(req.Params, &params)
 		doc := doctor.CheckEnvironment(params.Harness)
 		return protocol.NewResponse(req.ID, doc)
+
+	case protocol.MethodMCPList:
+		var params protocol.MCPListParams
+		_ = json.Unmarshal(req.Params, &params)
+		if params.CWD == "" {
+			params.CWD = "."
+		}
+		list, err := mcp.GetHub().ListServers(params.CWD)
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
+		}
+		return protocol.NewResponse(req.ID, map[string]interface{}{"servers": list})
+
+	case protocol.MethodMCPAdd:
+		var params protocol.MCPAddParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para mcp.add", nil)
+		}
+		if params.CWD == "" {
+			params.CWD = "."
+		}
+		cfg := mcp.ServerConfig{
+			Command: params.Command,
+			Args:    params.Args,
+			Env:     params.Env,
+			URL:     params.URL,
+		}
+		if err := mcp.GetHub().RegisterServer(params.CWD, params.Name, cfg); err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
+		}
+		return protocol.NewResponse(req.ID, map[string]interface{}{"status": "success", "name": params.Name})
 
 	default:
 		return protocol.NewErrorResponse(req.ID, protocol.CodeMethodNotFound, fmt.Sprintf("Método '%s' não encontrado", req.Method), nil)

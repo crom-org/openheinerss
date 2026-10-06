@@ -69,5 +69,23 @@ func TestStdioServerProtocol(t *testing.T) {
 		t.Fatalf("erro inesperado na resposta 2: %+v", resp2.Error)
 	}
 
+	// 3. Enviar mcp.list
+	req3 := `{"jsonrpc":"2.0","id":3,"method":"mcp.list"}` + "\n"
+	if _, err := inW.Write([]byte(req3)); err != nil {
+		t.Fatalf("falha ao escrever no pipe: %v", err)
+	}
+
+	if !scanner.Scan() {
+		t.Fatalf("não recebeu resposta para mcp.list: %v", scanner.Err())
+	}
+
+	var resp3 protocol.Response
+	if err := json.Unmarshal(scanner.Bytes(), &resp3); err != nil {
+		t.Fatalf("falha ao parsear resposta 3: %v", err)
+	}
+	if resp3.Error != nil {
+		t.Fatalf("erro inesperado na resposta 3: %+v", resp3.Error)
+	}
+
 	_ = inW.Close()
 }

@@ -9,7 +9,24 @@ const (
 	MethodSessionList              = "session.list"
 	MethodDoctorCheck              = "doctor.check"
 	MethodCatalogList              = "catalog.list"
+	MethodMCPList                  = "mcp.list"
+	MethodMCPAdd                   = "mcp.add"
 )
+
+// MCPListParams parâmetros para mcp.list
+type MCPListParams struct {
+	CWD string `json:"cwd,omitempty"`
+}
+
+// MCPAddParams parâmetros para mcp.add
+type MCPAddParams struct {
+	CWD     string            `json:"cwd,omitempty"`
+	Name    string            `json:"name"`
+	Command string            `json:"command,omitempty"`
+	Args    []string          `json:"args,omitempty"`
+	Env     map[string]string `json:"env,omitempty"`
+	URL     string            `json:"url,omitempty"`
+}
 
 // Attachment representa anexos de imagem ou arquivos no prompt
 type Attachment struct {
