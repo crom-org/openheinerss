@@ -1,0 +1,21 @@
+{
+  "name": "@openheinerss/sdk",
+  "version": "0.1.0",
+  "description": "SDK oficial em TypeScript/JavaScript para o maestro Openheinerss",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": ["ai", "agents", "claude-code", "opencode", "orchestration", "json-rpc"],
+  "author": "crom-org",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  }
+}

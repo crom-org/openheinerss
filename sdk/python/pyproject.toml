@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openheinerss"
+version = "0.1.0"
+description = "SDK oficial Python para o orquestrador Openheinerss"
+authors = [{ name = "crom-org" }]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+keywords = ["ai", "agents", "claude-code", "opencode", "jsonrpc"]

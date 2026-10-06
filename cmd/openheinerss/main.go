@@ -14,7 +14,10 @@ import (
 
 	"github.com/crom-org/openheinerss/pkg/config"
 	"github.com/crom-org/openheinerss/pkg/doctor"
+	_ "github.com/crom-org/openheinerss/pkg/harness/claudecode"
 	_ "github.com/crom-org/openheinerss/pkg/harness/mock"
+	_ "github.com/crom-org/openheinerss/pkg/harness/opencode"
+	"github.com/crom-org/openheinerss/pkg/mcp"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 	"github.com/crom-org/openheinerss/pkg/server"
 	"github.com/crom-org/openheinerss/pkg/session"
@@ -37,6 +40,7 @@ Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC d
 	rootCmd.AddCommand(newDoctorCmd())
 	rootCmd.AddCommand(newInitCmd())
 	rootCmd.AddCommand(newRunCmd())
+	rootCmd.AddCommand(newMcpCmd())
 	rootCmd.AddCommand(newVersionCmd())
 
 	if err := rootCmd.Execute(); err != nil {
@@ -233,6 +237,63 @@ func newRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&model, "model", "", "Nome do modelo")
 
 	return cmd
+}
+
+func newMcpCmd() *cobra.Command {
+	mcpCmd := &cobra.Command{
+		Use:   "mcp",
+		Short: "Gerencia os servidores MCP (Model Context Protocol) do projeto",
+	}
+
+	mcpCmd.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "Lista os servidores MCP configurados em .openheinerss/mcp.json",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, _ := os.Getwd()
+			servers, err := mcp.GetHub().ListServers(cwd)
+			if err != nil {
+				return err
+			}
+			if len(servers) == 0 {
+				fmt.Println("Nenhum servidor MCP configurado no projeto (.openheinerss/mcp.json).")
+				return nil
+			}
+			fmt.Println("🔌 Servidores MCP Configurados:")
+			for _, s := range servers {
+				target := s.Command
+				if s.Type == "sse" {
+					target = s.URL
+				}
+				fmt.Printf("   • %-15s [%s] %s\n", s.Name, s.Type, target)
+			}
+			return nil
+		},
+	})
+
+	mcpCmd.AddCommand(&cobra.Command{
+		Use:                "add [nome] [comando] [argumentos...]",
+		Short:              "Registra um novo servidor MCP local no projeto",
+		DisableFlagParsing: true,
+		Args:               cobra.MinimumNArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, _ := os.Getwd()
+			name := args[0]
+			command := args[1]
+			mcpArgs := args[2:]
+
+			cfg := mcp.ServerConfig{
+				Command: command,
+				Args:    mcpArgs,
+			}
+			if err := mcp.GetHub().RegisterServer(cwd, name, cfg); err != nil {
+				return err
+			}
+			fmt.Printf("✅ Servidor MCP '%s' registrado com sucesso em .openheinerss/mcp.json!\n", name)
+			return nil
+		},
+	})
+
+	return mcpCmd
 }
 
 func newVersionCmd() *cobra.Command {
