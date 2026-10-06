@@ -186,15 +186,28 @@ openheinerss mcp add sqlite uvx mcp-server-sqlite --db-path dev.db
 
 ---
 
-## 📚 Documentação Técnica
+## 📚 Documentação Técnica Completa (`documentacao/`)
 
-Explore os guias detalhados na pasta [`docs/`](./docs):
+Acesse a documentação completa, detalhada e estruturada na pasta [`documentacao/`](./documentacao):
 
-- [**00 - Visão Geral & Manifesto**](./docs/00-overview.md)
-- [**01 - Arquitetura do Sistema**](./docs/01-architecture.md)
-- [**02 - Especificação do Protocolo**](./docs/02-protocol-spec.md)
-- [**03 - Adaptadores de Harness (Mock, Claude Code, OpenCode, Codex, AGY, Aider)**](./docs/03-harness-adapters.md)
-- [**04 - Guia de SDKs Oficiais e Multilinguagem**](./docs/04-sdk-any-language.md)
-- [**05 - Roadmap de Desenvolvimento**](./docs/05-roadmap.md)
+| Capítulo | Guia | O que você encontrará |
+| :---: | :--- | :--- |
+| **01** | [**Visão Geral & Manifesto**](./documentacao/01-visao-geral-e-manifesto.md) | O propósito do Openheinerss, problemas de fragmentação de CLIs, vantagens de Go e princípios centrais. |
+| **02** | [**Arquitetura & Design do Sistema**](./documentacao/02-arquitetura-e-design.md) | Concorrência com Goroutines/canais, STDIO vs WebSocket (`:4799`), ciclo de vida de sessões e diretório `.openheinerss/`. |
+| **03** | [**Especificação do Protocolo JSON-RPC 2.0**](./documentacao/03-especificacao-do-protocolo-rpc.md) | Todos os métodos (`session.start`, `session.prompt`, `session.permission`, `session.abort`, `session.resume`, etc.) e eventos de streaming. |
+| **04** | [**Guia Completo dos 6 Harnesses**](./documentacao/04-guia-completo-de-harnesses.md) | Detalhamento exaustivo de `mock`, `claude-code`, `opencode`, `codex`, `agy` e `aider`. |
+| **05** | [**Cache, Otimização de Tokens & Modelos Locais**](./documentacao/05-cache-otimizacao-e-modelos-locais.md) | Prompt caching, bypass de provedores de terceiros, KV-cache de GPU no Ollama/vLLM e tutorial passo a passo offline. |
+| **06** | [**Hub Centralizado de MCP**](./documentacao/06-hub-mcp-e-extensibilidade.md) | Gerenciamento de ferramentas via `.openheinerss/mcp.json`, comandos `openheinerss mcp add/list` e exemplos com SQLite/Git. |
+| **07** | [**Segurança, Permissões & Checkpoints**](./documentacao/07-checkpoints-seguranca-e-permissoes.md) | Modos de permissão (`prompt`, `auto_allow`, `deny`), níveis de severidade, handshake síncrono e snapshots/rollback de arquivos. |
+| **08** | [**Guia de SDKs Oficiais**](./documentacao/08-sdks-oficiais.md) | Tutoriais de integração para TypeScript/Node/React, PHP/Laravel e Python com exemplos prontos para rodar. |
+| **09** | [**Manual de Referência do CLI Go**](./documentacao/09-manual-do-cli.md) | Referência de todos os comandos do binário (`doctor`, `init`, `run`, `serve`, `mcp`, `version`), flags e variáveis de ambiente. |
+| **10** | [**Guia de Desenvolvimento & Extensão**](./documentacao/10-guia-de-desenvolvimento-e-extensao.md) | Como implementar um novo adaptador de Harness em Go, rodar testes automatizados e contribuir com a organização [crom-org](https://github.com/crom-org). |
+
+---
+
+## 📄 Licença
+
+Distribuído sob a licença MIT. Desenvolvido com orgulho pela organização [crom-org](https://github.com/crom-org).
+
 
 
