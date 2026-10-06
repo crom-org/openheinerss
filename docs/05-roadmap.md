@@ -34,14 +34,18 @@ Plano mestre de fases refinado para a construção do projeto, integrando os apr
 
 ---
 
-## Fase 3: OpenCode Dual Mode & Catálogo Dinâmico de Provedores (Semanas 5 e 6)
+## Fase 3: OpenCode Dual Mode, Expansão de Motores & Catálogo Dinâmico (Semanas 5 e 6)
 - [x] **OpenCode - Modo CLI & API (`opencode`)**:
   - Adaptador para o OpenCode Interpreter / CLI.
   - Conexão direta com modelos OpenAI, DeepSeek, Ollama e Groq sem conversão obrigatória para Anthropic.
+- [x] **Expansão do Ecossistema de Harnesses**:
+  - **OpenAI Codex / Assistants (`codex`)**: Gestão de Threads, Runs e RunSteps.
+  - **Google Antigravity (`agy`)**: Integração com a suíte AGY CLI e raciocínio Gemini.
+  - **Aider Pair Programming (`aider`)**: Execução com auto-commit, repomap e suporte nativo a Ollama.
 - [x] **Catálogo Dinâmico de Modelos (`catalog.list`)**:
   - Detecção e exposição dos provedores e modelos válidos por harness.
 - [x] **Harness Selector & Alternância Dinâmica**:
-  - Troca de motor na criação de sessão ou migração de contexto entre Claude Code e OpenCode.
+  - Troca de motor na criação de sessão ou migração de contexto entre todos os 6 harnesses.
 
 ---
 

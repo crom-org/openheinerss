@@ -14,7 +14,10 @@ import (
 
 	"github.com/crom-org/openheinerss/pkg/config"
 	"github.com/crom-org/openheinerss/pkg/doctor"
+	_ "github.com/crom-org/openheinerss/pkg/harness/agy"
+	_ "github.com/crom-org/openheinerss/pkg/harness/aider"
 	_ "github.com/crom-org/openheinerss/pkg/harness/claudecode"
+	_ "github.com/crom-org/openheinerss/pkg/harness/codex"
 	_ "github.com/crom-org/openheinerss/pkg/harness/mock"
 	_ "github.com/crom-org/openheinerss/pkg/harness/opencode"
 	"github.com/crom-org/openheinerss/pkg/mcp"
