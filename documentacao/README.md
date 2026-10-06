@@ -1,5 +1,9 @@
 # 📚 Documentação Oficial do Openheinerss
 
+<p align="center">
+  <img src="../logo.jpg" alt="Openheinerss Logo" width="380" />
+</p>
+
 Bem-vindo à documentação técnica e arquitetural completa do **Openheinerss** (OpenHarness), o maestro universal de orquestração de **AI Coding Agents** desenvolvido pela organização [crom-org](https://github.com/crom-org).
 
 ---

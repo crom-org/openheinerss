@@ -1,6 +1,12 @@
 # 01 - Visão Geral & Manifesto do Openheinerss
 
-> **"Regendo a orquestra universal de agentes e harnesses de IA."**
+<p align="center">
+  <img src="../logo.jpg" alt="Openheinerss Logo" width="340" />
+</p>
+
+<p align="center">
+  <strong>"Regendo a orquestra universal de agentes e harnesses de IA."</strong>
+</p>
 
 ---
 

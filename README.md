@@ -1,14 +1,13 @@
 # 🎼 Openheinerss (OpenHarness)
 
-> **"Regendo a orquestra universal de agentes e harnesses de IA."**
-
 <p align="center">
-  <img src="./logo.jpg" alt="Openheinerss Maestro" width="380" />
+  <img src="logo.jpg" alt="Openheinerss Logo Principal" width="320" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="logo_alt.jpg" alt="Openheinerss Logo Partitura" width="320" />
 </p>
 
 <p align="center">
-  <a href="./logo_ascii.txt"><b>[Ver Logo em Arte ASCII Principal]</b></a> • 
-  <a href="./logo_alt_ascii.txt"><b>[Ver Logo em Arte ASCII Alternativa]</b></a>
+  <strong>"Regendo a orquestra universal de agentes e harnesses de IA."</strong>
 </p>
 
 O **Openheinerss** é um maestro universal de orquestração de **AI Coding Agents** desenvolvido pela organização [crom-org](https://github.com/crom-org).
