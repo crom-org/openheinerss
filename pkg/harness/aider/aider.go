@@ -46,6 +46,7 @@ type AiderHarness struct {
 	mu      sync.Mutex
 	mode    harness.Mode
 	cfg     harness.SessionConfig
+	env     []string
 	events  chan harness.Event
 	cmd     *exec.Cmd
 	stdin   io.WriteCloser
@@ -89,37 +90,11 @@ func (a *AiderHarness) Start(ctx context.Context, cfg harness.SessionConfig) err
 	a.ctx, a.cancel = context.WithCancel(ctx)
 	a.stopped = false
 
-	args := []string{"--no-git", "--yes"}
-	if cfg.Model != "" {
-		args = append(args, "--model", cfg.Model)
-	}
-
-	cmd := exec.CommandContext(a.ctx, "aider", args...)
-	cmd.Dir = cfg.CWD
-
 	env := os.Environ()
 	for k, v := range cfg.Env {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
-	cmd.Env = env
-
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return fmt.Errorf("falha ao criar stdin para aider: %w", err)
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("falha ao criar stdout para aider: %w", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("falha ao iniciar aider: %w", err)
-	}
-
-	a.cmd = cmd
-	a.stdin = stdin
-
-	go a.readEvents(stdout)
+	a.env = env
 
 	return nil
 }
@@ -128,12 +103,70 @@ func (a *AiderHarness) SendPrompt(ctx context.Context, text string, attachments 
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.stopped || a.stdin == nil {
+	if a.stopped {
 		return fmt.Errorf("processo do aider não está ativo")
 	}
 
-	_, err := fmt.Fprintf(a.stdin, "%s\n", text)
-	return err
+	sessID := a.cfg.SessionID
+	go func() {
+		a.emit(harness.Event{
+			Type: harness.EventThinking,
+			Payload: protocol.ThinkingParams{
+				SessionID: sessID,
+				Delta:     "Aider analisando repositório e histórico...",
+			},
+		})
+
+		args := []string{"--no-git", "--yes", "--message", text}
+		if a.cfg.Model != "" {
+			args = append(args, "--model", a.cfg.Model)
+		}
+
+		cmd := exec.CommandContext(a.ctx, "aider", args...)
+		cmd.Dir = a.cfg.CWD
+		cmd.Env = a.env
+
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			a.emit(harness.Event{
+				Type: harness.EventError,
+				Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()},
+			})
+			return
+		}
+
+		if err := cmd.Start(); err != nil {
+			a.emit(harness.Event{
+				Type: harness.EventError,
+				Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()},
+			})
+			return
+		}
+
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			a.emit(harness.Event{
+				Type: harness.EventText,
+				Payload: protocol.TextParams{
+					SessionID: sessID,
+					Delta:     line + "\n",
+				},
+			})
+		}
+
+		_ = cmd.Wait()
+
+		a.emit(harness.Event{
+			Type: harness.EventComplete,
+			Payload: protocol.CompleteParams{
+				SessionID: sessID,
+				Reason:    "completed",
+			},
+		})
+	}()
+
+	return nil
 }
 
 func (a *AiderHarness) RespondPermission(ctx context.Context, reqID string, allow bool, message string) error {

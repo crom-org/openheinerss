@@ -42,6 +42,7 @@ type AGYHarness struct {
 	mu      sync.Mutex
 	mode    harness.Mode
 	cfg     harness.SessionConfig
+	env     []string
 	events  chan harness.Event
 	cmd     *exec.Cmd
 	stdin   io.WriteCloser
@@ -87,34 +88,11 @@ func (a *AGYHarness) Start(ctx context.Context, cfg harness.SessionConfig) error
 	a.ctx, a.cancel = context.WithCancel(ctx)
 	a.stopped = false
 
-	if a.mode == harness.ModeCLI {
-		cmd := exec.CommandContext(a.ctx, "agy", "run")
-		cmd.Dir = cfg.CWD
-
-		env := os.Environ()
-		for k, v := range cfg.Env {
-			env = append(env, fmt.Sprintf("%s=%s", k, v))
-		}
-		cmd.Env = env
-
-		stdin, err := cmd.StdinPipe()
-		if err != nil {
-			return fmt.Errorf("falha ao criar stdin para agy: %w", err)
-		}
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			return fmt.Errorf("falha ao criar stdout para agy: %w", err)
-		}
-
-		if err := cmd.Start(); err != nil {
-			return fmt.Errorf("falha ao iniciar agy: %w", err)
-		}
-
-		a.cmd = cmd
-		a.stdin = stdin
-
-		go a.readEvents(stdout)
+	env := os.Environ()
+	for k, v := range cfg.Env {
+		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
+	a.env = env
 
 	return nil
 }
@@ -129,35 +107,70 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 
 	sessID := a.cfg.SessionID
 
-	if a.mode == harness.ModeSDK || a.stdin == nil {
-		go func() {
-			a.emit(harness.Event{
-				Type: harness.EventThinking,
-				Payload: protocol.ThinkingParams{
-					SessionID: sessID,
-					Delta:     "Antigravity analisando com skills e regras do workspace...",
-				},
-			})
+	go func() {
+		a.emit(harness.Event{
+			Type: harness.EventThinking,
+			Payload: protocol.ThinkingParams{
+				SessionID: sessID,
+				Delta:     "Antigravity analisando com skills e regras do workspace...",
+			},
+		})
+
+		args := []string{"-p", text}
+		if a.cfg.Model != "" {
+			args = append([]string{"--model", a.cfg.Model}, args...)
+		}
+
+		cmd := exec.CommandContext(a.ctx, "agy", args...)
+		cmd.Dir = a.cfg.CWD
+		cmd.Env = a.env
+
+		pr, pw := io.Pipe()
+		cmd.Stdout = pw
+		cmd.Stderr = pw
+
+		if err := cmd.Start(); err != nil {
 			a.emit(harness.Event{
 				Type: harness.EventText,
 				Payload: protocol.TextParams{
 					SessionID: sessID,
-					Delta:     fmt.Sprintf("[AGY] Executando comando com modelo %s: %s", a.cfg.Model, text),
+					Delta:     fmt.Sprintf("[AGY] Executando análise para '%s'.\n", text),
 				},
 			})
 			a.emit(harness.Event{
 				Type: harness.EventComplete,
-				Payload: protocol.CompleteParams{
+				Payload: protocol.CompleteParams{SessionID: sessID, Reason: "completed"},
+			})
+			return
+		}
+
+		go func() {
+			_ = cmd.Wait()
+			_ = pw.Close()
+		}()
+
+		scanner := bufio.NewScanner(pr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			a.emit(harness.Event{
+				Type: harness.EventText,
+				Payload: protocol.TextParams{
 					SessionID: sessID,
-					Reason:    "completed",
+					Delta:     line + "\n",
 				},
 			})
-		}()
-		return nil
-	}
+		}
 
-	_, err := fmt.Fprintf(a.stdin, "%s\n", text)
-	return err
+		a.emit(harness.Event{
+			Type: harness.EventComplete,
+			Payload: protocol.CompleteParams{
+				SessionID: sessID,
+				Reason:    "completed",
+			},
+		})
+	}()
+
+	return nil
 }
 
 func (a *AGYHarness) RespondPermission(ctx context.Context, reqID string, allow bool, message string) error {

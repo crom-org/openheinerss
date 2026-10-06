@@ -63,6 +63,7 @@ type OpenCodeHarness struct {
 	mu      sync.Mutex
 	mode    harness.Mode
 	cfg     harness.SessionConfig
+	env     []string
 	events  chan harness.Event
 	cmd     *exec.Cmd
 	stdin   io.WriteCloser
@@ -112,33 +113,7 @@ func (o *OpenCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig) 
 	for k, v := range cfg.Env {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
-
-	args := []string{"run"}
-	if cfg.Model != "" {
-		args = append(args, "-m", cfg.Model)
-	}
-
-	cmd := exec.CommandContext(o.ctx, "opencode", args...)
-	cmd.Dir = cfg.CWD
-	cmd.Env = env
-
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return fmt.Errorf("falha ao criar stdin pipe para opencode: %w", err)
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("falha ao criar stdout pipe para opencode: %w", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("falha ao iniciar processo do OpenCode: %w", err)
-	}
-
-	o.cmd = cmd
-	o.stdin = stdin
-
-	go o.readEvents(stdout)
+	o.env = env
 
 	return nil
 }
@@ -147,12 +122,71 @@ func (o *OpenCodeHarness) SendPrompt(ctx context.Context, text string, attachmen
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
-	if o.stopped || o.stdin == nil {
+	if o.stopped {
 		return fmt.Errorf("processo do OpenCode não está ativo")
 	}
 
-	_, err := fmt.Fprintf(o.stdin, "%s\n", text)
-	return err
+	sessID := o.cfg.SessionID
+	go func() {
+		o.emit(harness.Event{
+			Type: harness.EventThinking,
+			Payload: protocol.ThinkingParams{
+				SessionID: sessID,
+				Delta:     "Consultando OpenCode Interpreter...",
+			},
+		})
+
+		args := []string{"run"}
+		if o.cfg.Model != "" {
+			args = append(args, "-m", o.cfg.Model)
+		}
+		args = append(args, text)
+
+		cmd := exec.CommandContext(o.ctx, "opencode", args...)
+		cmd.Dir = o.cfg.CWD
+		cmd.Env = o.env
+
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			o.emit(harness.Event{
+				Type: harness.EventError,
+				Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()},
+			})
+			return
+		}
+
+		if err := cmd.Start(); err != nil {
+			o.emit(harness.Event{
+				Type: harness.EventError,
+				Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()},
+			})
+			return
+		}
+
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			o.emit(harness.Event{
+				Type: harness.EventText,
+				Payload: protocol.TextParams{
+					SessionID: sessID,
+					Delta:     line + "\n",
+				},
+			})
+		}
+
+		_ = cmd.Wait()
+
+		o.emit(harness.Event{
+			Type: harness.EventComplete,
+			Payload: protocol.CompleteParams{
+				SessionID: sessID,
+				Reason:    "completed",
+			},
+		})
+	}()
+
+	return nil
 }
 
 func (o *OpenCodeHarness) RespondPermission(ctx context.Context, reqID string, allow bool, message string) error {
