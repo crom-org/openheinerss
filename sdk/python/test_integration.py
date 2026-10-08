@@ -18,11 +18,24 @@ def repo_temporario():
 
 
 class SDKIntegrationTest(unittest.TestCase):
+    def novo_agent(self, config=None):
+        """Agent do transporte sob teste (STDIO aqui; test_websocket.py troca por WebSocket).
+        `config` vira OPENHEINERSS_CONFIG do servidor."""
+        antes = os.environ.get("OPENHEINERSS_CONFIG")
+        if config:
+            os.environ["OPENHEINERSS_CONFIG"] = config
+        try:
+            return Agent(harness="mock", bin_path=os.environ.get("OPENHEINERSS_BIN", "openheinerss"))
+        finally:
+            if config:
+                if antes is None:
+                    os.environ.pop("OPENHEINERSS_CONFIG", None)
+                else:
+                    os.environ["OPENHEINERSS_CONFIG"] = antes
+
     def test_comandos_do_harness(self):
         cfg = tempfile.mkdtemp(prefix="openheinerss-cmd-py-")
-        antes = os.environ.get("OPENHEINERSS_CONFIG")
-        os.environ["OPENHEINERSS_CONFIG"] = cfg
-        agent = Agent(harness="mock", bin_path=os.environ.get("OPENHEINERSS_BIN", "openheinerss"))
+        agent = self.novo_agent(config=cfg)
         try:
             nota = agent.annotate_command("claude-code", "/compact", "compacta o claude code; o central não usa")
             self.assertEqual(nota["anotacao"], "compacta o claude code; o central não usa")
@@ -34,10 +47,6 @@ class SDKIntegrationTest(unittest.TestCase):
             self.assertEqual(agent.listCommands("codex")["desconhecido"], "sem_equivalente")
         finally:
             agent.close()
-            if antes is None:
-                os.environ.pop("OPENHEINERSS_CONFIG", None)
-            else:
-                os.environ["OPENHEINERSS_CONFIG"] = antes
 
     @staticmethod
     def _esperar(condicao, segundos):
@@ -47,7 +56,7 @@ class SDKIntegrationTest(unittest.TestCase):
         return bool(condicao())
 
     def test_servidor_real(self):
-        agent = Agent(harness="mock", bin_path=os.environ.get("OPENHEINERSS_BIN", "openheinerss"))
+        agent = self.novo_agent()
         try:
             agent.registerHarness({"name": "py-test-harness", "base": "mock"})
             self.assertTrue(any(x["id"] == "py-test-harness" for x in agent.listHarnesses()))
@@ -78,7 +87,7 @@ class SDKIntegrationTest(unittest.TestCase):
             agent.close()
 
     def test_negar_com_encerrar(self):
-        agent = Agent(harness="mock", bin_path=os.environ.get("OPENHEINERSS_BIN", "openheinerss"))
+        agent = self.novo_agent()
         try:
             fins, inicios = [], []
             terminou = threading.Event()

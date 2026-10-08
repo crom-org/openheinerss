@@ -3,7 +3,7 @@ import os
 import queue
 import time
 from typing import Generator, Dict, Any, Optional, Callable, TypedDict
-from .transport import StdioTransport
+from .transport import StdioTransport, WebSocketTransport
 
 class RunOptions(TypedDict, total=False):
     nome: str; motor: str; modelo: str; esforco: str; prompt: str; texto: str; retomar: bool
@@ -26,10 +26,22 @@ class Agent:
         effort: Optional[str] = None,
         harness_args: Optional[list] = None,
         prompt_timeout: Optional[float] = 3600.0,
+        transport: str = "stdio",
+        url: Optional[str] = None,
+        host: str = "127.0.0.1",
+        port: Optional[int] = None,
+        origin: Optional[str] = None,
     ):
+        """transport="stdio" (padrão) sobe `serve --stdio`; "websocket" (ou url=) conecta a um
+        `serve --porta N` já rodando (host/port, padrão 127.0.0.1:OPENHEINERSS_PORTA|4820; origin opcional)."""
         # Teto de segurança sem nenhum evento durante um prompt (None/0 desliga).
         self.prompt_timeout = prompt_timeout
-        self.transport = StdioTransport(bin_path)
+        if transport not in ("stdio", "websocket"):
+            raise ValueError(f"transport inválido: {transport!r} (use 'stdio' ou 'websocket')")
+        if url or transport == "websocket":
+            self.transport = WebSocketTransport(url=url, host=host, port=port, origin=origin)
+        else:
+            self.transport = StdioTransport(bin_path)
         self.req_id = 1
         self.generation: Optional[str] = None
         self.callbacks: Dict[str, Callable[[Dict[str, Any]], None]] = {}

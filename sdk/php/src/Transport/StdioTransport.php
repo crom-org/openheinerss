@@ -2,7 +2,7 @@
 
 namespace Openheinerss\Transport;
 
-class StdioTransport
+class StdioTransport implements TransportInterface
 {
     private $process;
     private $pipes = [];

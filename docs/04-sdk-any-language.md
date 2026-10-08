@@ -1,6 +1,6 @@
 # SDKs e protocolo bruto
 
-O transporte comum é JSON-RPC 2.0 em NDJSON via `openheinerss serve --stdio`. O servidor WebSocket (`ws://127.0.0.1:4820/ws`; `OPENHEINERSS_PORTA` muda a porta) também existe; só o SDK TypeScript o usa. Os SDKs Python e PHP usam STDIO.
+O transporte comum é JSON-RPC 2.0 em NDJSON via `openheinerss serve --stdio`. O servidor WebSocket (`ws://127.0.0.1:4820/ws`; `OPENHEINERSS_PORTA` muda a porta) também existe; os três SDKs o usam. Python e PHP usam STDIO por padrão e WebSocket com `Agent(transport="websocket", host=, port=, origin=)` / `url=` (PHP: `Agent::session(['transport' => 'websocket', 'port' => N])`), sem dependências; origem fora de `OPENHEINERSS_ORIGENS` é recusada (HTTP 403 → `TransportError`/`RuntimeException`).
 
 Os três SDKs (versão 1.1.0) expõem a mesma orquestração: `registerHarness`, `listHarnesses`, `run` (`rodar.iniciar`), `listRuns`, `stopRun`, `decideRun`, `getLimits` e `subscribeEvents`. Todos os callbacks `orq.*` recebem `geracao` (e todo evento do serve, inclusive `agent.*`, traz `geracao` no envelope); erro RPC em `session.prompt` (ex.: `/compact` sem equivalente no codex) vira exceção nos três SDKs, e Python/PHP têm teto de segurança sem eventos no prompt (`prompt_timeout`/`$promptTimeout`, padrão 3600 s; `timeout` por chamada); a geração da última resposta também fica disponível no cliente. Comandos nativos do harness (`harness.comandos*`): `listCommands(harness, cwd?)`,
 `annotateCommand(harness, comando, anotacao)` e `confirmCommand(harness, comando)` (Python também
