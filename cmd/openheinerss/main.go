@@ -503,6 +503,7 @@ func newRodarCmd() *cobra.Command {
 	var carga, cargaAbaixo float64
 	var maxAgentes, tentativas int
 	var cotaMax float64
+	var eventosLog string
 	cmd := &cobra.Command{
 		Use:     "rodar <nome> <instância|harness>",
 		Aliases: []string{"launch", "dispatch"},
@@ -520,7 +521,7 @@ func newRodarCmd() *cobra.Command {
 			if cargaAbaixo > 0 {
 				carga = cargaAbaixo
 			}
-			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, PromptFile: prompt, PromptText: texto, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax})
+			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, PromptFile: prompt, PromptText: texto, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog})
 			if err != nil && res.Name == "" {
 				return err
 			}
@@ -558,6 +559,8 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().IntVar(&tentativas, "retries", 0, "Alias em inglês de --tentativas")
 	cmd.Flags().Float64Var(&cotaMax, "cota-max", 0, "Pula instâncias com uso de cota igual ou acima deste percentual (0 desativa)")
 	cmd.Flags().Float64Var(&cotaMax, "quota-max", 0, "Alias em inglês de --cota-max")
+	cmd.Flags().StringVar(&eventosLog, "eventos-log", "", "Acrescenta FIM ao arquivo de eventos (desligado por padrão)")
+	cmd.Flags().StringVar(&eventosLog, "events-log", "", "Alias em inglês de --eventos-log")
 	return cmd
 }
 

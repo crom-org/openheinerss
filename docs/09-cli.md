@@ -183,6 +183,8 @@ Flags:
       --cota-max float              Pula instâncias com uso de cota igual ou acima deste percentual (0 desativa)
       --effort string               Alias em inglês de --esforco
       --esforco string              Esforço de raciocínio
+      --eventos-log string          Acrescenta FIM ao arquivo de eventos (desligado por padrão)
+      --events-log string           Alias em inglês de --eventos-log
       --max-agentes int             Máximo de agentes simultâneos
       --max-agents int              Alias em inglês de --max-agentes
       --max-load float              Alias em inglês de --carga-maxima

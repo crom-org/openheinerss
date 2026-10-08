@@ -62,6 +62,28 @@ func TestClaudeCodeCotaViraErro(t *testing.T) {
 	}
 }
 
+func TestClaudeCodeAmostraRealDeLimiteDeSessaoFalha(t *testing.T) {
+	c := NewClaudeCodeHarness(harness.ModeCLI)
+	turn := &cliTurn{}
+	c.parseCLIEvent([]byte(`{"type":"result","subtype":"success","is_error":true,"result":"You've hit your session limit · resets 9am","session_id":"sess-cota"}`), "fallback", turn)
+	var erro, fim bool
+	for len(c.events) > 0 {
+		ev := <-c.events
+		if ev.Type == harness.EventError {
+			erro = true
+		}
+		if ev.Type == harness.EventComplete {
+			fim = true
+			if got := ev.Payload.(protocol.CompleteParams).Reason; got != "process_error" {
+				t.Fatalf("motivo do fim: %q", got)
+			}
+		}
+	}
+	if !erro || !fim {
+		t.Fatalf("amostra de cota não virou falha: erro=%v fim=%v", erro, fim)
+	}
+}
+
 func TestClaudeCodePermissoesDoRodar(t *testing.T) {
 	c := NewClaudeCodeHarness(harness.ModeCLI)
 	c.cfg.Options = map[string]interface{}{"rodar": true}

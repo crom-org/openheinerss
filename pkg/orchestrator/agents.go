@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -107,7 +108,19 @@ func processAlive(pid int) bool {
 
 func staleLog(path string, now time.Time) bool {
 	info, err := os.Stat(path)
-	return err == nil && now.Sub(info.ModTime()) > 15*time.Minute
+	return err == nil && now.Sub(info.ModTime()) > staleAfter()
+}
+
+// LogParado informa se o log está sem atualização pelo prazo configurado.
+// OPENHEINERSS_LOG_PARADO_MIN altera o padrão de 15 minutos.
+func LogParado(path string, now time.Time) bool { return staleLog(path, now) }
+
+func staleAfter() time.Duration {
+	minutes, err := strconv.Atoi(os.Getenv("OPENHEINERSS_LOG_PARADO_MIN"))
+	if err == nil && minutes > 0 {
+		return time.Duration(minutes) * time.Minute
+	}
+	return 15 * time.Minute
 }
 
 func lastUsefulLine(path string) string {

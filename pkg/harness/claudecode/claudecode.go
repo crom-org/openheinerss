@@ -457,6 +457,9 @@ func (c *ClaudeCodeHarness) parseCLIEvent(data []byte, fallbackSession string, t
 			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessionID, Message: message}})
 		}
 		turn.completed = true
+		if isError {
+			reason = "process_error"
+		}
 		c.emit(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessionID, Reason: reason}})
 	case "rate_limit_event":
 		info, _ := msg["rate_limit_info"].(map[string]interface{})
@@ -499,7 +502,7 @@ func number(m map[string]interface{}, key string) float64     { v, _ := m[key].(
 func quotaMessage(m map[string]interface{}) bool {
 	data, _ := json.Marshal(m)
 	s := strings.ToLower(string(data))
-	for _, marker := range []string{"usage limit", "rate limit", "rate_limit", "quota", "limite de uso", "limite de cota", "out of credits"} {
+	for _, marker := range []string{"session limit", "usage limit", "hit your limit", "rate limit", "rate_limit", "quota", "limite de uso", "limite de cota", "out of credits"} {
 		if strings.Contains(s, marker) {
 			return true
 		}
