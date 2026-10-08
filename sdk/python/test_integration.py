@@ -37,7 +37,7 @@ class SDKIntegrationTest(unittest.TestCase):
                 eventos.append(payload)
                 if payload.get("opcoes"):
                     decisao.append(payload)
-                    agent.decide_run(payload["id"], "permitir")
+                    agent.decide_run(payload["run"], payload["id"], "permitir")
                     decisao_enviada.set()
                 if "codigo" in payload:
                     terminou.set()

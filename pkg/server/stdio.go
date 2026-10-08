@@ -25,6 +25,11 @@ type StdioServer struct {
 
 // NewStdioServer cria uma nova instância de StdioServer
 func NewStdioServer(m *session.Manager, in io.Reader, out io.Writer) *StdioServer {
+	return NewStdioServerWithMaxAgents(m, in, out, 0)
+}
+
+// NewStdioServerWithMaxAgents cria o servidor STDIO com limite de agentes opcional.
+func NewStdioServerWithMaxAgents(m *session.Manager, in io.Reader, out io.Writer, maxAgents int) *StdioServer {
 	if in == nil {
 		in = os.Stdin
 	}
@@ -32,7 +37,7 @@ func NewStdioServer(m *session.Manager, in io.Reader, out io.Writer) *StdioServe
 		out = os.Stdout
 	}
 	s := &StdioServer{
-		router:  NewRouter(m),
+		router:  NewRouterWithMaxAgents(m, maxAgents),
 		manager: m,
 		in:      in,
 		out:     out,
@@ -89,6 +94,7 @@ func (s *StdioServer) Run(ctx context.Context) error {
 		var req protocol.Request
 		if err := json.Unmarshal([]byte(line), &req); err != nil {
 			errResp := protocol.NewErrorResponse(nil, protocol.CodeParseError, fmt.Sprintf("JSON inválido: %v", err), nil)
+			errResp.Geracao = s.router.geracao
 			s.writeMessage(errResp)
 			continue
 		}

@@ -28,7 +28,7 @@ if (!str_starts_with($run['id'], 'rodar-')) throw new RuntimeException('rodar n�
 $fim = microtime(true) + 1.0;
 while ($decisao === null && microtime(true) < $fim) $agent->listen(0.05);
 if ($decisao === null) throw new RuntimeException('decisão não recebida');
-$agent->decideRun($decisao['id'], 'permitir');
+$agent->decideRun($decisao['run'], $decisao['id'], 'permitir');
 $agent->listen(1.5);
 if (count($eventos) < 3) throw new RuntimeException('eventos contínuos ausentes');
 $pensamentos = [];

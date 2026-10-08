@@ -33,7 +33,7 @@ ws.onmessage = (ev) => {
   if (msg.id !== undefined) { console.log('RESPOSTA', msg.id, JSON.stringify(msg.result)); return; }
   if (!msg.method?.startsWith('orq.')) return;
   console.log(msg.method, JSON.stringify(msg.params));
-  if (msg.method === 'orq.precisa_decisao') enviar('rodar.decidir', { id: msg.params.id, resposta: opt.decidir });
+  if (msg.method === 'orq.precisa_decisao') enviar('rodar.decidir', { run: msg.params.run, id: msg.params.id, geracao: msg.params.geracao, resposta: opt.decidir });
   if (msg.method === 'orq.fim') {
     clearTimeout(limite);
     ws.close();
