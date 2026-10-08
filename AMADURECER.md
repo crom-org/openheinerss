@@ -29,3 +29,13 @@ virar essa camada, mas ainda não está pronto.
 O "estúdio" de vídeos do crom-videos (papéis roteirista, montador, revisor e finalizador, cada um com motor configurável).
 Ele vai começar usando o `rodar.sh` por baixo. Quando o openheinerss passar nos itens acima, troca-se só essa
 peça por baixo, sem mudar o estúdio.
+
+## Harness "custom" (pedido do usuário, 08/10)
+Hoje só dá para adicionar harness escrevendo Go e chamando `harness.Register` (pkg/harness/harness.go). Falta um harness **custom**:
+- Declarado num arquivo (ex.: `.openheinerss/harnesses/<nome>.yaml`), sem recompilar.
+- Pode **herdar** de um harness existente (`base: claude-code`) e sobrescrever só o que muda: comando, args, env
+  (ex.: `ANTHROPIC_BASE_URL`, `CLAUDE_CONFIG_DIR`), modelo, como ler a saída/eventos e como detectar o fim e a falta de cota.
+- Ou ser um harness novo do zero: um comando qualquer que lê o prompt e escreve NDJSON no protocolo.
+- Também via código (SDK TS/Python/Go: `registerHarness({...})`).
+- Modelo de inspiração: o `cco` (Claude Code com outro provedor). Ex.: `cco-openrouter` = `base: claude-code` + env do provedor.
+- Comandos: `openheinerss harness list | add | test <nome>` (teste com prompt curto).
