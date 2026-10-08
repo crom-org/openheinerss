@@ -96,6 +96,9 @@ func (a *AiderHarness) Start(ctx context.Context, cfg harness.SessionConfig) err
 	for k, v := range cfg.Env {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
+	if cfg.CWD != "" {
+		env = harness.SetEnv(env, "PWD", cfg.CWD)
+	}
 	a.env = env
 
 	return nil
@@ -121,13 +124,14 @@ func (a *AiderHarness) SendPrompt(ctx context.Context, text string, attachments 
 
 		if msg := missingModelMessage(a.cfg, a.env); msg != "" {
 			a.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: msg, SuggestedFix: modelFix}})
-			a.emit(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessID, Reason: "no_model"}})
+			a.emit(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessID, Reason: "process_error"}})
 			return
 		}
 
 		// --yes-always responde "sim" a toda pergunta e --no-pretty/--no-stream evitam
 		// controle de terminal; sem isso o aider pode ficar esperando entrada.
-		args := []string{"--no-git", "--yes-always", "--no-pretty", "--no-stream", "--no-check-update", "--no-analytics", "--no-show-model-warnings", "--message", text}
+		// O git fica habilitado para que uma missão possa criar o commit pedido.
+		args := []string{"--yes-always", "--no-pretty", "--no-stream", "--no-check-update", "--no-analytics", "--no-show-model-warnings", "--no-browser", "--message", text}
 		if a.cfg.Model != "" {
 			args = append(args, "--model", a.cfg.Model)
 		}
@@ -212,7 +216,7 @@ func (a *AiderHarness) SendPrompt(ctx context.Context, text string, attachments 
 		if fatal != "" {
 			_, fix := harness.ClassifyFailure(fatal)
 			a.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: fatal, SuggestedFix: fix}})
-			a.emit(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessID, Reason: "provider_error"}})
+			a.emit(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessID, Reason: "process_error"}})
 			return
 		}
 		if err != nil {
@@ -224,11 +228,15 @@ func (a *AiderHarness) SendPrompt(ctx context.Context, text string, attachments 
 			a.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: message, SuggestedFix: fix}})
 		}
 
+		reason := "completed"
+		if err != nil {
+			reason = "process_error"
+		}
 		a.emit(harness.Event{
 			Type: harness.EventComplete,
 			Payload: protocol.CompleteParams{
 				SessionID: sessID,
-				Reason:    "completed",
+				Reason:    reason,
 			},
 		})
 	}()

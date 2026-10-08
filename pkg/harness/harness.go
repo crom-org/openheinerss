@@ -4,10 +4,25 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/crom-org/openheinerss/pkg/protocol"
 )
+
+// SetEnv substitui uma variável em um ambiente no formato aceito por exec.Cmd.
+// Substituir, em vez de apenas acrescentar, é importante para PWD: alguns CLIs
+// consultam a primeira ocorrência e poderiam escapar da worktree.
+func SetEnv(env []string, key, value string) []string {
+	prefix := key + "="
+	out := env[:0]
+	for _, item := range env {
+		if !strings.HasPrefix(item, prefix) {
+			out = append(out, item)
+		}
+	}
+	return append(out, prefix+value)
+}
 
 // Mode define o modo de operação do harness
 type Mode string
