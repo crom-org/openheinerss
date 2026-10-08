@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/crom-org/openheinerss/pkg/harness"
+	"github.com/crom-org/openheinerss/pkg/harness/process"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 )
 
@@ -137,7 +137,7 @@ func (c *CodexHarness) SendPrompt(ctx context.Context, text string, attachments 
 }
 
 func configureProcessGroup(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	process.Configure(cmd)
 }
 
 func (c *CodexHarness) RespondPermission(ctx context.Context, reqID string, allow bool, message string) error {
@@ -163,11 +163,10 @@ func (c *CodexHarness) Stop() error {
 		c.cancel()
 	}
 	if c.cmd != nil && c.cmd.Process != nil {
-		pid := c.cmd.Process.Pid
-		if err := syscall.Kill(-pid, syscall.SIGINT); err == nil {
+		if err := process.Interrupt(c.cmd); err == nil {
 			return nil
 		}
-		return c.cmd.Process.Signal(syscall.SIGINT)
+		return c.cmd.Process.Signal(os.Interrupt)
 	}
 	return nil
 }

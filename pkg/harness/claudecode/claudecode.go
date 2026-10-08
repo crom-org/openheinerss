@@ -12,10 +12,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/crom-org/openheinerss/pkg/config"
 	"github.com/crom-org/openheinerss/pkg/harness"
+	"github.com/crom-org/openheinerss/pkg/harness/process"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 )
 
@@ -158,7 +158,7 @@ func (c *ClaudeCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig
 
 	if c.mode == harness.ModeSDK {
 		cmd := exec.CommandContext(c.ctx, "node", "-e", NodeWorkerScript)
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		process.Configure(cmd)
 		cmd.Dir = cfg.CWD
 		cmd.Env = env
 
@@ -273,7 +273,7 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 			args = append(args, "--permission-mode", permission)
 		}
 		cmd := exec.CommandContext(c.ctx, "claude", args...)
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		process.Configure(cmd)
 		cmd.Dir = c.cfg.CWD
 		cmd.Env = c.env
 
@@ -547,8 +547,8 @@ func (c *ClaudeCodeHarness) Stop() error {
 
 	if c.cmd != nil && c.cmd.Process != nil {
 		// Envia sinal SIGINT limpo antes de encerrar
-		if syscall.Kill(-c.cmd.Process.Pid, syscall.SIGINT) != nil {
-			_ = c.cmd.Process.Signal(syscall.SIGINT)
+		if process.Interrupt(c.cmd) != nil {
+			_ = c.cmd.Process.Signal(os.Interrupt)
 		}
 	}
 

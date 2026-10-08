@@ -34,7 +34,11 @@ import (
 )
 
 var (
-	version = "v0.1.0-alpha"
+	// Estas variáveis recebem valores reais no release pelo GoReleaser. Um
+	// build local deliberadamente continua identificável como desenvolvimento.
+	Version = "dev"
+	Commit  = "desconhecido"
+	Date    = "desconhecida"
 )
 
 func main() {
@@ -547,7 +551,7 @@ func newVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Exibe a versão do Openheinerss",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("openheinerss %s (github.com/crom-org/openheinerss)\n", version)
+			fmt.Printf("openheinerss %s (commit %s, data %s)\n", Version, Commit, Date)
 		},
 	}
 }
