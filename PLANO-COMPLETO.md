@@ -27,3 +27,4 @@ Ordem e paralelismo: 0 e 2 juntos; depois 1 e 3; depois 4, 5 e 6; por fim 7. No 
 ## Achados no uso real (para a etapa 7)
 - `rodar` sem `reserva`: ao detectar falta de cota, não repetir as 4 tentativas na mesma instância; parar logo com `FIM código 2` e a hora de volta da cota (o Claude informa "resets 9am").
 - Instâncias do projeto com reserva: `claude-conta2` → `codex`.
+- 08/10 08:48–08:49: a detecção de cota do Claude funcionou ("You've hit your session limit"), mas a troca para o Codex foi feita À MÃO (a instância não tinha `reserva`). A troca automática por `reserva` só foi provada em teste com mock; falta prova real.
