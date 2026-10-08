@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -42,6 +43,15 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Aviso: %v\n", err)
 		}
 	}
+	rootCmd := newRootCmd()
+
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Erro: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "openheinerss",
 		Short: "Openheinerss - O maestro universal de orquestração de AI Coding Agents",
@@ -60,11 +70,72 @@ Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC d
 	rootCmd.AddCommand(newHarnessCmd())
 	rootCmd.AddCommand(newLimitesCmd())
 	rootCmd.AddCommand(newVersionCmd())
+	rootCmd.AddCommand(newDocsCmd())
+	return rootCmd
+}
 
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Erro: %v\n", err)
-		os.Exit(1)
+func newDocsCmd() *cobra.Command {
+	var check bool
+	cmd := &cobra.Command{
+		Use:   "docs",
+		Short: "Gera ou verifica o manual do CLI em docs/09-cli.md",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path, err := filepath.Abs(filepath.Join("docs", "09-cli.md"))
+			if err != nil {
+				return err
+			}
+			data, err := renderCLIDoc(newRootCmd())
+			if err != nil {
+				return err
+			}
+			if check {
+				existing, readErr := os.ReadFile(path)
+				if readErr != nil {
+					return readErr
+				}
+				if !bytes.Equal(existing, data) {
+					return fmt.Errorf("%s está desatualizado; execute 'openheinerss docs'", path)
+				}
+				fmt.Printf("Manual atualizado: %s\n", path)
+				return nil
+			}
+			if err := os.WriteFile(path, data, 0644); err != nil {
+				return err
+			}
+			fmt.Printf("Manual gerado: %s\n", path)
+			return nil
+		},
 	}
+	cmd.Flags().BoolVar(&check, "check", false, "Falha se docs/09-cli.md não corresponder ao --help atual")
+	return cmd
+}
+
+func renderCLIDoc(root *cobra.Command) ([]byte, error) {
+	var out bytes.Buffer
+	out.WriteString("# Manual do CLI — referência gerada\n\n")
+	out.WriteString("Este arquivo é gerado pelo comando `openheinerss docs` a partir do `--help` real. Não edite manualmente.\n\n")
+	commands := []*cobra.Command{root}
+	for i := 0; i < len(commands); i++ {
+		commands = append(commands, commands[i].Commands()...)
+	}
+	for _, command := range commands {
+		var section bytes.Buffer
+		section.WriteString("## `openheinerss")
+		if command != root {
+			section.WriteString(" " + command.CommandPath()[len("openheinerss "):])
+		}
+		section.WriteString(" --help`\n\n```text\n")
+		var helpOut bytes.Buffer
+		command.SetOut(&helpOut)
+		command.SetErr(&helpOut)
+		if err := command.Help(); err != nil {
+			return nil, err
+		}
+		section.Write(helpOut.Bytes())
+		section.WriteString("\n```\n\n")
+		out.Write(section.Bytes())
+	}
+	return out.Bytes(), nil
 }
 
 func newServeCmd() *cobra.Command {
