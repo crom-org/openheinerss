@@ -11,7 +11,9 @@ import (
 )
 
 func TestSessionManagerLifecycle(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	// O detector de race deixa o ciclo do harness mock significativamente mais
+	// lento em máquinas carregadas; o teste verifica o protocolo, não um SLA.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	m := session.NewManager()

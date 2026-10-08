@@ -8,9 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"sync"
-	"syscall"
 
 	"github.com/crom-org/openheinerss/pkg/harness"
+	"github.com/crom-org/openheinerss/pkg/harness/process"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 )
 
@@ -122,7 +122,7 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 		}
 
 		cmd := exec.CommandContext(a.ctx, "agy", args...)
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		process.Configure(cmd)
 		cmd.Dir = a.cfg.CWD
 		cmd.Env = a.env
 
@@ -233,8 +233,8 @@ func (a *AGYHarness) Stop() error {
 		_ = a.stdin.Close()
 	}
 	if a.cmd != nil && a.cmd.Process != nil {
-		if syscall.Kill(-a.cmd.Process.Pid, syscall.SIGINT) != nil {
-			_ = a.cmd.Process.Signal(syscall.SIGINT)
+		if process.Interrupt(a.cmd) != nil {
+			_ = a.cmd.Process.Signal(os.Interrupt)
 		}
 	}
 

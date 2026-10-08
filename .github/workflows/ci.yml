@@ -28,11 +28,20 @@ jobs:
       - name: Verify Dependencies
         run: go mod verify
 
-      - name: Run Go Tests
-        run: go test -v -race ./...
+      - name: Build Go
+        run: go build ./...
 
-      - name: Build Binary
-        run: go build -o openheinerss cmd/openheinerss/main.go
+      - name: Build CLI
+        run: go build -o openheinerss ./cmd/openheinerss
+
+      - name: Vet Go
+        run: go vet ./...
+
+      - name: Run Go Tests
+        run: go test ./...
+
+      - name: Run Go Tests with Race Detector
+        run: go test -race ./...
 
       - name: Run CLI Doctor Check
         run: ./openheinerss --version

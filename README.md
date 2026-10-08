@@ -14,6 +14,24 @@ go build -o openheinerss ./cmd/openheinerss
 
 O `mock` é determinístico, offline e não consome tokens. Para conferir todos os comandos e flags do binário instalado, use `./openheinerss docs` ou leia [docs/09-cli.md](docs/09-cli.md). O manual é gerado automaticamente e tem teste de consistência.
 
+## Instalação
+
+A instalação recomendada baixa o binário do último release, verifica o SHA-256 e instala em `~/.local/bin`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/crom-org/openheinerss/main/install.sh | bash
+```
+
+Para fixar uma versão, use `curl ... | bash -s -- --versao 0.1.0`. Se o GitHub não estiver disponível e o comando for executado dentro de um clone do projeto, o instalador compila com `go build` como fallback. Se `~/.local/bin` não estiver no `PATH`, adicione-o ao shell.
+
+Também é possível instalar pelo toolchain Go:
+
+```bash
+go install github.com/crom-org/openheinerss/cmd/openheinerss@latest
+```
+
+Ou baixe manualmente o arquivo `openheinerss_<versão>_<sistema>_<arquitetura>.tar.gz` (ou `.zip` no Windows) na página de releases, confira `checksums.txt`, extraia e coloque o binário no `PATH`. Confira a instalação com `openheinerss version`.
+
 ## O que existe hoje
 
 - Harnesses embutidos: `mock`, `claude-code`, `opencode`, `codex`, `agy` e `aider`. Instâncias adicionais podem ser declaradas em `.openheinerss/harnesses/`.
@@ -48,7 +66,7 @@ Os SDKs disponíveis estão em [sdk/typescript/](sdk/typescript), [sdk/python/](
 - [Visão geral](docs/00-overview.md) e [arquitetura](docs/01-architecture.md)
 - [Protocolo](docs/02-protocol-spec.md), [harnesses](docs/03-harness-adapters.md) e [SDKs](docs/04-sdk-any-language.md)
 - [Roadmap](docs/05-roadmap.md), [harness custom](docs/06-harness-custom.md), [missões](docs/07-rodar.md) e [manual do CLI](docs/09-cli.md)
-- [Testes reais](docs/TESTES-REAIS.md) e [auditoria de lacunas](docs/LACUNAS.md)
+- [Instalação](docs/08-instalacao.md), [testes reais](docs/TESTES-REAIS.md) e [auditoria de lacunas](docs/LACUNAS.md)
 
 ## Desenvolvimento
 

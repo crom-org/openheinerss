@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/crom-org/openheinerss/pkg/harness"
+	"github.com/crom-org/openheinerss/pkg/harness/process"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 )
 
@@ -135,9 +135,9 @@ func (a *AiderHarness) SendPrompt(ctx context.Context, text string, attachments 
 		runCtx, stopRun := context.WithCancel(a.ctx)
 		defer stopRun()
 		cmd := exec.CommandContext(runCtx, "aider", args...)
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		process.Configure(cmd)
 		cmd.Cancel = func() error {
-			if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); err != nil {
+			if err := process.Kill(cmd); err != nil {
 				return cmd.Process.Kill()
 			}
 			return nil
@@ -332,8 +332,8 @@ func (a *AiderHarness) Stop() error {
 		_ = a.stdin.Close()
 	}
 	if a.cmd != nil && a.cmd.Process != nil {
-		if syscall.Kill(-a.cmd.Process.Pid, syscall.SIGINT) != nil {
-			_ = a.cmd.Process.Signal(syscall.SIGINT)
+		if process.Interrupt(a.cmd) != nil {
+			_ = a.cmd.Process.Signal(os.Interrupt)
 		}
 	}
 
