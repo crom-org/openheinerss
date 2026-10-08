@@ -195,6 +195,7 @@ Flags:
       --max-load float              Alias em inglês de --carga-maxima
       --model string                Alias em inglês de --modelo
       --modelo string               Modelo a usar
+      --no-default-rules            Alias em inglês de --sem-regras-padrao
       --no-rules                    Alias em inglês de --sem-regras
       --pasta-agentes string        Pasta dos agentes (padrão .claude/agentes)
       --prompt string               Arquivo de prompt alternativo
@@ -207,6 +208,7 @@ Flags:
       --rules string                Alias em inglês de --regras
       --seco                        Mostra o comando sem executá-lo
       --sem-regras                  Não acrescenta regras padrão ao prompt
+      --sem-regras-padrao           Desliga as regras padrão do prompt
       --tentativas int              Máximo de tentativas
       --text string                 Alias em inglês de --texto
       --texto string                Prompt em texto, no lugar do arquivo prompts/<nome>.md

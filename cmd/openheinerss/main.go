@@ -568,6 +568,8 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().StringVar(&regras, "rules", "", "Alias em inglês de --regras")
 	cmd.Flags().BoolVar(&semRegras, "sem-regras", false, "Não acrescenta regras padrão ao prompt")
 	cmd.Flags().BoolVar(&semRegras, "no-rules", false, "Alias em inglês de --sem-regras")
+	cmd.Flags().BoolVar(&semRegras, "sem-regras-padrao", false, "Desliga as regras padrão do prompt")
+	cmd.Flags().BoolVar(&semRegras, "no-default-rules", false, "Alias em inglês de --sem-regras-padrao")
 	cmd.Flags().StringVar(&arquivoChaves, "arquivo-chaves", "", "Arquivo opcional de variáveis secretas (não imprime valores)")
 	cmd.Flags().StringVar(&arquivoChaves, "keys-file", "", "Alias em inglês de --arquivo-chaves")
 	return cmd

@@ -300,12 +300,28 @@ func TestRunComPromptEmTextoNaoPrecisaDeArquivo(t *testing.T) {
 		t.Fatal(err)
 	}
 	p, err := readPrompt(agents, "x", "", "faça isso")
-	if err != nil || p != "REGRAS-DO-PROJETO\n\nfaça isso" {
+	if err != nil || !strings.Contains(p, defaultPromptRules) || !strings.Contains(p, "REGRAS-DO-PROJETO") || !strings.HasSuffix(p, "faça isso") {
 		t.Fatalf("prompt = %q, err = %v", p, err)
+	}
+	sem, err := readPromptOptions(agents, "x", "", "faça isso", "", "", true)
+	if err != nil || strings.Contains(sem, defaultPromptRules) {
+		t.Fatalf("regras padrão não foram desligadas: %q (err=%v)", sem, err)
 	}
 	res, err := Run(context.Background(), root, Options{Name: "texto-inline", Motor: "mock", AgentsDir: agents, PromptText: "responda OK", Attempts: 1})
 	if err != nil || res.Code != 0 {
 		t.Fatalf("err=%v código=%d", err, res.Code)
+	}
+}
+
+func TestPromptRegrasPadraoConfiguraveis(t *testing.T) {
+	_, agents := repoFixture(t)
+	rules := filepath.Join(t.TempDir(), "regras.txt")
+	if err := os.WriteFile(rules, []byte("REGRA CONFIGURADA"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	p, err := readPromptOptions(agents, "x", "", "prompt", "", rules, false)
+	if err != nil || !strings.Contains(p, "REGRA CONFIGURADA") || strings.Contains(p, defaultPromptRules) {
+		t.Fatalf("regras configuráveis: %q (err=%v)", p, err)
 	}
 }
 

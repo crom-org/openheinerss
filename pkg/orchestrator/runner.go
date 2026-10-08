@@ -31,12 +31,15 @@ import (
 
 const continuation = "\n\n--- CONTINUAÇÃO ---\nUma execução anterior desta MESMA tarefa foi interrompida (erro ou cota). NÃO recomece do zero: rode `git status` e `git log --oneline -10`, leia RELATORIO-AGENTE.md e os arquivos já alterados nesta pasta (ou os relatórios em .claude/agentes/relatorios/ se for missão), confira o que já está pronto e termine SOMENTE o que falta, depois finalize como a tarefa pede."
 const missionRules = "\n\n--- MISSÃO SOMENTE LEITURA ---\nEsta é uma missão de inspeção. Não crie, altere, remova ou comite arquivos; não use worktree. Apenas leia e relate o que encontrar."
+const defaultPromptRules = "--- REGRAS PADRÃO DO AGENTE ---\nTrabalhe somente dentro da pasta do agente e da worktree desta missão.\nÉ proibido buscar fora da worktree: não use `find /`, `find ~`, `locate`, varreduras de disco ou buscas equivalentes fora dela."
 
 type Options struct {
 	Name, Motor, Model, Effort, PromptFile string
 	// PromptText é o prompt em texto; quando preenchido, vale no lugar de PromptFile e de prompts/<nome>.md.
-	PromptText            string
-	Conta, Regras         string
+	PromptText    string
+	Conta, Regras string
+	// RegrasPadrao é um arquivo opcional com regras adicionais/substitutas.
+	RegrasPadrao          string
 	SemRegras, Seco       bool
 	KeysFile              string
 	Retomar               bool
@@ -217,6 +220,17 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			o.EventLog = cfg.EventosLog
 		}
 	}
+	if cfg, cfgErr := config.LoadProject(repo); cfgErr == nil {
+		if o.RegrasPadrao == "" {
+			o.RegrasPadrao = cfg.RegrasPadrao
+		}
+		if cfg.SemRegrasPadrao {
+			o.SemRegras = true
+		}
+	}
+	if o.RegrasPadrao != "" && !filepath.IsAbs(o.RegrasPadrao) {
+		o.RegrasPadrao = filepath.Join(repo, o.RegrasPadrao)
+	}
 	agents := o.AgentsDir
 	if !filepath.IsAbs(agents) {
 		agents = filepath.Join(repo, agents)
@@ -238,7 +252,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		return Result{}, err
 	}
 	// O prompt é lido antes: sem ele não vale criar worktree e branch que ninguém vai usar.
-	prompt, err := readPromptOptions(agents, o.Name, o.PromptFile, o.PromptText, o.Regras, o.SemRegras)
+	prompt, err := readPromptOptions(agents, o.Name, o.PromptFile, o.PromptText, o.Regras, o.RegrasPadrao, o.SemRegras)
 	if err != nil {
 		return Result{}, err
 	}
@@ -556,10 +570,10 @@ func gitRoot(cwd string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 func readPrompt(agents, name, explicit, text string) (string, error) {
-	return readPromptOptions(agents, name, explicit, text, "", false)
+	return readPromptOptions(agents, name, explicit, text, "", "", false)
 }
 
-func readPromptOptions(agents, name, explicit, text, rulesPath string, noRules bool) (string, error) {
+func readPromptOptions(agents, name, explicit, text, rulesPath, defaultRulesPath string, noRules bool) (string, error) {
 	b := []byte(text)
 	if text == "" {
 		prompt := explicit
@@ -582,6 +596,20 @@ func readPromptOptions(agents, name, explicit, text, rulesPath string, noRules b
 	}
 	result := string(b)
 	if !noRules {
+		defaultRules := defaultPromptRules
+		if defaultRulesPath != "" {
+			rb, err := os.ReadFile(defaultRulesPath)
+			if err != nil && !filepath.IsAbs(defaultRulesPath) {
+				rb, err = os.ReadFile(filepath.Join(agents, "..", "..", defaultRulesPath))
+			}
+			if err != nil {
+				return "", fmt.Errorf("abrir regras padrão %s: %w", defaultRulesPath, err)
+			}
+			defaultRules = strings.TrimSpace(string(rb))
+		}
+		if defaultRules != "" {
+			result = defaultRules + "\n\n" + result
+		}
 		rb, err := os.ReadFile(filepath.Join(agents, "prompts", rules))
 		if err == nil {
 			result = string(rb) + "\n\n" + result
