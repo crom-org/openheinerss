@@ -60,6 +60,11 @@ func (c *CodexHarness) Start(ctx context.Context, cfg harness.SessionConfig) err
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.cfg = cfg
+	if c.cfg.Model == "" {
+		// Mantém o modelo efetivo explícito no estado do adaptador; o CLI usa o
+		// mesmo valor em buildExecArgs quando a instância não o sobrescreve.
+		c.cfg.Model = "gpt-reserve"
+	}
 	c.stopped = false
 	c.threadID = optionString(cfg.Options, "codex_session_id", "resume_session", "session_id")
 	var cancel context.CancelFunc
@@ -95,7 +100,7 @@ func (c *CodexHarness) SendPrompt(ctx context.Context, text string, attachments 
 	// O CLI pode criar processos auxiliares. O grupo próprio garante que timeout
 	// e Stop não deixem filhos segurando os pipes de streaming abertos.
 	configureProcessGroup(cmd)
-	cmd.Dir, cmd.Env = c.cfg.CWD, mergedEnv(c.cfg.Env)
+	cmd.Dir, cmd.Env = c.cfg.CWD, mergedEnv(c.cfg.Env, c.cfg.CWD)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("stdout do codex: %w", err)
@@ -217,10 +222,13 @@ func (c *CodexHarness) emit(evt harness.Event) {
 	}
 }
 
-func mergedEnv(extra map[string]string) []string {
+func mergedEnv(extra map[string]string, cwd ...string) []string {
 	env := os.Environ()
 	for k, v := range extra {
 		env = append(env, k+"="+v)
+	}
+	if len(cwd) > 0 && cwd[0] != "" {
+		env = harness.SetEnv(env, "PWD", cwd[0])
 	}
 	return env
 }

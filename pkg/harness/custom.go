@@ -374,7 +374,7 @@ func (c *customHarness) SendPrompt(ctx context.Context, text string, _ []protoco
 	cmd := exec.CommandContext(base, spec.Command, args...)
 	process.Configure(cmd)
 	cmd.Dir = cfg.CWD
-	cmd.Env = mergedCustomEnv(spec.Env, cfg.Env)
+	cmd.Env = mergedCustomEnv(spec.Env, cfg.Env, cfg.CWD)
 	stderr := &tailBuffer{max: 4096}
 	cmd.Stderr = stderr
 	in, err := cmd.StdinPipe()
@@ -515,13 +515,16 @@ func (c *customHarness) complete(reason string) {
 	c.mu.Unlock()
 	c.emit(Event{Type: EventComplete, Payload: protocol.CompleteParams{SessionID: c.cfg.SessionID, Reason: reason}})
 }
-func mergedCustomEnv(base, extra map[string]string) []string {
+func mergedCustomEnv(base, extra map[string]string, cwd ...string) []string {
 	env := os.Environ()
 	for k, v := range base {
 		env = append(env, k+"="+v)
 	}
 	for k, v := range extra {
 		env = append(env, k+"="+v)
+	}
+	if len(cwd) > 0 && cwd[0] != "" {
+		env = SetEnv(env, "PWD", cwd[0])
 	}
 	return env
 }

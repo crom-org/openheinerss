@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"github.com/crom-org/openheinerss/pkg/harness"
@@ -92,6 +93,9 @@ func (a *AGYHarness) Start(ctx context.Context, cfg harness.SessionConfig) error
 	for k, v := range cfg.Env {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
+	if cfg.CWD != "" {
+		env = harness.SetEnv(env, "PWD", cfg.CWD)
+	}
 	a.env = env
 
 	return nil
@@ -116,10 +120,13 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 			},
 		})
 
-		args := []string{"-p", text}
+		// O modo headless precisa autorizar ferramentas e emitir eventos para que
+		// o agente consiga editar/commitar na worktree sem pedir interação.
+		args := []string{"--dangerously-skip-permissions", "--output-format", "stream-json"}
 		if a.cfg.Model != "" {
 			args = append([]string{"--model", a.cfg.Model}, args...)
 		}
+		args = append(args, "-p", text)
 
 		cmd := exec.CommandContext(a.ctx, "agy", args...)
 		process.Configure(cmd)
@@ -131,17 +138,8 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 		cmd.Stderr = pw
 
 		if err := cmd.Start(); err != nil {
-			a.emit(harness.Event{
-				Type: harness.EventText,
-				Payload: protocol.TextParams{
-					SessionID: sessID,
-					Delta:     fmt.Sprintf("[AGY] Executando análise para '%s'.\n", text),
-				},
-			})
-			a.emit(harness.Event{
-				Type:    harness.EventComplete,
-				Payload: protocol.CompleteParams{SessionID: sessID, Reason: "completed"},
-			})
+			a.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: "falha ao iniciar agy: " + err.Error()}})
+			a.emit(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessID, Reason: "process_error"}})
 			return
 		}
 		a.mu.Lock()
@@ -156,8 +154,15 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 
 		scanner := bufio.NewScanner(pr)
 		scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
+		sawOutput, toolFailure := false, ""
 		for scanner.Scan() {
 			line := scanner.Text()
+			if line != "" {
+				sawOutput = true
+				if failure := agyFailureLine(line); failure != "" && toolFailure == "" {
+					toolFailure = failure
+				}
+			}
 			if events := harness.ParseJSONEvent(line, sessID); len(events) > 0 {
 				for _, event := range events {
 					a.emit(event)
@@ -185,12 +190,18 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 		if waitErr != nil {
 			a.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: waitErr.Error()}})
 		}
+		if toolFailure == "" && !sawOutput {
+			toolFailure = "agy terminou sem produzir saída; nenhuma ferramenta foi executada"
+		}
+		if toolFailure != "" {
+			a.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: toolFailure}})
+		}
 
 		a.emit(harness.Event{
 			Type: harness.EventComplete,
 			Payload: protocol.CompleteParams{
 				SessionID: sessID,
-				Reason:    "completed",
+				Reason:    map[bool]string{true: "process_error", false: "completed"}[waitErr != nil || toolFailure != ""],
 			},
 		})
 	}()
@@ -211,6 +222,14 @@ func (a *AGYHarness) RespondPermission(ctx context.Context, reqID string, allow 
 		return err
 	}
 	return nil
+}
+
+func agyFailureLine(line string) string {
+	lower := strings.ToLower(line)
+	if strings.Contains(lower, "no output produced") || strings.Contains(lower, "tool required") || (strings.Contains(lower, "permission") && strings.Contains(lower, "denied")) {
+		return strings.TrimSpace(line)
+	}
+	return ""
 }
 
 func (a *AGYHarness) Events() <-chan harness.Event {

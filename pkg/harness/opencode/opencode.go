@@ -117,6 +117,9 @@ func (o *OpenCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig) 
 	for k, v := range cfg.Env {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
+	if cfg.CWD != "" {
+		env = harness.SetEnv(env, "PWD", cfg.CWD)
+	}
 	o.env = env
 
 	return nil
