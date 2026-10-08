@@ -11,6 +11,19 @@ export interface SessionOptions {
   systemPrompt?: string;
 }
 
+export interface HarnessRegistration {
+  name: string;
+  base?: string;
+  displayName?: string;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  model?: string;
+  prompt?: "stdin" | "argument";
+  finishRegex?: string;
+  quotaRegex?: string;
+}
+
 export interface PermissionRequest {
   sessionId: string;
   requestId: string;

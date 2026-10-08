@@ -90,6 +90,25 @@ class Agent:
                 output.append(event["data"].get("delta", ""))
         return "".join(output)
 
+    def register_harness(self, spec: Dict[str, Any]) -> None:
+        """Registra um harness custom em tempo de execução."""
+        req_id = self.req_id
+        self.req_id += 1
+        self.transport.send({"jsonrpc": "2.0", "id": req_id, "method": "harness.register", "params": spec})
+        while True:
+            line = self.transport.read_line()
+            if not line:
+                raise RuntimeError("Falha ao registrar harness")
+            msg = json.loads(line)
+            if msg.get("id") == req_id:
+                if "error" in msg:
+                    raise RuntimeError(msg["error"]["message"])
+                return
+
+    # Alias alinhado ao nome usado pelos SDKs TypeScript e pelo protocolo.
+    def registerHarness(self, spec: Dict[str, Any]) -> None:
+        self.register_harness(spec)
+
     def respond_permission(self, request_id: str, allow: bool):
         req_id = self.req_id
         self.req_id += 1

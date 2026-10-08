@@ -55,7 +55,6 @@ func init() {
 		})
 	}
 	register("claude-code")
-	register("claude")
 }
 
 // ClaudeCodeHarness implementa o conector para o Claude Code nos modos SDK e CLI

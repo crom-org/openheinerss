@@ -77,6 +77,17 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) protoc
 		catalog := harness.ListCatalog()
 		return protocol.NewResponse(req.ID, protocol.CatalogListResult{Harnesses: catalog})
 
+	case protocol.MethodHarnessRegister:
+		var p protocol.HarnessRegisterParams
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para harness.register", nil)
+		}
+		err := harness.RegisterCustom(harness.CustomSpec{Name: p.Name, Base: p.Base, DisplayName: p.DisplayName, Command: p.Command, Args: p.Args, Env: p.Env, Model: p.Model, Prompt: p.Prompt, FinishRegex: p.FinishRegex, QuotaRegex: p.QuotaRegex})
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, err.Error(), nil)
+		}
+		return protocol.NewResponse(req.ID, map[string]string{"name": p.Name, "status": "registered"})
+
 	case protocol.MethodDoctorCheck:
 		var params protocol.DoctorCheckParams
 		_ = json.Unmarshal(req.Params, &params)

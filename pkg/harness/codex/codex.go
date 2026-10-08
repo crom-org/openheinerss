@@ -27,7 +27,6 @@ func init() {
 		})
 	}
 	register("codex")
-	register("codex2")
 }
 
 // CodexHarness adapta o streaming JSONL do `codex exec` ao protocolo do projeto.

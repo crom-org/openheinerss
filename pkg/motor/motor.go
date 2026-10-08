@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/crom-org/openheinerss/pkg/harness"
 )
 
 // Perfil é a configuração efetiva de um motor.
@@ -16,20 +18,12 @@ type Perfil struct {
 	Env                                          map[string]string
 }
 
-var perfis = map[string]Perfil{
-	"codex":          {Nome: "codex", Harness: "codex", Mode: "cli", Model: "gpt-reserve", Effort: "medium"},
-	"codex2":         {Nome: "codex2", Harness: "codex2", Mode: "cli", Model: "gpt-reserve", Effort: "medium", Env: map[string]string{"CODEX_HOME": "~/.codex-compartilhado"}},
-	"claude":         {Nome: "claude", Harness: "claude", Mode: "cli", Model: "claude-sonnet-5-5"},
-	"claude-conta2":  {Nome: "claude-conta2", Harness: "claude", Mode: "cli", Model: "claude-sonnet-5-5", Env: map[string]string{"CLAUDE_CONFIG_DIR": "~/.claude-conta2"}},
-	"cco-openrouter": {Nome: "cco-openrouter", Harness: "cco", Mode: "cli", Provider: "openrouter", Model: ""},
-	"cco-zen":        {Nome: "cco-zen", Harness: "cco", Mode: "cli", Provider: "opencode-zen", Model: ""},
-	"opencode":       {Nome: "opencode", Harness: "opencode", Mode: "cli", Model: "opencode/big-pickle"},
-}
+var harnessesBase = []string{"aider", "agy", "claude-code", "codex", "mock", "opencode"}
 
 func perfisPadrao() []Perfil {
-	result := make([]Perfil, 0, len(perfis))
-	for _, p := range perfis {
-		result = append(result, p)
+	result := make([]Perfil, 0, len(harnessesBase))
+	for _, name := range harnessesBase {
+		result = append(result, Perfil{Nome: name, Harness: name, Mode: "cli"})
 	}
 	for i := range result {
 		for j := i + 1; j < len(result); j++ {
@@ -41,12 +35,19 @@ func perfisPadrao() []Perfil {
 	return result
 }
 
-// Resolve resolve um perfil embutido, aplicando modelo e esforço opcionais.
+// Resolve resolve um harness base ou uma instância carregada, aplicando modelo e esforço opcionais.
 func Resolve(nome, modelo, esforco string) (Perfil, error) {
-	p, ok := perfis[nome]
-	if !ok {
-		return Perfil{}, fmt.Errorf("motor '%s' desconhecido; use motores para listar os perfis", nome)
+	base := false
+	for _, name := range harnessesBase {
+		if name == nome {
+			base = true
+			break
+		}
 	}
+	if !base && !harness.Exists(nome) {
+		return Perfil{}, fmt.Errorf("motor '%s' desconhecido; defina-o em .openheinerss/harnesses ou use um harness base", nome)
+	}
+	p := Perfil{Nome: nome, Harness: nome, Mode: "cli"}
 	if modelo != "" {
 		p.Model = modelo
 	}
