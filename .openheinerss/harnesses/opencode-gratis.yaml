@@ -1,0 +1,3 @@
+name: opencode-gratis
+base: opencode
+model: opencode/big-pickle
