@@ -85,6 +85,7 @@ type Result struct {
 }
 
 type meta struct {
+	Projeto   string `json:"projeto"`
 	Motor     string `json:"motor"`
 	Modelo    string `json:"modelo"`
 	Esforco   string `json:"esforco"`
@@ -262,7 +263,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		if modeloMeta == "" {
 			modeloMeta = "padrão"
 		}
-		m := meta{Motor: candidate, Modelo: modeloMeta, Esforco: effort, Conta: candidate, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid()}
+		m := meta{Projeto: filepath.Base(repo), Motor: candidate, Modelo: modeloMeta, Esforco: effort, Conta: candidate, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid()}
 		metaPath := filepath.Join(agents, "logs", o.Name+".meta.json")
 		if err := writeMeta(metaPath, m); err != nil {
 			return Result{}, err
@@ -379,7 +380,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	if lastErr == nil {
 		lastErr = fmt.Errorf("nenhuma tentativa executada")
 	}
-	m := meta{Motor: o.Motor, Conta: o.Motor, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid()}
+	m := meta{Projeto: filepath.Base(repo), Motor: o.Motor, Conta: o.Motor, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid()}
 	code := finalCode
 	m.Fim, m.Codigo = o.Now().Format(time.RFC3339), &code
 	_ = writeMeta(filepath.Join(agents, "logs", o.Name+".meta.json"), m)
