@@ -49,7 +49,7 @@ import { useOpenheinerss } from "@openheinerss/react";
 export function AIAssistant() {
   const [input, setInput] = useState("");
   const { prompt, messages, isThinking, permissionRequest, respondPermission } = useOpenheinerss({
-    endpoint: "ws://localhost:4799"
+    endpoint: "ws://localhost:4820"
   });
 
   return (
@@ -122,7 +122,7 @@ for event in agent.stream("Escreva testes unitários para o módulo auth"):
 
 Para qualquer linguagem que não possua um SDK publicado (como Rust, Go, C#, Ruby, Elixir), a implementação é direta porque o Openheinerss fala JSON-RPC 2.0 padrão via:
 - **STDIO**: o aplicativo lança `openheinerss serve --stdio` e escreve/lê no terminal do subprocesso.
-- **WebSocket**: o aplicativo conecta em `ws://127.0.0.1:4799` e troca mensagens de texto JSON.
+- **WebSocket**: o aplicativo conecta em `ws://127.0.0.1:4820` e troca mensagens de texto JSON.
 
 ### Exemplo em Rust (Cliente Bruto):
 ```rust

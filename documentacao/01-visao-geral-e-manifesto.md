@@ -39,7 +39,7 @@ O **Openheinerss** (OpenHarness) nasceu na organização [crom-org](https://gith
                 │   React / Next.js  •  PHP / Laravel  •  Python Scripts │
                 └──────────────────────────┬─────────────────────────────┘
                                            │  JSON-RPC 2.0 / NDJSON
-                                           │  (STDIO ou WebSocket :4799)
+                                           │  (STDIO ou WebSocket :4820)
                 ┌──────────────────────────▼─────────────────────────────┐
                 │                 OPENHEINERSS GO CORE                   │
                 │                                                        │

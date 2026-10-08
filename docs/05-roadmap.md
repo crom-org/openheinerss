@@ -9,7 +9,7 @@ Plano mestre de fases refinado para a construção do projeto, integrando os apr
 - [x] Estrutura base de pacotes (`cmd/openheinerss`, `pkg/protocol`, `pkg/server`, `pkg/session`, `pkg/harness`, `pkg/config`).
 - [x] Implementar a estrutura de comandos CLI com Cobra/pflag:
   - `openheinerss serve --stdio` (transporte via pipes padrão)
-  - `openheinerss serve --port 4799` (servidor WebSocket local para web/apps)
+  - `openheinerss serve --port 4820` (servidor WebSocket local para web/apps)
   - `openheinerss init` (cria diretório `.openheinerss/` com `config.yaml` e diretórios base)
   - `openheinerss run --harness ...` (execução CLI interativa rápida)
 - [x] Motor de transporte JSON-RPC 2.0 / NDJSON bidirecional (STDIO e WebSocket).
@@ -70,6 +70,6 @@ Plano mestre de fases refinado para a construção do projeto, integrando os apr
 - [x] **Python SDK (`openheinerss` no PyPI)**:
   - Suporte a síncrono e assíncrono (`asyncio`).
 - [ ] **Integração com a Interface Web do CCO**:
-  - Conectar a interface React + assistant-ui do CCO ao WebSocket do Openheinerss (`ws://localhost:4799`).
+  - Conectar a interface React + assistant-ui do CCO ao WebSocket do Openheinerss (`ws://localhost:4820`).
 - [ ] Extensão VSCode oficial.
 

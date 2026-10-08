@@ -14,7 +14,7 @@ openheinerss/
 │   └── main.go
 ├── pkg/
 │   ├── protocol/               # Tipos JSON-RPC 2.0, mensagens e eventos normalizados
-│   ├── server/                 # Servidores de transporte (STDIO e WebSocket :4799)
+│   ├── server/                 # Servidores de transporte (STDIO e WebSocket :4820)
 │   ├── session/                # Gerenciador de ciclo de vida e estado das sessões
 │   ├── harness/                # Interface universal Harness e registro de motores
 │   │   ├── mock/               # Motor determinístico de teste (offline)
@@ -46,9 +46,9 @@ O Openheinerss suporta dois meios de transporte bidirecionais:
 - **Funcionamento**: A aplicação pai inicia o binário `openheinerss serve --stdio` como subprocesso e comunica-se lendo e escrevendo linhas delimitadas por `\n` (NDJSON) na entrada/saída padrão.
 - **Vantagem**: Desempenho máximo, overhead de rede zero, sem necessidade de portas de rede abertas.
 
-### B. Transporte WebSocket (`--port 4799`)
+### B. Transporte WebSocket (`--port 4820`)
 - **Indicado para**: Interfaces Web (React, Vue, Svelte), aplicações desktop (Tauri, Electron), mobile ou ambientes multi-client.
-- **Funcionamento**: Um servidor HTTP/WebSocket em Go escuta na porta `4799` (ou na porta configurada via flag `--port`). O handshake inicial atualiza a conexão para WebSocket e troca mensagens JSON-RPC 2.0 em tempo real.
+- **Funcionamento**: Um servidor HTTP/WebSocket em Go escuta na porta `4820` (ou na porta configurada via flag `--port`). O handshake inicial atualiza a conexão para WebSocket e troca mensagens JSON-RPC 2.0 em tempo real.
 - **Vantagem**: Permite que múltiplos clientes observem o mesmo stream e interajam com as sessões de agentes.
 
 ---

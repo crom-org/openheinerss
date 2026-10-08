@@ -14,7 +14,7 @@ import { Openheinerss } from "@openheinerss/sdk";
 
 // Conectar ao servidor Openheinerss via WebSocket ou subprocesso STDIO:
 const agent = new Openheinerss({
-  endpoint: "ws://localhost:4799",
+  endpoint: "ws://localhost:4820",
   options: {
     harness: "claude-code",
     model: "claude-3-5-sonnet-20241022",
@@ -54,7 +54,7 @@ import { useOpenheinerss } from "@openheinerss/sdk";
 export function AssistantChat() {
   const [input, setInput] = useState("");
   const { messages, isThinking, prompt, pendingPermission, respondPermission } = useOpenheinerss({
-    endpoint: "ws://localhost:4799",
+    endpoint: "ws://localhost:4820",
     harness: "opencode",
   });
 

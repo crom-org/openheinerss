@@ -14,7 +14,7 @@ O **Openheinerss** é um maestro universal de orquestração de **AI Coding Agen
 
 Em vez de prender sua aplicação ao Claude Code, OpenCode, Codex ou qualquer CLI proprietário, o Openheinerss fornece:
 1. **Um binário Go de alta performance** que gerencia processos filhos, permissões bloqueantes e streaming em tempo real.
-2. **Um protocolo unificado de mensagens (JSON-RPC 2.0 / NDJSON)** via STDIO e WebSocket (`:4799`).
+2. **Um protocolo unificado de mensagens (JSON-RPC 2.0 / NDJSON)** via STDIO e WebSocket (`:4820`).
 3. **6 Harnesses plugáveis**:
    - `mock`: Motor de teste determinístico offline (0 tokens, simulação instantânea).
    - `claude-code`: Dual mode (SDK headless `@anthropic-ai/claude-agent-sdk` + CLI binário oficial `claude`).
@@ -123,7 +123,7 @@ openheinerss run --harness agy "Revise a arquitetura de módulos"
 openheinerss serve --stdio
 
 # Modo WebSocket (para interfaces Web, React, Tauri, mobile):
-openheinerss serve --port 4799
+openheinerss serve --port 4820
 ```
 
 ---
@@ -192,7 +192,7 @@ Acesse a documentação completa, detalhada e estruturada na pasta [`documentaca
 | Capítulo | Guia | O que você encontrará |
 | :---: | :--- | :--- |
 | **01** | [**Visão Geral & Manifesto**](./documentacao/01-visao-geral-e-manifesto.md) | O propósito do Openheinerss, problemas de fragmentação de CLIs, vantagens de Go e princípios centrais. |
-| **02** | [**Arquitetura & Design do Sistema**](./documentacao/02-arquitetura-e-design.md) | Concorrência com Goroutines/canais, STDIO vs WebSocket (`:4799`), ciclo de vida de sessões e diretório `.openheinerss/`. |
+| **02** | [**Arquitetura & Design do Sistema**](./documentacao/02-arquitetura-e-design.md) | Concorrência com Goroutines/canais, STDIO vs WebSocket (`:4820`), ciclo de vida de sessões e diretório `.openheinerss/`. |
 | **03** | [**Especificação do Protocolo JSON-RPC 2.0**](./documentacao/03-especificacao-do-protocolo-rpc.md) | Todos os métodos (`session.start`, `session.prompt`, `session.permission`, `session.abort`, `session.resume`, etc.) e eventos de streaming. |
 | **04** | [**Guia Completo dos 6 Harnesses**](./documentacao/04-guia-completo-de-harnesses.md) | Detalhamento exaustivo de `mock`, `claude-code`, `opencode`, `codex`, `agy` e `aider`. |
 | **05** | [**Cache, Otimização de Tokens & Modelos Locais**](./documentacao/05-cache-otimizacao-e-modelos-locais.md) | Prompt caching, bypass de provedores de terceiros, KV-cache de GPU no Ollama/vLLM e tutorial passo a passo offline. |

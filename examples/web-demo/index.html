@@ -134,10 +134,10 @@
     const permContainer = document.getElementById("permContainer");
 
     function connect() {
-      ws = new WebSocket("ws://127.0.0.1:4799");
+      ws = new WebSocket("ws://127.0.0.1:4820");
       
       ws.onopen = () => {
-        statusDiv.textContent = "Conectado (:4799)";
+        statusDiv.textContent = "Conectado (:4820)";
         statusDiv.className = "status connected";
       };
 
