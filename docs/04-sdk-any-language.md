@@ -45,6 +45,18 @@ Os callbacks Python são executados por uma fila e uma thread de despacho separa
 
 O transporte PHP inicia o processo com argumentos separados (sem shell), assim binários em caminhos com espaços funcionam. O transporte TypeScript usa `spawn` com argv pelo mesmo motivo e rejeita as RPCs pendentes quando o processo ou WebSocket chega ao EOF. No TypeScript, callbacks podem chamar métodos assíncronos como `decideRun()` sem bloquear o processamento da resposta.
 
+## MCP e risco nos SDKs
+
+Os três SDKs aceitam as opções de sessão do protocolo (`options` em `session.create`):
+
+| Opção | TypeScript (`start`/`options`) | Python (`Agent(...)`) | PHP (`Agent::session([...])`) |
+|---|---|---|---|
+| não entregar `mcp.json` | `semMcp: true` | `sem_mcp=True` | `'semMcp' => true` |
+| só alguns servidores | `mcp: ["fs"]` | `mcp=["fs"]` | `'mcp' => ['fs']` |
+| classificador de risco | `classificarRisco: true` | `classificar_risco=True` | `'classificarRisco' => true` |
+
+Com o classificador ligado, os eventos `tool_call` e `permission` trazem `risco` (`"baixo" | "medio" | "alto"`) e `motivoRisco`. Só informa; quem decide é o cliente. Desligado (padrão), os campos não aparecem.
+
 ## RPC mínimo em qualquer linguagem
 
 ```json
