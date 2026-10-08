@@ -37,6 +37,9 @@ Gera ou verifica o manual do CLI em docs/09-cli.md
 Usage:
   openheinerss docs [flags]
 
+Aliases:
+  docs, documentacao
+
 Flags:
       --check   Falha se docs/09-cli.md não corresponder ao --help atual
 
@@ -49,6 +52,9 @@ Verifica ferramentas, dependências e pré-requisitos do sistema
 
 Usage:
   openheinerss doctor [flags]
+
+Aliases:
+  doctor, diagnostico
 
 Flags:
       --harness string   Harness específico para validar pré-requisitos
@@ -80,6 +86,9 @@ Inicializa o diretório .openheinerss no repositório atual
 Usage:
   openheinerss init
 
+Aliases:
+  init, inicializar
+
 ```
 
 ## `openheinerss limites --help`
@@ -89,6 +98,9 @@ Mostra as cotas locais das instâncias Codex e Claude
 
 Usage:
   openheinerss limites [flags]
+
+Aliases:
+  limites, limits
 
 Flags:
       --json   Emite JSON
@@ -119,6 +131,9 @@ Lista perfis de motores e papéis configurados
 Usage:
   openheinerss motores
 
+Aliases:
+  motores, engines
+
 ```
 
 ## `openheinerss rodar --help`
@@ -129,17 +144,29 @@ Executa uma missão com worktree, log e retomada
 Usage:
   openheinerss rodar <nome> <instância|harness> [flags]
 
+Aliases:
+  rodar, launch, dispatch
+
 Flags:
       --agentes string         Alias de --pasta-agentes
+      --agents-dir string      Alias em inglês de --pasta-agentes
+      --base-branch string     Alias em inglês de --branch-base
       --branch-base string     Branch base da worktree (padrão main)
       --carga-maxima float     Carga máxima de 1 minuto; 0 desativa
       --cota-max float         Pula instâncias com uso de cota igual ou acima deste percentual (0 desativa)
+      --effort string          Alias em inglês de --esforco
       --esforco string         Esforço de raciocínio
       --max-agentes int        Máximo de agentes simultâneos
+      --max-agents int         Alias em inglês de --max-agentes
+      --max-load float         Alias em inglês de --carga-maxima
+      --model string           Alias em inglês de --modelo
       --modelo string          Modelo a usar
       --pasta-agentes string   Pasta dos agentes (padrão .claude/agentes)
       --prompt string          Arquivo de prompt alternativo
+      --quota-max float        Alias em inglês de --cota-max
+      --resume                 Alias em inglês de --retomar
       --retomar                Acrescenta o texto de continuação e preserva o log
+      --retries int            Alias em inglês de --tentativas
       --tentativas int         Máximo de tentativas
 
 ```
@@ -152,16 +179,25 @@ Executa um prompt interativo no terminal usando o harness escolhido
 Usage:
   openheinerss run [prompt] [flags]
 
+Aliases:
+  run, executar
+
 Flags:
+      --effort string     Alias em inglês de --esforco
+      --engine string     Alias em inglês de --motor
       --esforco string    Esforço de raciocínio do motor
       --harness string    Nome do harness ('mock', 'claude-code', 'opencode') (default "mock")
       --mode string       Modo do harness ('mock', 'sdk', 'cli') (default "mock")
       --model string      Nome do modelo
       --modelo string     Alias em português de --model
+      --modo string       Alias em português de --mode (default "mock")
       --motor string      Harness base ou instância custom definida pelo usuário
       --papel string      Papel definido em .openheinerss/motores.yaml
+      --provedor string   Alias em português de --provider
       --provider string   Provedor do modelo
+      --resume string     Alias em inglês de --retomar
       --retomar string    Retoma a sessão persistida pelo ID
+      --role string       Alias em inglês de --papel
 
 ```
 
@@ -173,11 +209,15 @@ Inicia o servidor de orquestração Openheinerss (STDIO ou WebSocket)
 Usage:
   openheinerss serve [flags]
 
+Aliases:
+  serve, servir
+
 Flags:
-      --host string   Host de vinculação do WebSocket (default "127.0.0.1")
-  -p, --port int      Porta para o servidor WebSocket (alias de --porta) (default 4820)
-      --porta int     Porta para o servidor WebSocket (default 4820)
-      --stdio         Executa via pipes padrão STDIO (JSON-RPC / NDJSON)
+      --hospedeiro string   Alias em português de --host (default "127.0.0.1")
+      --host string         Host de vinculação do WebSocket (default "127.0.0.1")
+  -p, --port int            Porta para o servidor WebSocket (alias de --porta) (default 4820)
+      --porta int           Porta para o servidor WebSocket (default 4820)
+      --stdio               Executa via pipes padrão STDIO (JSON-RPC / NDJSON)
 
 ```
 
@@ -189,6 +229,9 @@ Exibe a versão do Openheinerss
 Usage:
   openheinerss version
 
+Aliases:
+  version, versao
+
 ```
 
 ## `openheinerss harness add --help`
@@ -198,6 +241,9 @@ Valida e copia um arquivo de harness para o projeto
 
 Usage:
   openheinerss harness add <arquivo>
+
+Aliases:
+  add, adicionar
 
 ```
 
@@ -209,6 +255,9 @@ Lista harnesses embutidos e custom
 Usage:
   openheinerss harness list
 
+Aliases:
+  list, listar
+
 ```
 
 ## `openheinerss harness test --help`
@@ -219,13 +268,20 @@ Executa um prompt curto e mostra eventos
 Usage:
   openheinerss harness test [nome] [flags]
 
+Aliases:
+  test, testar
+
 Flags:
+      --all                 Alias em inglês de --todos
       --incluir-principal   Inclui claude-code (conta principal)
       --json                Emite a matriz em JSON (com --todos)
+      --mode string         Alias em inglês de --modo (default "cli")
       --modo string         Modo do teste individual (cli ou sdk) (default "cli")
       --prompt string       Prompt curto para o teste
       --pular string        Nomes a pular, separados por vírgula
+      --resume              Alias em inglês de --retomar
       --retomar             Envia um segundo prompt na mesma sessão
+      --skip string         Alias em inglês de --pular
       --timeout duration    Tempo máximo de cada teste (default 2m0s)
       --todos               Testa todos os harnesses e instâncias em sequência
 
@@ -239,6 +295,9 @@ Registra um novo servidor MCP local no projeto
 Usage:
   openheinerss mcp add [nome] [comando] [argumentos...]
 
+Aliases:
+  add, adicionar
+
 ```
 
 ## `openheinerss mcp list --help`
@@ -248,6 +307,9 @@ Lista os servidores MCP configurados em .openheinerss/mcp.json
 
 Usage:
   openheinerss mcp list
+
+Aliases:
+  list, listar
 
 ```
 

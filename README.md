@@ -2,6 +2,8 @@
 
 O Openheinerss é um binário Go que normaliza sessões de agentes de código por JSON-RPC 2.0/NDJSON. Ele oferece transporte STDIO e WebSocket (`127.0.0.1:4820`), além de uma execução de missões com worktree, logs e retomada.
 
+Todo comando e flag do CLI aceita o nome padrão em português e em inglês; `rodar` também pode ser chamado de `launch` ou `dispatch`, sem alterar o comando interativo `run`.
+
 ## Início rápido
 
 ```bash

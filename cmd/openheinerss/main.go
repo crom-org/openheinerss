@@ -77,8 +77,9 @@ Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC d
 func newDocsCmd() *cobra.Command {
 	var check bool
 	cmd := &cobra.Command{
-		Use:   "docs",
-		Short: "Gera ou verifica o manual do CLI em docs/09-cli.md",
+		Use:     "docs",
+		Aliases: []string{"documentacao"},
+		Short:   "Gera ou verifica o manual do CLI em docs/09-cli.md",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := filepath.Abs(filepath.Join("docs", "09-cli.md"))
 			if err != nil {
@@ -146,8 +147,9 @@ func newServeCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "serve",
-		Short: "Inicia o servidor de orquestração Openheinerss (STDIO ou WebSocket)",
+		Use:     "serve",
+		Aliases: []string{"servir"},
+		Short:   "Inicia o servidor de orquestração Openheinerss (STDIO ou WebSocket)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			manager := session.NewManager()
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -182,6 +184,7 @@ func newServeCmd() *cobra.Command {
 	cmd.Flags().IntVarP(&port, "port", "p", defaultPort, "Porta para o servidor WebSocket (alias de --porta)")
 	cmd.Flags().IntVar(&port, "porta", defaultPort, "Porta para o servidor WebSocket")
 	cmd.Flags().StringVar(&host, "host", "127.0.0.1", "Host de vinculação do WebSocket")
+	cmd.Flags().StringVar(&host, "hospedeiro", "127.0.0.1", "Alias em português de --host")
 
 	return cmd
 }
@@ -202,8 +205,9 @@ func newDoctorCmd() *cobra.Command {
 	var targetHarness string
 
 	cmd := &cobra.Command{
-		Use:   "doctor",
-		Short: "Verifica ferramentas, dependências e pré-requisitos do sistema",
+		Use:     "doctor",
+		Aliases: []string{"diagnostico"},
+		Short:   "Verifica ferramentas, dependências e pré-requisitos do sistema",
 		Run: func(cmd *cobra.Command, args []string) {
 			res := doctor.CheckEnvironment(targetHarness)
 			fmt.Print(doctor.FormatDoctorReport(res))
@@ -216,8 +220,9 @@ func newDoctorCmd() *cobra.Command {
 
 func newInitCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "init",
-		Short: "Inicializa o diretório .openheinerss no repositório atual",
+		Use:     "init",
+		Aliases: []string{"inicializar"},
+		Short:   "Inicializa o diretório .openheinerss no repositório atual",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
@@ -251,9 +256,10 @@ func newRunCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "run [prompt]",
-		Short: "Executa um prompt interativo no terminal usando o harness escolhido",
-		Args:  cobra.MinimumNArgs(0),
+		Use:     "run [prompt]",
+		Aliases: []string{"executar"},
+		Short:   "Executa um prompt interativo no terminal usando o harness escolhido",
+		Args:    cobra.MinimumNArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			promptText := strings.Join(args, " ")
 			if promptText == "" {
@@ -372,13 +378,19 @@ func newRunCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&role, "papel", "", "Papel definido em .openheinerss/motores.yaml")
+	cmd.Flags().StringVar(&role, "role", "", "Alias em inglês de --papel")
 	cmd.Flags().StringVar(&motorName, "motor", "", "Harness base ou instância custom definida pelo usuário")
+	cmd.Flags().StringVar(&motorName, "engine", "", "Alias em inglês de --motor")
 	cmd.Flags().StringVar(&harnessName, "harness", "mock", "Nome do harness ('mock', 'claude-code', 'opencode')")
 	cmd.Flags().StringVar(&modeName, "mode", "mock", "Modo do harness ('mock', 'sdk', 'cli')")
+	cmd.Flags().StringVar(&modeName, "modo", "mock", "Alias em português de --mode")
 	cmd.Flags().StringVar(&provider, "provider", "", "Provedor do modelo")
+	cmd.Flags().StringVar(&provider, "provedor", "", "Alias em português de --provider")
 	cmd.Flags().StringVar(&model, "model", "", "Nome do modelo")
 	cmd.Flags().StringVar(&model, "modelo", "", "Alias em português de --model")
+	cmd.Flags().StringVar(&effort, "effort", "", "Alias em inglês de --esforco")
 	cmd.Flags().StringVar(&effort, "esforco", "", "Esforço de raciocínio do motor")
+	cmd.Flags().StringVar(&resumeID, "resume", "", "Alias em inglês de --retomar")
 	cmd.Flags().StringVar(&resumeID, "retomar", "", "Retoma a sessão persistida pelo ID")
 
 	return cmd
@@ -391,8 +403,10 @@ func newRodarCmd() *cobra.Command {
 	var maxAgentes, tentativas int
 	var cotaMax float64
 	cmd := &cobra.Command{
-		Use: "rodar <nome> <instância|harness>", Short: "Executa uma missão com worktree, log e retomada",
-		Args: cobra.ExactArgs(2),
+		Use:     "rodar <nome> <instância|harness>",
+		Aliases: []string{"launch", "dispatch"},
+		Short:   "Executa uma missão com worktree, log e retomada",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if os.Getenv("RETOMAR") == "1" {
 				retomar = true
@@ -410,22 +424,31 @@ func newRodarCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&modelo, "modelo", "", "Modelo a usar")
+	cmd.Flags().StringVar(&modelo, "model", "", "Alias em inglês de --modelo")
 	cmd.Flags().StringVar(&esforco, "esforco", "", "Esforço de raciocínio")
+	cmd.Flags().StringVar(&esforco, "effort", "", "Alias em inglês de --esforco")
 	cmd.Flags().StringVar(&prompt, "prompt", "", "Arquivo de prompt alternativo")
 	cmd.Flags().BoolVar(&retomar, "retomar", false, "Acrescenta o texto de continuação e preserva o log")
+	cmd.Flags().BoolVar(&retomar, "resume", false, "Alias em inglês de --retomar")
 	cmd.Flags().StringVar(&pasta, "pasta-agentes", "", "Pasta dos agentes (padrão .claude/agentes)")
 	cmd.Flags().StringVar(&pasta, "agentes", "", "Alias de --pasta-agentes")
+	cmd.Flags().StringVar(&pasta, "agents-dir", "", "Alias em inglês de --pasta-agentes")
 	cmd.Flags().StringVar(&branchBase, "branch-base", "", "Branch base da worktree (padrão main)")
+	cmd.Flags().StringVar(&branchBase, "base-branch", "", "Alias em inglês de --branch-base")
 	cmd.Flags().Float64Var(&carga, "carga-maxima", 0, "Carga máxima de 1 minuto; 0 desativa")
+	cmd.Flags().Float64Var(&carga, "max-load", 0, "Alias em inglês de --carga-maxima")
 	cmd.Flags().IntVar(&maxAgentes, "max-agentes", 0, "Máximo de agentes simultâneos")
+	cmd.Flags().IntVar(&maxAgentes, "max-agents", 0, "Alias em inglês de --max-agentes")
 	cmd.Flags().IntVar(&tentativas, "tentativas", 0, "Máximo de tentativas")
+	cmd.Flags().IntVar(&tentativas, "retries", 0, "Alias em inglês de --tentativas")
 	cmd.Flags().Float64Var(&cotaMax, "cota-max", 0, "Pula instâncias com uso de cota igual ou acima deste percentual (0 desativa)")
+	cmd.Flags().Float64Var(&cotaMax, "quota-max", 0, "Alias em inglês de --cota-max")
 	return cmd
 }
 
 func newLimitesCmd() *cobra.Command {
 	var jsonOutput bool
-	cmd := &cobra.Command{Use: "limites", Short: "Mostra as cotas locais das instâncias Codex e Claude", RunE: func(cmd *cobra.Command, args []string) error {
+	cmd := &cobra.Command{Use: "limites", Aliases: []string{"limits"}, Short: "Mostra as cotas locais das instâncias Codex e Claude", RunE: func(cmd *cobra.Command, args []string) error {
 		resultado := limites.Obter()
 		if jsonOutput {
 			b, err := json.MarshalIndent(resultado, "", "  ")
@@ -460,7 +483,7 @@ func newLimitesCmd() *cobra.Command {
 }
 
 func newMotorsCmd() *cobra.Command {
-	return &cobra.Command{Use: "motores", Short: "Lista perfis de motores e papéis configurados", RunE: func(cmd *cobra.Command, args []string) error {
+	return &cobra.Command{Use: "motores", Aliases: []string{"engines"}, Short: "Lista perfis de motores e papéis configurados", RunE: func(cmd *cobra.Command, args []string) error {
 		for _, p := range motor.Perfis() {
 			fmt.Printf("%-16s harness=%-12s modelo=%s", p.Nome, p.Harness, p.Model)
 			if p.Provider != "" {
@@ -492,8 +515,9 @@ func newMcpCmd() *cobra.Command {
 	}
 
 	mcpCmd.AddCommand(&cobra.Command{
-		Use:   "list",
-		Short: "Lista os servidores MCP configurados em .openheinerss/mcp.json",
+		Use:     "list",
+		Aliases: []string{"listar"},
+		Short:   "Lista os servidores MCP configurados em .openheinerss/mcp.json",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, _ := os.Getwd()
 			servers, err := mcp.GetHub().ListServers(cwd)
@@ -518,6 +542,7 @@ func newMcpCmd() *cobra.Command {
 
 	mcpCmd.AddCommand(&cobra.Command{
 		Use:                "add [nome] [comando] [argumentos...]",
+		Aliases:            []string{"adicionar"},
 		Short:              "Registra um novo servidor MCP local no projeto",
 		DisableFlagParsing: true,
 		Args:               cobra.MinimumNArgs(2),
@@ -544,8 +569,9 @@ func newMcpCmd() *cobra.Command {
 
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "version",
-		Short: "Exibe a versão do Openheinerss",
+		Use:     "version",
+		Aliases: []string{"versao"},
+		Short:   "Exibe a versão do Openheinerss",
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Printf("openheinerss %s (github.com/crom-org/openheinerss)\n", version)
 		},
@@ -554,7 +580,7 @@ func newVersionCmd() *cobra.Command {
 
 func newHarnessCmd() *cobra.Command {
 	root := &cobra.Command{Use: "harness", Short: "Lista, instala e testa harnesses"}
-	root.AddCommand(&cobra.Command{Use: "list", Short: "Lista harnesses embutidos e custom", RunE: func(cmd *cobra.Command, args []string) error {
+	root.AddCommand(&cobra.Command{Use: "list", Aliases: []string{"listar"}, Short: "Lista harnesses embutidos e custom", RunE: func(cmd *cobra.Command, args []string) error {
 		for _, item := range harness.ListCatalog() {
 			origin := item.Origin
 			if origin == "" {
@@ -564,7 +590,7 @@ func newHarnessCmd() *cobra.Command {
 		}
 		return nil
 	}})
-	root.AddCommand(&cobra.Command{Use: "add <arquivo>", Short: "Valida e copia um arquivo de harness para o projeto", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	root.AddCommand(&cobra.Command{Use: "add <arquivo>", Aliases: []string{"adicionar"}, Short: "Valida e copia um arquivo de harness para o projeto", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		if err := harness.LoadCustomFile(args[0]); err != nil {
 			return err
 		}
@@ -593,7 +619,7 @@ func newHarnessCmd() *cobra.Command {
 	var modo string
 	var pular string
 	var timeout time.Duration
-	test := &cobra.Command{Use: "test [nome]", Short: "Executa um prompt curto e mostra eventos", Args: func(cmd *cobra.Command, args []string) error {
+	test := &cobra.Command{Use: "test [nome]", Aliases: []string{"testar"}, Short: "Executa um prompt curto e mostra eventos", Args: func(cmd *cobra.Command, args []string) error {
 		if todos && len(args) != 0 {
 			return fmt.Errorf("--todos não aceita nome")
 		}
@@ -646,12 +672,16 @@ func newHarnessCmd() *cobra.Command {
 	}}
 	test.Flags().StringVar(&prompt, "prompt", "", "Prompt curto para o teste")
 	test.Flags().BoolVar(&todos, "todos", false, "Testa todos os harnesses e instâncias em sequência")
+	test.Flags().BoolVar(&todos, "all", false, "Alias em inglês de --todos")
 	test.Flags().BoolVar(&jsonOutput, "json", false, "Emite a matriz em JSON (com --todos)")
 	test.Flags().StringVar(&pular, "pular", "", "Nomes a pular, separados por vírgula")
+	test.Flags().StringVar(&pular, "skip", "", "Alias em inglês de --pular")
 	test.Flags().DurationVar(&timeout, "timeout", 120*time.Second, "Tempo máximo de cada teste")
 	test.Flags().BoolVar(&incluirPrincipal, "incluir-principal", false, "Inclui claude-code (conta principal)")
 	test.Flags().BoolVar(&retomar, "retomar", false, "Envia um segundo prompt na mesma sessão")
+	test.Flags().BoolVar(&retomar, "resume", false, "Alias em inglês de --retomar")
 	test.Flags().StringVar(&modo, "modo", "cli", "Modo do teste individual (cli ou sdk)")
+	test.Flags().StringVar(&modo, "mode", "cli", "Alias em inglês de --modo")
 	root.AddCommand(test)
 	return root
 }
