@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -224,11 +223,11 @@ func (o *Orq) fim(p protocol.OrqFimParams) {
 // ---------- caminhos ----------
 
 func raizGit(cwd string) string {
-	out, err := exec.Command("git", "-C", cwd, "rev-parse", "--show-toplevel").Output()
+	repo, err := orchestrator.RepoRoot(cwd)
 	if err != nil {
 		return cwd
 	}
-	return strings.TrimSpace(string(out))
+	return repo
 }
 
 // resolverPasta devolve a pasta de agentes e o nome do projeto (nome da raiz git), com as mesmas regras do rodar.

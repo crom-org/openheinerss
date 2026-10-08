@@ -50,7 +50,7 @@ Available Commands:
 Flags:
       --agents-dir string      Alias em inglês de --pasta-agentes (default ".claude/agentes")
       --json                   Emite JSON
-      --pasta-agentes string   Pasta dos agentes (default ".claude/agentes")
+      --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
 
 Use "openheinerss agentes [command] --help" for more information about a command.
 
@@ -180,7 +180,7 @@ Flags:
       --agents-dir string           Alias em inglês de --pasta-agentes
       --arquivo-chaves string       Arquivo opcional de variáveis secretas (não imprime valores)
       --base-branch string          Alias em inglês de --branch-base
-      --branch-base string          Branch base da worktree (padrão main)
+      --branch-base string          Branch base da worktree (padrão: main, ou a branch atual se não houver main)
       --carga-maxima float          Carga máxima de 1 minuto; 0 desativa
       --conta string                Conta/provedor da instância
       --cota-max float              Pula instâncias com uso de cota igual ou acima deste percentual (0 desativa)
@@ -295,7 +295,7 @@ Aliases:
 Global Flags:
       --agents-dir string      Alias em inglês de --pasta-agentes (default ".claude/agentes")
       --json                   Emite JSON
-      --pasta-agentes string   Pasta dos agentes (default ".claude/agentes")
+      --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
 
 ```
 
@@ -313,7 +313,7 @@ Aliases:
 Global Flags:
       --agents-dir string      Alias em inglês de --pasta-agentes (default ".claude/agentes")
       --json                   Emite JSON
-      --pasta-agentes string   Pasta dos agentes (default ".claude/agentes")
+      --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
 
 ```
 
@@ -331,7 +331,7 @@ Aliases:
 Global Flags:
       --agents-dir string      Alias em inglês de --pasta-agentes (default ".claude/agentes")
       --json                   Emite JSON
-      --pasta-agentes string   Pasta dos agentes (default ".claude/agentes")
+      --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
 
 ```
 
