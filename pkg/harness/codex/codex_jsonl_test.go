@@ -38,6 +38,10 @@ func TestParseJSONLSamples(t *testing.T) {
 	if parseJSONL(string(bad[:len(bad)-1]), "sess-test")[0].Type != harness.EventError {
 		t.Fatal("erro JSONL não convertido")
 	}
+	nested := parseJSONL(`{"type":"turn.failed","error":{"message":"modelo não suportado"}}`, "sess-test")
+	if len(nested) != 1 || nested[0].Payload.(protocol.ErrorParams).Message != "modelo não suportado" {
+		t.Fatalf("erro aninhado perdido: %#v", nested)
+	}
 }
 
 func TestBuildExecArgsAndEnv(t *testing.T) {

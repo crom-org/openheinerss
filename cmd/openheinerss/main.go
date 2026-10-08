@@ -497,7 +497,7 @@ func newRunCmd() *cobra.Command {
 }
 
 func newRodarCmd() *cobra.Command {
-	var modelo, esforco, prompt, texto, pasta, branchBase, conta, regras, arquivoChaves string
+	var modelo, esforco, modo, prompt, texto, pasta, branchBase, conta, regras, arquivoChaves string
 	var retomar, semRegras, seco bool
 	var carga, cargaAbaixo float64
 	var maxAgentes, tentativas int
@@ -520,7 +520,7 @@ func newRodarCmd() *cobra.Command {
 			if cargaAbaixo > 0 {
 				carga = cargaAbaixo
 			}
-			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog})
+			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Mode: modo, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog})
 			if err != nil && res.Name == "" {
 				return err
 			}
@@ -538,6 +538,8 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().StringVar(&modelo, "model", "", "Alias em inglês de --modelo")
 	cmd.Flags().StringVar(&esforco, "esforco", "", "Esforço de raciocínio")
 	cmd.Flags().StringVar(&esforco, "effort", "", "Alias em inglês de --esforco")
+	cmd.Flags().StringVar(&modo, "modo", "", "Modo do harness (cli ou sdk; a instância pode definir o padrão)")
+	cmd.Flags().StringVar(&modo, "mode", "", "Alias em inglês de --modo")
 	cmd.Flags().StringVar(&conta, "conta", "", "Conta/provedor da instância")
 	cmd.Flags().StringVar(&conta, "account", "", "Alias em inglês de --conta")
 	cmd.Flags().StringVar(&prompt, "prompt", "", "Arquivo de prompt alternativo")

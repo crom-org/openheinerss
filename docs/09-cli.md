@@ -193,8 +193,10 @@ Flags:
       --max-agentes int             Máximo de agentes simultâneos
       --max-agents int              Alias em inglês de --max-agentes
       --max-load float              Alias em inglês de --carga-maxima
+      --mode string                 Alias em inglês de --modo
       --model string                Alias em inglês de --modelo
       --modelo string               Modelo a usar
+      --modo string                 Modo do harness (cli ou sdk; a instância pode definir o padrão)
       --no-default-rules            Alias em inglês de --sem-regras-padrao
       --no-rules                    Alias em inglês de --sem-regras
       --pasta-agentes string        Pasta dos agentes (padrão .claude/agentes)

@@ -291,10 +291,7 @@ func parseJSONL(line, sessionID string) []harness.Event {
 		out = append(out, harness.Event{Type: harness.EventToolResult, Payload: protocol.ToolResultParams{SessionID: sessionID, CallID: stringValue(item, "id"), Status: status, Output: stringValue(item, "aggregated_output")}})
 	}
 	if typ == "error" || typ == "turn.failed" {
-		msg := stringValue(raw, "message")
-		if msg == "" {
-			msg = stringValue(raw, "error")
-		}
+		msg := nestedErrorMessage(raw)
 		out = append(out, harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessionID, Message: msg}})
 	}
 	if usage, ok := raw["usage"].(map[string]interface{}); ok {
@@ -304,6 +301,22 @@ func parseJSONL(line, sessionID string) []harness.Event {
 		out = append(out, harness.Event{Type: harness.EventUsage, Payload: protocol.UsageParams{SessionID: sessionID, InputTokens: in, OutputTokens: output, TotalTokens: total}})
 	}
 	return out
+}
+func nestedErrorMessage(m map[string]interface{}) string {
+	if msg := stringValue(m, "message"); msg != "" {
+		return msg
+	}
+	if msg := stringValue(m, "error"); msg != "" {
+		return msg
+	}
+	if nested, ok := m["error"].(map[string]interface{}); ok {
+		if msg := stringValue(nested, "message"); msg != "" {
+			return msg
+		}
+		b, _ := json.Marshal(nested)
+		return string(b)
+	}
+	return "erro do motor Codex sem mensagem"
 }
 func stringValue(m map[string]interface{}, key string) string { v, _ := m[key].(string); return v }
 func itemText(item map[string]interface{}) string {

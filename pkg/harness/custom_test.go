@@ -95,6 +95,29 @@ func TestLoadCustomFile(t *testing.T) {
 	}
 }
 
+func TestCustomAceitaModoSDKEErroRegexEmPortugues(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "instancia-sdk.yaml")
+	conteudo := "name: instancia-sdk\nbase: claude-code\nmodo: sdk\nerro_regex: 'ServiceUnavailableError|429'\n"
+	if err := os.WriteFile(path, []byte(conteudo), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := LoadCustomFile(path); err != nil {
+		t.Fatal(err)
+	}
+	s, ok := CustomSpecFor("instancia-sdk")
+	if !ok || s.Mode != "sdk" || s.ErrorRegex != "ServiceUnavailableError|429" {
+		t.Fatalf("instância efetiva: %+v", s)
+	}
+	h, err := Create("instancia-sdk", ModeSDK)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Mode() != ModeSDK {
+		t.Fatalf("modo do harness: %s", h.Mode())
+	}
+}
+
 func contains(s, part string) bool {
 	for i := 0; i+len(part) <= len(s); i++ {
 		if s[i:i+len(part)] == part {
