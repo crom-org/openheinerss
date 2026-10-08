@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/crom-org/openheinerss/pkg/orchestrator"
@@ -318,8 +317,7 @@ func vivo(pid int) bool {
 	if pid <= 0 {
 		return false
 	}
-	p, err := os.FindProcess(pid)
-	return err == nil && p.Signal(syscall.Signal(0)) == nil
+	return processAlive(pid)
 }
 
 // varrer compara logs/*.meta.json e *.log com o último estado visto e emite o que mudou.

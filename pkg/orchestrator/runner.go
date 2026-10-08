@@ -11,7 +11,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/crom-org/openheinerss/pkg/config"
@@ -738,27 +737,6 @@ func providerPattern(name string) *regexp.Regexp {
 
 var unknownOptionPattern = regexp.MustCompile(`(?i)(unknown option|error:\s*unknown)`)
 
-func acquireNameLock(agents, name string) (*os.File, error) {
-	path := filepath.Join(agents, "logs", name+".lock")
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return nil, fmt.Errorf("criar trava do agente %q: %w", name, err)
-	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		_ = f.Close()
-		return nil, fmt.Errorf("agente %q já está rodando (trava de nome ocupada)", name)
-	}
-	return f, nil
-}
-
-func releaseNameLock(f *os.File) {
-	if f == nil {
-		return
-	}
-	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-	_ = f.Close()
-}
-
 func rejectLiveMeta(agents, name string) error {
 	path := filepath.Join(agents, "logs", name+".meta.json")
 	b, err := os.ReadFile(path)
@@ -881,7 +859,7 @@ func activeAgents(agents string) (int, error) {
 		}
 		logName := strings.TrimSuffix(e.Name(), ".meta.json") + ".log"
 		if !staleLog(filepath.Join(agents, "logs", logName), time.Now()) {
-			if p, er := os.FindProcess(m.PID); er == nil && p.Signal(syscall.Signal(0)) == nil {
+			if processAlivePlatform(m.PID) {
 				n++
 			}
 		}

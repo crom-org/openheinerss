@@ -2,13 +2,11 @@ package orchestrator
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -102,8 +100,7 @@ func processAlive(pid int) bool {
 	if pid <= 0 {
 		return false
 	}
-	p, err := os.FindProcess(pid)
-	return err == nil && p.Signal(syscall.Signal(0)) == nil
+	return processAlivePlatform(pid)
 }
 
 func staleLog(path string, now time.Time) bool {
@@ -186,18 +183,8 @@ func StopAgent(agentsDir, name string, now time.Time) error {
 	if m.Servidor {
 		return fmt.Errorf("agente %s foi lançado por um servidor (PID %d); pare-o com rodar.parar, não pelo PID", name, m.PID)
 	}
-	// Só sinalize o grupo quando o processo for seu líder. Assim não atingimos
-	// o grupo do shell que lançou o CLI; o PID exato é o fallback seguro.
-	if pgid, pgErr := syscall.Getpgid(m.PID); pgErr == nil && pgid == m.PID {
-		if err := syscall.Kill(-m.PID, syscall.SIGTERM); err != nil {
-			if !errors.Is(err, syscall.ESRCH) {
-				return fmt.Errorf("parar grupo do agente %s (PID %d): %w", name, m.PID, err)
-			}
-		}
-	} else if err := syscall.Kill(m.PID, syscall.SIGTERM); err != nil {
-		if !errors.Is(err, syscall.ESRCH) {
-			return fmt.Errorf("parar agente %s (PID %d): %w", name, m.PID, err)
-		}
+	if err := stopAgentProcess(m.PID); err != nil {
+		return fmt.Errorf("parar agente %s (PID %d): %w", name, m.PID, err)
 	}
 	// Um rodar vivo trata o SIGTERM sozinho (SIGINT pode vir ignorado de um shell com `&`): fecha meta e log (FIM 130). Só escrevemos o fim
 	// quando ele não o fez (processo já morto ou que ignorou o sinal).
