@@ -8,12 +8,16 @@ on:
 
 jobs:
   test-go:
-    name: Go Test & Build (${{ matrix.os }})
+    name: Go Test & Build (${{ matrix.os }}, Go ${{ matrix.go-version }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
         go-version: ['1.22', '1.23']
+        # Go 1.22 gera binários que o macOS atual do GitHub recusa ("missing LC_UUID"); o 1.23 cobre o macOS.
+        exclude:
+          - os: macos-latest
+            go-version: '1.22'
 
     steps:
       - name: Checkout Code
