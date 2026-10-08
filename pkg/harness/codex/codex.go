@@ -176,7 +176,8 @@ func (c *CodexHarness) readJSONL(r io.Reader, sessionID string) {
 }
 func (c *CodexHarness) readStderr(r io.Reader, sessionID string) {
 	for s := bufio.NewScanner(r); s.Scan(); {
-		if text := strings.TrimSpace(s.Text()); text != "" {
+		// Aviso informativo do codex exec, não é erro.
+		if text := strings.TrimSpace(s.Text()); text != "" && !strings.HasPrefix(text, "Reading additional input from stdin") {
 			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessionID, Message: text}})
 		}
 	}
