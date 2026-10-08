@@ -186,8 +186,9 @@ func (o *OpenCodeHarness) SendPrompt(ctx context.Context, text string, attachmen
 			o.handleLine(scanner.Text(), sessID)
 		}
 
-		err = cmd.Wait()
+		// Ler o stderr até o fim antes do Wait: o Wait fecha o pipe e o resto se perderia.
 		<-stderrDone
+		err = cmd.Wait()
 		o.mu.Lock()
 		if o.cmd == cmd {
 			o.cmd = nil
