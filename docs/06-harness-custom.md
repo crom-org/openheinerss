@@ -2,6 +2,17 @@
 
 Harnesses custom são carregados no início do comando a partir de `.openheinerss/harnesses/*.(yaml|yml|json)` e de `~/.config/openheinerss/harnesses`. O diretório do projeto vence o do usuário.
 
+### Pasta de configuração explícita (`--config`)
+
+Para não depender da pasta onde o comando roda (ex.: a central chamando `limites --json`), aponte a configuração:
+
+```bash
+openheinerss --config /caminho/cfg limites --json      # alias PT: --configuracao
+OPENHEINERSS_CONFIG=/caminho/cfg openheinerss serve
+```
+
+A pasta contém `harnesses/` e `motores.yaml`; se ela tiver uma subpasta `.openheinerss/`, essa é usada (então dá para apontar a raiz de um projeto). Ordem: **`--config`/`--configuracao` > `OPENHEINERSS_CONFIG` > busca atual** (instâncias na raiz do repositório git, ou na pasta atual fora de repositório; `motores.yaml` em `<cwd>/.openheinerss/`). `~/.config/openheinerss/harnesses` continua carregado antes (a pasta escolhida vence). Vale para todos os comandos (`limites`, `harness list/add`, `rodar`, `run --papel`, `motores`, `serve`, inclusive `session.create` com `papel`). Pasta inexistente é erro. Com a flag, o processo exporta `OPENHEINERSS_CONFIG` para os filhos. `config.yaml`, `mcp.json` e sessões continuam por projeto.
+
 Formato mínimo:
 
 ```yaml

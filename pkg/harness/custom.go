@@ -222,11 +222,16 @@ func resolveSpec(s CustomSpec, seen map[string]bool) (CustomSpec, error) {
 
 // LoadCustom carrega o projeto e ~/.config/openheinerss (projeto vence usuário).
 func LoadCustom(cwd string) error {
+	return LoadCustomDir(cwd + "/.openheinerss/harnesses")
+}
+
+// LoadCustomDir carrega ~/.config/openheinerss/harnesses e depois dir (dir vence usuário).
+func LoadCustomDir(dir string) error {
 	paths := []string{}
 	if home, err := os.UserHomeDir(); err == nil {
 		paths = append(paths, home+"/.config/openheinerss/harnesses")
 	}
-	paths = append(paths, cwd+"/.openheinerss/harnesses")
+	paths = append(paths, dir)
 	for _, dir := range paths {
 		entries, err := os.ReadDir(dir)
 		if os.IsNotExist(err) {
