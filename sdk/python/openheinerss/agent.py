@@ -23,6 +23,7 @@ class Agent:
     ):
         self.transport = StdioTransport(bin_path)
         self.req_id = 1
+        self.generation: Optional[str] = None
         self.callbacks: Dict[str, Callable[[Dict[str, Any]], None]] = {}
         self.transport.on_event = self._event
         self.session_id = self._create_session(
@@ -52,6 +53,7 @@ class Agent:
 
         if "error" in response:
             raise RuntimeError(response["error"]["message"])
+        self.generation = response.get("geracao")
         return response["result"]["sessionId"]
 
     def stream(self, text: str) -> Generator[Dict[str, Any], None, None]:
@@ -115,6 +117,8 @@ class Agent:
         msg = self.transport.request({"jsonrpc": "2.0", "id": req_id, "method": method, "params": params})
         if "error" in msg:
             raise RuntimeError(msg["error"]["message"])
+        if msg.get("geracao"):
+            self.generation = msg["geracao"]
         return msg.get("result")
 
     def list_harnesses(self) -> list[dict[str, Any]]:
@@ -129,8 +133,8 @@ class Agent:
     def stop_run(self, id: Optional[str] = None, agente: Optional[str] = None) -> None:
         self._request("rodar.parar", {k: v for k, v in {"id": id, "agente": agente}.items() if v})
 
-    def decide_run(self, id: str, resposta: str, mensagem: Optional[str] = None) -> None:
-        self._request("rodar.decidir", {"id": id, "resposta": resposta, "mensagem": mensagem})
+    def decide_run(self, run: str, id: str, resposta: str, mensagem: Optional[str] = None) -> None:
+        self._request("rodar.decidir", {"run": run, "id": id, "resposta": resposta, "mensagem": mensagem})
 
     def get_limits(self) -> Dict[str, Any]:
         return self._request("limites.obter", {})

@@ -9,6 +9,7 @@ class Agent
     private StdioTransport $transport;
     private string $sessionId;
     private int $reqId = 1;
+    public ?string $generation = null;
     /** @var array<string, callable> */
     private array $callbacks = [];
 
@@ -51,6 +52,7 @@ class Agent
                 if (isset($msg['error'])) {
                     throw new \RuntimeException($msg['error']['message']);
                 }
+                $this->generation = $msg['geracao'] ?? null;
                 $this->sessionId = $msg['result']['sessionId'];
                 return;
             }
@@ -123,6 +125,7 @@ class Agent
             $msg = json_decode($line, true);
             if (($msg['id'] ?? null) === $id) {
                 if (isset($msg['error'])) throw new \RuntimeException($msg['error']['message']);
+                $this->generation = $msg['geracao'] ?? null;
                 return $msg['result'] ?? null;
             }
         }
@@ -136,8 +139,8 @@ class Agent
     public function stopRun(?string $id = null, ?string $agente = null): void {
         $this->request('rodar.parar', array_filter(['id' => $id, 'agente' => $agente]));
     }
-    public function decideRun(string $id, string $resposta, ?string $mensagem = null): void {
-        $this->request('rodar.decidir', array_filter(['id' => $id, 'resposta' => $resposta, 'mensagem' => $mensagem]));
+    public function decideRun(string $run, string $id, string $resposta, ?string $mensagem = null): void {
+        $this->request('rodar.decidir', array_filter(['run' => $run, 'id' => $id, 'resposta' => $resposta, 'mensagem' => $mensagem]));
     }
     public function getLimits(): array { return $this->request('limites.obter', []); }
     /** @param array<string, callable(array): void> $callbacks */

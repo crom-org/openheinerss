@@ -1,12 +1,12 @@
 package main
 
 import (
-	"strings"
 	"bytes"
 	"github.com/crom-org/openheinerss/pkg/harness"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 

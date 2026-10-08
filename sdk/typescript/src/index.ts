@@ -20,6 +20,8 @@ export class Openheinerss extends EventEmitter {
   private reqId = 1;
   private pendingCallbacks = new Map<number, { resolve: (res: any) => void; reject: (err: Error) => void }>();
   private transportReady?: Promise<void>;
+  /** Geração do processo serve ao qual o cliente está conectado. */
+  public generation?: string;
   private config: ClientConfig;
 
   constructor(config: ClientConfig = {}) {
@@ -43,7 +45,7 @@ export class Openheinerss extends EventEmitter {
   async run(options: RunOptions): Promise<RunStarted> { await this.ensureTransport(); return this.sendRPC("rodar.iniciar", options as unknown as Record<string, unknown>); }
   async listRuns(filter: EventFilter = {}): Promise<RunList> { await this.ensureTransport(); return this.sendRPC("rodar.listar", filter as Record<string, unknown>); }
   async stopRun(idOrAgent: { id?: string; agente?: string }): Promise<void> { await this.ensureTransport(); await this.sendRPC("rodar.parar", idOrAgent); }
-  async decideRun(id: string, resposta: string, mensagem?: string): Promise<void> { await this.ensureTransport(); await this.sendRPC("rodar.decidir", { id, resposta, mensagem }); }
+  async decideRun(run: string, id: string, resposta: string, mensagem?: string): Promise<void> { await this.ensureTransport(); await this.sendRPC("rodar.decidir", { run, id, resposta, mensagem }); }
   async getLimits(): Promise<Limits> { await this.ensureTransport(); return this.sendRPC("limites.obter", {}); }
   async subscribeEvents(filter: EventFilter = {}, callbacks: Partial<Record<OrchestrationEventName, OrchestrationCallback>> = {}): Promise<void> {
     await this.ensureTransport();
@@ -192,6 +194,7 @@ export class Openheinerss extends EventEmitter {
   }
 
   private handleIncoming(msg: any): void {
+    if (msg.geracao) this.generation = msg.geracao;
     // Resposta a requisição enviada
     if (msg.id !== undefined && this.pendingCallbacks.has(msg.id)) {
       const cb = this.pendingCallbacks.get(msg.id)!;

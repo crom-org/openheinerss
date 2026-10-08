@@ -82,25 +82,31 @@ type pasta struct {
 // Orq é o orquestrador do servidor: executa rodar em segundo plano, observa as pastas de
 // agentes e entrega os eventos orq.* para as conexões que chamaram eventos.assinar.
 type Orq struct {
-	mu       sync.Mutex
-	emitMu   sync.Mutex
-	scanMu   sync.Mutex // ordem de travas: scanMu, emitMu, mu
-	subs     map[*conexao]assinatura
-	jobs     map[string]*job
-	decisoes map[string]*decisao
-	pastas   map[string]*pasta
-	limites  map[string]*limiteProg
-	seq      int
-	ctx      context.Context
-	cancel   context.CancelFunc
-	obsOn    bool
-	wg       sync.WaitGroup // execuções de rodar em andamento
-	agora    func() time.Time
+	mu        sync.Mutex
+	emitMu    sync.Mutex
+	scanMu    sync.Mutex // ordem de travas: scanMu, emitMu, mu
+	subs      map[*conexao]assinatura
+	jobs      map[string]*job
+	decisoes  map[string]*decisao
+	pastas    map[string]*pasta
+	limites   map[string]*limiteProg
+	seq       int
+	ctx       context.Context
+	cancel    context.CancelFunc
+	obsOn     bool
+	wg        sync.WaitGroup // execuções de rodar em andamento
+	agora     func() time.Time
+	geracao   string
+	maxAgents int
 }
 
-func newOrq() *Orq {
+func newOrq(limite ...int) *Orq {
+	maxAgents := 0
+	if len(limite) > 0 {
+		maxAgents = limite[0]
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Orq{subs: map[*conexao]assinatura{}, jobs: map[string]*job{}, decisoes: map[string]*decisao{}, pastas: map[string]*pasta{}, limites: map[string]*limiteProg{}, ctx: ctx, cancel: cancel, agora: time.Now}
+	return &Orq{subs: map[*conexao]assinatura{}, jobs: map[string]*job{}, decisoes: map[string]*decisao{}, pastas: map[string]*pasta{}, limites: map[string]*limiteProg{}, ctx: ctx, cancel: cancel, agora: time.Now, geracao: novaGeracao(), maxAgents: maxAgents}
 }
 
 // Close para as execuções, o observador e os temporizadores.
@@ -131,6 +137,23 @@ func (o *Orq) desconectar(c *conexao) {
 // ---------- emissão ----------
 
 func (o *Orq) emitir(method, projeto, agente string, params interface{}) {
+	switch p := params.(type) {
+	case protocol.OrqInicioParams:
+		p.Geracao = o.geracao
+		params = p
+	case protocol.OrqProgressoParams:
+		p.Geracao = o.geracao
+		params = p
+	case protocol.OrqFimParams:
+		p.Geracao = o.geracao
+		params = p
+	case protocol.OrqErroParams:
+		p.Geracao = o.geracao
+		params = p
+	case protocol.OrqDecisaoParams:
+		p.Geracao = o.geracao
+		params = p
+	}
 	o.emitMu.Lock()
 	defer o.emitMu.Unlock()
 	o.entregar(protocol.NewNotification(method, params), projeto, agente)
@@ -153,6 +176,7 @@ func (o *Orq) entregar(n protocol.Notification, projeto, agente string) {
 
 // progresso aplica o limite de 1 a cada 2 s por agente; o excedente fica pendente e sai no fim da janela.
 func (o *Orq) progresso(p protocol.OrqProgressoParams) {
+	p.Geracao = o.geracao
 	chave := p.Projeto + "/" + p.Agente
 	n := protocol.NewNotification(protocol.EventOrqProgresso, p)
 	o.emitMu.Lock()
@@ -481,6 +505,9 @@ func (o *Orq) iniciar(p protocol.RodarIniciarParams) (protocol.RodarIniciarResul
 	if p.Nome == "" || p.Motor == "" {
 		return protocol.RodarIniciarResult{}, fmt.Errorf("rodar.iniciar exige nome e motor")
 	}
+	if o.maxAgents > 0 && (p.MaxAgentes <= 0 || p.MaxAgentes > o.maxAgents) {
+		p.MaxAgentes = o.maxAgents
+	}
 	dir, projeto := resolverPasta(p.CWD, p.Pasta)
 	if p.Projeto != "" {
 		projeto = p.Projeto
@@ -536,7 +563,7 @@ func (o *Orq) iniciar(p protocol.RodarIniciarParams) (protocol.RodarIniciarResul
 		delete(o.jobs, j.id)
 		o.mu.Unlock()
 	}()
-	return protocol.RodarIniciarResult{ID: j.id, Agente: p.Nome, Projeto: projeto}, nil
+	return protocol.RodarIniciarResult{Geracao: o.geracao, ID: j.id, Agente: p.Nome, Projeto: projeto}, nil
 }
 
 func max64(a, b int64) int64 {
@@ -574,7 +601,7 @@ func (o *Orq) deJob(j *job, e orchestrator.Evento) {
 func (o *Orq) perguntar(ctx context.Context, j *job, q orchestrator.Pergunta) (bool, string) {
 	o.mu.Lock()
 	o.seq++
-	d := &decisao{ch: make(chan decisaoResp, 1), params: protocol.OrqDecisaoParams{ID: fmt.Sprintf("dec-%d", o.seq), Agente: j.nome, Projeto: j.projeto, Pergunta: q.Pergunta, Opcoes: q.Opcoes}}
+	d := &decisao{ch: make(chan decisaoResp, 1), params: protocol.OrqDecisaoParams{Geracao: o.geracao, ID: fmt.Sprintf("dec-%d", o.seq), Run: j.id, Agente: j.nome, Projeto: j.projeto, Pergunta: q.Pergunta, Opcoes: q.Opcoes}}
 	o.decisoes[d.params.ID] = d
 	o.mu.Unlock()
 	defer func() {
@@ -592,6 +619,12 @@ func (o *Orq) perguntar(ctx context.Context, j *job, q orchestrator.Pergunta) (b
 }
 
 func (o *Orq) decidir(p protocol.RodarDecidirParams) error {
+	if p.Run == "" {
+		return fmt.Errorf("rodar.decidir exige o id da execução no campo \"run\"")
+	}
+	if p.Geracao != "" && p.Geracao != o.geracao {
+		return fmt.Errorf("geração %q não corresponde a este servidor", p.Geracao)
+	}
 	var allow bool
 	switch strings.ToLower(strings.TrimSpace(p.Resposta)) {
 	case "permitir", "sim", "s", "ok", "allow", "aprovar", "true":
@@ -606,6 +639,13 @@ func (o *Orq) decidir(p protocol.RodarDecidirParams) error {
 	o.mu.Unlock()
 	if d == nil {
 		return fmt.Errorf("decisão %q não encontrada (já respondida ou expirada)", p.ID)
+	}
+	if d.params.Run != p.Run {
+		// Recoloca a decisão para que o cliente correto ainda possa respondê-la.
+		o.mu.Lock()
+		o.decisoes[p.ID] = d
+		o.mu.Unlock()
+		return fmt.Errorf("decisão %q não pertence à execução %q", p.ID, p.Run)
 	}
 	d.ch <- decisaoResp{allow, p.Mensagem}
 	return nil

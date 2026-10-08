@@ -61,6 +61,7 @@ func TestAliasesDeFlagsCompartilhamVariavel(t *testing.T) {
 	}{
 		{"serve porta", newServeCmd, "porta", "port", "4911"},
 		{"serve host", newServeCmd, "hospedeiro", "host", "exemplo.local"},
+		{"serve agentes", newServeCmd, "max-agentes", "max-agents", "3"},
 		{"run papel", newRunCmd, "papel", "role", "revisor"},
 		{"run motor", newRunCmd, "motor", "engine", "codex"},
 		{"run modo", newRunCmd, "modo", "mode", "cli"},
