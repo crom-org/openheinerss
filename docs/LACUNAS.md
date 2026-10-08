@@ -163,6 +163,12 @@ Existem **duas documentações paralelas** descrevendo o mesmo sistema, e elas *
 
 ## 4. Decisões tomadas nesta auditoria (sem perguntas)
 
+## 5. Fechamento da etapa 4a (08/10/2026)
+
+Resolvidos no código: transcripts ligados ao manager em `.openheinerss/sessions/<id>.jsonl`; `session.resume` no RPC e `run --retomar <id>` com retomada nativa; cache condicional à Anthropic; checkpoints por cópia de arquivos, sem `git checkout -- .`; `suggestedFix` em erros conhecidos e duração/totais em `agent.complete`; Aider não interativo com classificação rápida; e `motores` tolerante à ausência de `motores.yaml`.
+
+O modo SDK do Claude valida `@anthropic-ai/claude-agent-sdk` antes de iniciar e retorna dependência ausente com correção sugerida em vez de timeout. A prova real de `claude-conta2` ficou bloqueada pelo limite de sessão da conta e deve ser repetida após a renovação; o modo CLI continua disponível.
+
 - Relatório gravado em `.claude/agentes/relatorios/auditoria-lacunas.md` (caminho determinado pelas regras da missão); o `docs/LACUNAS.md` previsto em PLANO-COMPLETO.md:15 **não foi criado** para não alterar o repositório de código/docs durante uma missão de análise.
 - "Existe" só quando há comando/método/evento no código **e** foi verificado (por leitura ou execução do binário); "parcial" quando a implementação atende em parte; "falta" quando não há rastro no código; "doc desatualizada" quando o código mudou e a doc não acompanhou.
 - Itens meramente promocionais ("binário de ~15MB", "startup sub-ms", "zero dependências") foram ignorados por não serem verificáveis de forma determinística nesta etapa.

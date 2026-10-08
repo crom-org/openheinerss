@@ -178,14 +178,8 @@ func stopHarnessWithLimit(h harness.Harness) {
 }
 
 func classifyHarnessFailure(message string) (string, string) {
-	lower := strings.ToLower(message)
-	if strings.Contains(lower, "quota") || strings.Contains(lower, "cota") || strings.Contains(lower, "rate limit") || strings.Contains(lower, "rate_limit") {
-		return "sem cota", message
-	}
-	if strings.Contains(lower, "login") || strings.Contains(lower, "auth") || strings.Contains(lower, "unauthorized") || strings.Contains(lower, "não autentic") || strings.Contains(lower, "not authenticated") || strings.Contains(lower, "api key") {
-		return "sem login", message
-	}
-	return "falha", message
+	kind, _ := harness.ClassifyFailure(message)
+	return kind, message
 }
 
 func formatDuration(ms int64) string {

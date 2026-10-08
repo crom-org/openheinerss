@@ -77,6 +77,17 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) protoc
 		list := r.manager.ListSessions()
 		return protocol.NewResponse(req.ID, protocol.SessionListResult{Sessions: list})
 
+	case protocol.MethodSessionResume:
+		var params protocol.SessionResumeParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para session.resume", nil)
+		}
+		res, err := r.manager.ResumeSession(ctx, params)
+		if err != nil {
+			return errorToResponse(req.ID, err)
+		}
+		return protocol.NewResponse(req.ID, res)
+
 	case protocol.MethodCatalogList:
 		catalog := harness.ListCatalog()
 		return protocol.NewResponse(req.ID, protocol.CatalogListResult{Harnesses: catalog})

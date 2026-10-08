@@ -4,13 +4,18 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/crom-org/openheinerss/pkg/checkpoint"
 	"github.com/crom-org/openheinerss/pkg/harness"
 	"github.com/crom-org/openheinerss/pkg/motor"
 	"github.com/crom-org/openheinerss/pkg/protocol"
+	"github.com/crom-org/openheinerss/pkg/storage"
 )
 
 // EventHandler é o callback invocado sempre que um evento de sessão é emitido
@@ -18,14 +23,16 @@ type EventHandler func(notification protocol.Notification)
 
 // Session representa uma sessão de agente ativa
 type Session struct {
-	mu        sync.RWMutex
-	ID        string
-	Harness   harness.Harness
-	Config    harness.SessionConfig
-	CreatedAt time.Time
-	Running   bool
-	ctx       context.Context
-	cancel    context.CancelFunc
+	mu                        sync.RWMutex
+	ID                        string
+	Harness                   harness.Harness
+	Config                    harness.SessionConfig
+	CreatedAt                 time.Time
+	Running                   bool
+	startedAt                 time.Time
+	inputTokens, outputTokens int64
+	ctx                       context.Context
+	cancel                    context.CancelFunc
 }
 
 // Manager coordena o ciclo de vida de todas as sessões ativas no Openheinerss
@@ -33,6 +40,7 @@ type Manager struct {
 	mu        sync.RWMutex
 	sessions  map[string]*Session
 	listeners []EventHandler
+	storage   *storage.Storage
 }
 
 // NewManager cria uma nova instância de SessionManager
@@ -40,6 +48,7 @@ func NewManager() *Manager {
 	return &Manager{
 		sessions:  make(map[string]*Session),
 		listeners: make([]EventHandler, 0),
+		storage:   storage.GetStorage(),
 	}
 }
 
@@ -117,6 +126,8 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 
 	cfg := harness.SessionConfig{
 		SessionID:      sessID,
+		Harness:        params.Harness,
+		Mode:           string(mode),
 		CWD:            params.CWD,
 		Provider:       params.Provider,
 		Model:          params.Model,
@@ -124,6 +135,11 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 		PermissionMode: params.Options.PermissionMode,
 		SystemPrompt:   params.Options.SystemPrompt,
 		Options:        params.Options.Extra,
+	}
+	// O snapshot é feito antes de o motor receber o primeiro prompt.
+	if _, err := checkpoint.GetManager().CreateCheckpoint(params.CWD, sessID, "antes do primeiro prompt"); err != nil {
+		cancel()
+		return nil, &protocol.RPCError{Code: protocol.CodeInternalError, Message: fmt.Sprintf("falha ao criar checkpoint: %v", err)}
 	}
 
 	if err := h.Start(sessCtx, cfg); err != nil {
@@ -142,6 +158,7 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 		Running:   true,
 		ctx:       sessCtx,
 		cancel:    cancel,
+		startedAt: time.Now(),
 	}
 
 	m.mu.Lock()
@@ -150,6 +167,7 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 
 	// Inicia consumo assíncrono dos eventos do harness
 	go m.forwardEvents(s)
+	_ = m.storage.Record(params.CWD, sessID, "system", nil, "", cfg)
 
 	return &protocol.SessionCreateResult{
 		SessionID: sessID,
@@ -161,6 +179,57 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 }
 
 // PromptSession envia um novo prompt para a sessão ativa
+// ResumeSession reidrata os metadados persistidos e entrega o ID nativo ao motor.
+func (m *Manager) ResumeSession(ctx context.Context, params protocol.SessionResumeParams) (*protocol.SessionResumeResult, error) {
+	if params.SessionID == "" {
+		return nil, &protocol.RPCError{Code: protocol.CodeInvalidParams, Message: "sessionId é obrigatório"}
+	}
+	if params.CWD == "" {
+		params.CWD, _ = os.Getwd()
+	}
+	entries, err := m.storage.LoadSession(params.CWD, params.SessionID)
+	if err != nil {
+		return nil, &protocol.RPCError{Code: protocol.CodeSessionNotFound, Message: err.Error()}
+	}
+	var cfg harness.SessionConfig
+	for i := len(entries) - 1; i >= 0; i-- {
+		if entries[i].Config != nil {
+			b, _ := json.Marshal(entries[i].Config)
+			if json.Unmarshal(b, &cfg) == nil {
+				break
+			}
+		}
+	}
+	if cfg.Harness == "" {
+		return nil, &protocol.RPCError{Code: protocol.CodeInvalidParams, Message: "configuração da sessão não encontrada"}
+	}
+	if cfg.CWD == "" {
+		cfg.CWD = params.CWD
+	}
+	cfg.SessionID = params.SessionID
+	mode := harness.Mode(cfg.Mode)
+	if mode == "" {
+		mode = harness.ModeCLI
+	}
+	h, err := harness.Create(cfg.Harness, mode)
+	if err != nil {
+		return nil, &protocol.RPCError{Code: protocol.CodeHarnessNotFound, Message: err.Error()}
+	}
+	if p := h.ValidatePrerequisites(ctx); !p.Satisfied {
+		return nil, &protocol.RPCError{Code: protocol.CodeHarnessDependencyMissing, Message: strings.Join(p.MissingItems, ", "), Data: protocol.ErrorData{SuggestedFix: p.SuggestedFix}}
+	}
+	if err := h.Start(ctx, cfg); err != nil {
+		return nil, &protocol.RPCError{Code: protocol.CodeInternalError, Message: err.Error()}
+	}
+	sessCtx, cancel := context.WithCancel(context.Background())
+	s := &Session{ID: params.SessionID, Harness: h, Config: cfg, CreatedAt: time.Now(), ctx: sessCtx, cancel: cancel, startedAt: time.Now()}
+	m.mu.Lock()
+	m.sessions[s.ID] = s
+	m.mu.Unlock()
+	go m.forwardEvents(s)
+	return &protocol.SessionResumeResult{SessionID: s.ID, Harness: cfg.Harness, Mode: string(mode), CWD: cfg.CWD, Status: "ready"}, nil
+}
+
 func (m *Manager) PromptSession(ctx context.Context, params protocol.SessionPromptParams) (*protocol.SessionPromptResult, error) {
 	m.mu.RLock()
 	s, exists := m.sessions[params.SessionID]
@@ -183,6 +252,7 @@ func (m *Manager) PromptSession(ctx context.Context, params protocol.SessionProm
 			Message: fmt.Sprintf("Erro ao enviar prompt: %v", err),
 		}
 	}
+	_ = m.storage.Record(s.Config.CWD, s.ID, "user_prompt", nil, params.Text, nil)
 
 	return &protocol.SessionPromptResult{
 		SessionID: params.SessionID,
@@ -296,7 +366,44 @@ func (m *Manager) forwardEvents(s *Session) {
 			method = "agent." + string(evt.Type)
 		}
 
-		m.broadcast(protocol.NewNotification(method, evt.Payload))
+		n := protocol.NewNotification(method, evt.Payload)
+		if u, ok := evt.Payload.(protocol.UsageParams); ok {
+			s.mu.Lock()
+			s.inputTokens += u.InputTokens
+			s.outputTokens += u.OutputTokens
+			s.mu.Unlock()
+		}
+		if evt.Type == harness.EventComplete {
+			s.mu.Lock()
+			if p, ok := evt.Payload.(protocol.CompleteParams); ok {
+				p.DurationMs = time.Since(s.startedAt).Milliseconds()
+				p.InputTokens = s.inputTokens
+				p.OutputTokens = s.outputTokens
+				p.TotalTokens = p.InputTokens + p.OutputTokens
+				n.Params = p
+			}
+			s.mu.Unlock()
+			if r, ok := s.Harness.(interface{ ResumeID() string }); ok {
+				if id := r.ResumeID(); id != "" {
+					s.mu.Lock()
+					if s.Config.Options == nil {
+						s.Config.Options = map[string]interface{}{}
+					}
+					s.Config.Options["session_id"] = id
+					cfg := s.Config
+					s.mu.Unlock()
+					_ = m.storage.Record(cfg.CWD, s.ID, "system", nil, "", cfg)
+				}
+			}
+		}
+		if evt.Type == harness.EventError {
+			if p, ok := evt.Payload.(protocol.ErrorParams); ok && p.SuggestedFix == "" {
+				_, p.SuggestedFix = harness.ClassifyFailure(p.Message)
+				n.Params = p
+			}
+		}
+		_ = m.storage.Record(s.Config.CWD, s.ID, "event", &n, "", nil)
+		m.broadcast(n)
 	}
 }
 

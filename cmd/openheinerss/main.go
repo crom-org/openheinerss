@@ -176,14 +176,18 @@ func newRunCmd() *cobra.Command {
 		provider    string
 		model       string
 		effort      string
+		resumeID    string
 	)
 
 	cmd := &cobra.Command{
 		Use:   "run [prompt]",
 		Short: "Executa um prompt interativo no terminal usando o harness escolhido",
-		Args:  cobra.MinimumNArgs(1),
+		Args:  cobra.MinimumNArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			promptText := strings.Join(args, " ")
+			if promptText == "" {
+				return fmt.Errorf("run exige um prompt; com --retomar informe o novo prompt depois do ID")
+			}
 			cwd, _ := os.Getwd()
 			var env map[string]string
 			var extra map[string]interface{}
@@ -212,15 +216,21 @@ func newRunCmd() *cobra.Command {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			sessRes, err := manager.CreateSession(ctx, protocol.SessionCreateParams{
-				Harness:  harnessName,
-				Mode:     modeName,
-				CWD:      cwd,
-				Provider: provider,
-				Model:    model,
-				Env:      env,
-				Options:  protocol.SessionOptions{Extra: extra},
-			})
+			var sessRes *protocol.SessionCreateResult
+			var err error
+			if resumeID != "" {
+				sessRes, err = manager.ResumeSession(ctx, protocol.SessionResumeParams{SessionID: resumeID, CWD: cwd})
+			} else {
+				sessRes, err = manager.CreateSession(ctx, protocol.SessionCreateParams{
+					Harness:  harnessName,
+					Mode:     modeName,
+					CWD:      cwd,
+					Provider: provider,
+					Model:    model,
+					Env:      env,
+					Options:  protocol.SessionOptions{Extra: extra},
+				})
+			}
 			if err != nil {
 				return fmt.Errorf("falha ao criar sessão: %v", err)
 			}
@@ -298,6 +308,7 @@ func newRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&model, "model", "", "Nome do modelo")
 	cmd.Flags().StringVar(&model, "modelo", "", "Alias em português de --model")
 	cmd.Flags().StringVar(&effort, "esforco", "", "Esforço de raciocínio do motor")
+	cmd.Flags().StringVar(&resumeID, "retomar", "", "Retoma a sessão persistida pelo ID")
 
 	return cmd
 }

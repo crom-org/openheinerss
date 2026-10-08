@@ -48,6 +48,8 @@ type PrerequisiteResult struct {
 // SessionConfig traz as opções de inicialização de um harness
 type SessionConfig struct {
 	SessionID      string                 `json:"sessionId"`
+	Harness        string                 `json:"harness,omitempty"`
+	Mode           string                 `json:"mode,omitempty"`
 	CWD            string                 `json:"cwd"`
 	Provider       string                 `json:"provider"`
 	Model          string                 `json:"model"`

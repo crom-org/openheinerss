@@ -1,5 +1,13 @@
 # Testes reais dos harnesses
 
+## Provas da etapa 4a
+
+Com timeout de 90s, o Codex passou nos dois turnos nativos: o primeiro (`guarde a palavra ABACAXI e responda só OK`) respondeu `OK` e `openheinerss run --retomar sess_831876d90aed 'qual palavra pedi para guardar?'` respondeu `ABACAXI`. O transcript dessa sessão ficou com 11 linhas.
+
+A prova equivalente de `claude-conta2` foi iniciada com timeout de 90s, mas a conta respondeu `You've hit your session limit · resets 9am (America/Bahia)`. Não foi marcada como aprovação nem como falha de retomada: está bloqueada por cota externa e deve ser repetida após a renovação.
+
+`openheinerss motores` foi executado sem `.openheinerss/motores.yaml`: listou os seis motores e informou `Nenhum papel` sem erro.
+
 Data da execução: 08/10/2026 (America/Bahia). Cada caso usou um único prompt curto (`responda só OK`); o teste em lote foi sequencial. A conta principal do Claude ficou excluída no lote padrão.
 
 ## Versões observadas
