@@ -169,6 +169,9 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				modelName, effort = s.Model, s.Effort
 			}
 		}
+		if modelName == "" {
+			modelName = "padrão"
+		}
 		m := meta{Motor: candidate, Modelo: modelName, Esforco: effort, Conta: candidate, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid()}
 		metaPath := filepath.Join(agents, "logs", o.Name+".meta.json")
 		if err := writeMeta(metaPath, m); err != nil {
@@ -316,12 +319,13 @@ func eventText(e harness.Event) string {
 		return p.Delta
 	}
 	if p, ok := e.Payload.(protocol.ErrorParams); ok {
-		return "ERRO: " + p.Message
+		return "\nERRO: " + p.Message + "\n"
 	}
 	if e.Type == harness.EventComplete {
-		return "[completo]\n"
+		return "\n[completo]\n"
 	}
-	return fmt.Sprintf("[%s] %s\n", e.Type, b)
+	// O texto chega em pedaços sem quebra de linha; os outros eventos começam numa linha nova.
+	return fmt.Sprintf("\n[%s] %s\n", e.Type, b)
 }
 func quotaPattern(name string) *regexp.Regexp {
 	if s, ok := harness.CustomSpecFor(name); ok && s.QuotaRegex != "" {
