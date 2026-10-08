@@ -101,18 +101,32 @@ func Obter() Resultado {
 // Percentual devolve o maior percentual conhecido da instância. Sem leitura,
 // false evita trocar de reserva por falta de informação.
 func Percentual(nome string) (float64, bool) {
+	agora := time.Now()
 	for _, i := range Obter().Instancias {
 		if i.Nome == nome {
-			var maior float64
-			for _, j := range i.Janelas {
-				if j.Percentual > maior {
-					maior = j.Percentual
-				}
-			}
-			return maior, len(i.Janelas) > 0
+			return maiorPercentual(i, agora)
 		}
 	}
 	return 0, false
+}
+
+// maiorPercentual ignora janelas cujo horário de reinício já passou: a leitura é de antes da
+// renovação e manter o percentual antigo bloquearia a instância para sempre.
+func maiorPercentual(i Instancia, agora time.Time) (float64, bool) {
+	var maior float64
+	validas := 0
+	for _, j := range i.Janelas {
+		if j.ReiniciaEm != "" {
+			if t, err := time.Parse(time.RFC3339, j.ReiniciaEm); err == nil && t.Before(agora) {
+				continue
+			}
+		}
+		validas++
+		if j.Percentual > maior {
+			maior = j.Percentual
+		}
+	}
+	return maior, validas > 0
 }
 
 func nomesCustom() []string {
@@ -135,11 +149,14 @@ func lerCodex(nome, home string, agora time.Time) (Instancia, bool) {
 		}
 		return nil
 	})
-	sort.Slice(paths, func(i, j int) bool {
-		ai, _ := os.Stat(paths[i])
-		aj, _ := os.Stat(paths[j])
-		return ai.ModTime().After(aj.ModTime())
-	})
+	// Uma leitura de data por arquivo (o comparador chamava os.Stat a cada comparação).
+	datas := make(map[string]time.Time, len(paths))
+	for _, p := range paths {
+		if st, err := os.Stat(p); err == nil {
+			datas[p] = st.ModTime()
+		}
+	}
+	sort.Slice(paths, func(i, j int) bool { return datas[paths[i]].After(datas[paths[j]]) })
 	if len(paths) > 14 {
 		paths = paths[:14]
 	}

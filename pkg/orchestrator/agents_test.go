@@ -74,3 +74,16 @@ func TestShowAgentLogLimitaFim(t *testing.T) {
 		t.Fatalf("fim do log: %q (%v)", got, err)
 	}
 }
+
+func TestStopAgentRecusaExecucaoDeServidor(t *testing.T) {
+	dir := t.TempDir()
+	logs := filepath.Join(dir, "logs")
+	_ = os.MkdirAll(logs, 0755)
+	if err := writeMeta(filepath.Join(logs, "x.meta.json"), meta{Motor: "mock", PID: os.Getpid(), Servidor: true}); err != nil {
+		t.Fatal(err)
+	}
+	err := StopAgent(dir, "x", time.Now())
+	if err == nil || !strings.Contains(err.Error(), "rodar.parar") {
+		t.Fatalf("esperava recusa orientando rodar.parar, veio %v", err)
+	}
+}

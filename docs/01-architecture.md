@@ -62,7 +62,7 @@ Escrito em Go por ser altamente concorrente (goroutines), produzir binários ún
 1. **Transport Layer**: Escuta requisições do cliente por STDIO ou WebSocket.
 2. **Session Coordinator**: Mantém as sessões ativas, lida com timeout, interrupções (SIGINT / cancelamentos limpos) e filas de input.
 3. **Permission Interceptor**: Bloqueia ferramentas sensíveis (ex: `rm -rf`, `git push`, comandos bash perigosos) e emite eventos para o cliente aprovar ou rejeitar.
-4. **Storage & Rollback**: Há pacotes experimentais de transcript e checkpoint, mas eles não estão conectados ao fluxo de sessões; não são anunciados como recurso pronto.
+4. **Storage & Rollback**: cada evento da sessão é gravado em `.openheinerss/sessions/<id>.jsonl` (base do `session.resume`), e um checkpoint por cópia de arquivos é criado antes do primeiro prompt em `.openheinerss/checkpoints/`. O checkpoint pula `.git`, dependências (`node_modules`, `vendor`, `dist`, `build`...) e arquivos acima de 10 MB (limite total de 256 MB; o snapshot fica marcado como `parcial`). Não há rollback automático antes de cada ferramenta.
 
 ### C. Camada de Adaptadores de Harness
 Cada motor de IA possui peculiaridades. O adaptador é responsável por:
@@ -87,9 +87,11 @@ Localizado na raiz do repositório/workspace do projeto:
 .openheinerss/
 ├── config.yaml          # Configurações do projeto (harness padrão, permissões, provedores)
 ├── mcp.json             # Servidores MCP ativos especificamente para este projeto
-├── sessions/            # Reservado para histórico futuro; não é preenchido automaticamente hoje
+├── harnesses/           # Instâncias e harnesses custom (um arquivo YAML por instância)
+├── motores.yaml         # Opcional: papéis → motor/modelo
+├── sessions/            # Transcript de cada sessão (uma linha JSON por evento)
 │   └── sess_abc123.jsonl
-└── checkpoints/         # Reservado para checkpoints futuros
+└── checkpoints/         # Snapshots de arquivos criados antes do primeiro prompt
 ```
 
 ### B. Diretório Global do Usuário (`~/.openheinerss/`)

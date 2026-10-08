@@ -52,6 +52,15 @@ func RegisterCustom(spec CustomSpec) error {
 	if resolved.Command == "" && resolved.Base == "" {
 		return fmt.Errorf("harness custom '%s': informe base ou command", resolved.Name)
 	}
+	// O "~/" não é expandido pelo shell: vale para o comando e para as variáveis de ambiente.
+	resolved.Command = expandHome(resolved.Command)
+	if resolved.Env != nil {
+		env := make(map[string]string, len(resolved.Env))
+		for k, v := range resolved.Env {
+			env[k] = expandHome(v)
+		}
+		resolved.Env = env
+	}
 	if resolved.Prompt == "" {
 		resolved.Prompt = "stdin"
 	}
@@ -169,10 +178,6 @@ func resolveSpec(s CustomSpec, seen map[string]bool) (CustomSpec, error) {
 	return base, nil
 }
 
-func builtinSpec(name string) (CustomSpec, bool) {
-	return CustomSpec{}, false
-}
-
 // LoadCustom carrega o projeto e ~/.config/openheinerss (projeto vence usuário).
 func LoadCustom(cwd string) error {
 	paths := []string{}
@@ -225,6 +230,8 @@ func filepathBase(p string) string {
 }
 
 type customHarness struct {
+	finishRe  *regexp.Regexp
+	quotaRe   *regexp.Regexp
 	mu        sync.Mutex
 	spec      CustomSpec
 	mode      Mode
@@ -238,7 +245,15 @@ type customHarness struct {
 }
 
 func newCustom(s CustomSpec, mode Mode) *customHarness {
-	return &customHarness{spec: s, mode: mode, events: make(chan Event, 200)}
+	c := &customHarness{spec: s, mode: mode, events: make(chan Event, 200)}
+	// RegisterCustom já validou as expressões.
+	if s.FinishRegex != "" {
+		c.finishRe, _ = regexp.Compile(s.FinishRegex)
+	}
+	if s.QuotaRegex != "" {
+		c.quotaRe, _ = regexp.Compile(s.QuotaRegex)
+	}
+	return c
 }
 
 // overlayHarness aplica a configuração de uma instância ao harness base real.
@@ -269,6 +284,12 @@ func newOverlay(s CustomSpec, mode Mode) (Harness, error) {
 func (o *overlayHarness) Name() string { return o.spec.Name }
 func (o *overlayHarness) Mode() Mode   { return o.base.Mode() }
 func (o *overlayHarness) ValidatePrerequisites(ctx context.Context) PrerequisiteResult {
+	// A instância pode trazer variáveis que mudam o resultado (caminho do SDK, por exemplo).
+	if v, ok := o.base.(interface {
+		ValidatePrerequisitesEnv(context.Context, map[string]string) PrerequisiteResult
+	}); ok {
+		return v.ValidatePrerequisitesEnv(ctx, o.spec.Env)
+	}
 	return o.base.ValidatePrerequisites(ctx)
 }
 func (o *overlayHarness) Start(ctx context.Context, cfg SessionConfig) error {
@@ -350,6 +371,8 @@ func (c *customHarness) SendPrompt(ctx context.Context, text string, _ []protoco
 	process.Configure(cmd)
 	cmd.Dir = cfg.CWD
 	cmd.Env = mergedCustomEnv(spec.Env, cfg.Env)
+	stderr := &tailBuffer{max: 4096}
+	cmd.Stderr = stderr
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -369,25 +392,40 @@ func (c *customHarness) SendPrompt(ctx context.Context, text string, _ []protoco
 	} else {
 		_ = in.Close()
 	}
-	go c.read(out)
+	go c.read(cmd, out, stderr)
 	return nil
 }
-func (c *customHarness) read(r io.Reader) {
+
+// read consome o stdout, colhe o processo (sem deixar zumbi) e conta como falha uma saída com erro sem o evento de fim.
+func (c *customHarness) read(cmd *exec.Cmd, r io.Reader, stderr *tailBuffer) {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	for sc.Scan() {
 		c.parseLine(sc.Text())
 	}
+	_, _ = io.Copy(io.Discard, r)
+	err := cmd.Wait()
+	c.mu.Lock()
+	parado := c.stopped
+	c.mu.Unlock()
+	if err != nil && !parado {
+		tail := strings.TrimSpace(stderr.String())
+		if c.quotaRe != nil && c.quotaRe.MatchString(tail) {
+			c.emit(Event{Type: EventError, Payload: protocol.ErrorParams{SessionID: c.cfg.SessionID, Message: "limite de cota detectado: " + tail}})
+		} else {
+			c.emit(Event{Type: EventError, Payload: protocol.ErrorParams{SessionID: c.cfg.SessionID, Message: fmt.Sprintf("harness custom '%s' terminou com erro: %v %s", c.spec.Name, err, tail)}})
+		}
+		c.complete("process_error")
+		return
+	}
 	c.complete("process_exit")
 }
 func (c *customHarness) parseLine(line string) {
-	if c.spec.QuotaRegex != "" {
-		if regexp.MustCompile(c.spec.QuotaRegex).MatchString(line) {
-			c.emit(Event{Type: EventError, Payload: protocol.ErrorParams{SessionID: c.cfg.SessionID, Message: "limite de cota detectado: " + line}})
-			return
-		}
+	if c.quotaRe != nil && c.quotaRe.MatchString(line) {
+		c.emit(Event{Type: EventError, Payload: protocol.ErrorParams{SessionID: c.cfg.SessionID, Message: "limite de cota detectado: " + line}})
+		return
 	}
-	if c.spec.FinishRegex != "" && regexp.MustCompile(c.spec.FinishRegex).MatchString(line) {
+	if c.finishRe != nil && c.finishRe.MatchString(line) {
 		c.complete("finish_regex")
 		return
 	}
@@ -449,14 +487,18 @@ func (c *customHarness) Stop() error {
 	}
 	return nil
 }
+
+// emit entrega o evento; bloqueia se o consumidor está lento (não perde o fim) e desiste quando o harness para.
 func (c *customHarness) emit(e Event) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if !c.stopped {
-		select {
-		case c.events <- e:
-		default:
-		}
+	stopped, ctx := c.stopped, c.ctx
+	c.mu.Unlock()
+	if stopped || ctx == nil {
+		return
+	}
+	select {
+	case c.events <- e:
+	case <-ctx.Done():
 	}
 }
 func (c *customHarness) complete(reason string) {
@@ -488,4 +530,27 @@ func expandHome(v string) string {
 		}
 	}
 	return v
+}
+
+// tailBuffer guarda só o fim do que foi escrito (stderr do harness, para mensagens de erro).
+type tailBuffer struct {
+	mu  sync.Mutex
+	max int
+	b   []byte
+}
+
+func (t *tailBuffer) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.b = append(t.b, p...)
+	if len(t.b) > t.max {
+		t.b = t.b[len(t.b)-t.max:]
+	}
+	return len(p), nil
+}
+
+func (t *tailBuffer) String() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return string(t.b)
 }

@@ -9,7 +9,12 @@ uma pasta simples. O padrão da worktree é `.claude/agentes` e a branch base é
 ```bash
 openheinerss rodar revisor claude-conta2 --modelo claude-sonnet --esforco high
 openheinerss rodar missao-relatorio mock --retomar
+openheinerss rodar rapido mock --texto "responda OK"
 ```
+
+`--texto` (`--text`) dá o prompt direto na linha de comando, sem arquivo; `--prompt` aponta outro arquivo. O nome do agente só aceita letras, números, `.`, `_` e `-` (ele vira nome de pasta e de branch).
+
+**Código de saída.** O processo termina com o código do `FIM` do log: `0` concluído, `1` erro (tentativas esgotadas), `2` falta de cota sem reserva (ou todas as instâncias acima de `--cota-max`) e `130` parado por Ctrl-C/SIGTERM (o log e o `meta.json` são fechados antes de sair) ou por `agentes parar`.
 
 Cada execução atualiza `logs/<nome>.log` e, atomicamente,
 `logs/<nome>.meta.json`. `--retomar` (ou `RETOMAR=1`) preserva o log e adiciona
@@ -17,7 +22,7 @@ o texto de continuação. Uma instância custom pode declarar `reserva: [outra]`
 ao encontrar a regex de cota ou um erro, as reservas são tentadas até
 `--tentativas` (padrão 4).
 
-Limites opcionais: `--carga-maxima`, `--max-agentes`, `--pasta-agentes` e
+Um agente interrompido por Ctrl-C deixa a worktree e o log para o `--retomar`. Limites opcionais: `--carga-maxima`, `--max-agentes`, `--pasta-agentes` e
 `--branch-base`. O protocolo JSON-RPC oferece os mesmos recursos pelo método
 `run`, com os campos `nome`, `motor`, `prompt`, `retomar` e os limites. Use
 `--cota-max 95` (ou `OPENHEINERSS_COTA_MAX`) para pular uma instância que já

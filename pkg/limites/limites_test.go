@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/crom-org/openheinerss/pkg/harness"
 	_ "github.com/crom-org/openheinerss/pkg/harness/claudecode"
@@ -72,5 +73,19 @@ func TestContaClaudePelaPasta(t *testing.T) {
 		if got := contaClaude(in[0], in[1]); got != want {
 			t.Fatalf("contaClaude(%q,%q)=%q, quero %q", in[0], in[1], got, want)
 		}
+	}
+}
+
+func TestMaiorPercentualIgnoraJanelaJaRenovada(t *testing.T) {
+	agora := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
+	i := Instancia{Janelas: []Janela{
+		{Nome: "5 h", Percentual: 100, ReiniciaEm: agora.Add(-time.Hour).Format(time.RFC3339)},
+		{Nome: "semanal", Percentual: 40, ReiniciaEm: agora.Add(24 * time.Hour).Format(time.RFC3339)},
+	}}
+	if p, ok := maiorPercentual(i, agora); !ok || p != 40 {
+		t.Fatalf("percentual = %v (ok=%v), esperado 40", p, ok)
+	}
+	if _, ok := maiorPercentual(Instancia{Janelas: i.Janelas[:1]}, agora); ok {
+		t.Fatal("só janela vencida não deve contar como leitura")
 	}
 }

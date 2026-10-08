@@ -3,6 +3,7 @@ package harness
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/crom-org/openheinerss/pkg/protocol"
@@ -124,5 +125,7 @@ func ListCatalog() []protocol.HarnessCatalogItem {
 	for _, meta := range defaultRegistry.metadata {
 		items = append(items, meta)
 	}
+	// Ordem estável: o catálogo sai igual em toda chamada (CLI, RPC e testes).
+	sort.Slice(items, func(a, b int) bool { return items[a].ID < items[b].ID })
 	return items
 }

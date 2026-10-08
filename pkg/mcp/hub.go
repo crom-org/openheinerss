@@ -48,7 +48,11 @@ func GetHub() *Hub {
 func (h *Hub) LoadConfig(cwd string) (*Config, error) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
+	return loadConfig(cwd)
+}
 
+// loadConfig lê o mcp.json sem tocar na trava (quem chama já a segura).
+func loadConfig(cwd string) (*Config, error) {
 	filePath := filepath.Join(cwd, config.WorkspaceDirName, config.McpFileName)
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -98,14 +102,25 @@ func (h *Hub) RegisterServer(cwd, name string, s ServerConfig) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	filePath := filepath.Join(cwd, config.WorkspaceDirName, config.McpFileName)
-	cfg, _ := h.LoadConfig(cwd)
+	// LoadConfig também pega a trava: usar a versão interna evita o deadlock de Lock + RLock na mesma goroutine.
+	cfg, err := loadConfig(cwd)
+	if err != nil {
+		return err
+	}
 	cfg.MCPServers[name] = s
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
 	}
-
-	return os.WriteFile(filePath, data, 0644)
+	dir := filepath.Join(cwd, config.WorkspaceDirName)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	filePath := filepath.Join(dir, config.McpFileName)
+	tmp := filePath + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, filePath)
 }

@@ -18,7 +18,19 @@ type CheckpointInfo struct {
 	SessionID string `json:"sessionId"`
 	Message   string `json:"message"`
 	CreatedAt string `json:"createdAt"`
+	// Parcial indica que o snapshot pulou arquivos grandes ou atingiu o limite total.
+	Parcial bool `json:"parcial,omitempty"`
 }
+
+// Limites do snapshot: um checkpoint por sessão não pode copiar o disco inteiro.
+const (
+	maxArquivo = 10 << 20
+	maxTotal   = 256 << 20
+)
+
+// pastasPesadas são dependências e saídas de build, recriáveis e sem valor para desfazer edições.
+var pastasPesadas = map[string]bool{"node_modules": true, "vendor": true, "target": true, "dist": true, "build": true, ".venv": true, "venv": true, "__pycache__": true, ".cache": true, ".next": true}
+
 type Manager struct{}
 
 var defaultManager = &Manager{}
@@ -39,6 +51,7 @@ func (m *Manager) CreateCheckpoint(cwd, sessionID, message string) (*CheckpointI
 	if err := os.MkdirAll(root, 0755); err != nil {
 		return nil, err
 	}
+	var total int64
 	err := filepath.Walk(cwd, func(path string, fi os.FileInfo, err error) error {
 		if err != nil {
 			// Árvores compartilhadas (/tmp, por exemplo) podem conter diretórios
@@ -59,9 +72,25 @@ func (m *Manager) CreateCheckpoint(cwd, sessionID, message string) (*CheckpointI
 			}
 			return nil
 		}
-		if fi.IsDir() || !fi.Mode().IsRegular() {
+		if fi.IsDir() {
+			if pastasPesadas[fi.Name()] {
+				info.Parcial = true
+				return filepath.SkipDir
+			}
 			return nil
 		}
+		if !fi.Mode().IsRegular() {
+			return nil
+		}
+		if fi.Size() > maxArquivo {
+			info.Parcial = true
+			return nil
+		}
+		if total+fi.Size() > maxTotal {
+			info.Parcial = true
+			return filepath.SkipAll
+		}
+		total += fi.Size()
 		dst := filepath.Join(root, rel)
 		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 			return err

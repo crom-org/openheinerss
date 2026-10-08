@@ -4,7 +4,7 @@ from typing import Generator, Dict, Any, Optional, Callable, TypedDict
 from .transport import StdioTransport
 
 class RunOptions(TypedDict, total=False):
-    nome: str; motor: str; modelo: str; esforco: str; prompt: str; retomar: bool
+    nome: str; motor: str; modelo: str; esforco: str; prompt: str; texto: str; retomar: bool
     pasta: str; branchBase: str; cargaMax: float; maxAgentes: int; tentativas: int; cotaMax: float; cwd: str; projeto: str
 
 class OrchestrationEvent(TypedDict):

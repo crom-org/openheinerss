@@ -1,6 +1,8 @@
 # SDKs e protocolo bruto
 
-O transporte comum é JSON-RPC 2.0 em NDJSON via `openheinerss serve --stdio`. O servidor WebSocket também existe para clientes compatíveis, mas os SDKs Python e PHP atuais usam STDIO.
+O transporte comum é JSON-RPC 2.0 em NDJSON via `openheinerss serve --stdio`. O servidor WebSocket (`ws://127.0.0.1:4820/ws`; `OPENHEINERSS_PORTA` muda a porta) também existe; só o SDK TypeScript o usa. Os SDKs Python e PHP usam STDIO.
+
+Os três SDKs (versão 0.2.0) expõem a mesma orquestração: `registerHarness`, `listHarnesses`, `run` (`rodar.iniciar`), `listRuns`, `stopRun`, `decideRun`, `getLimits` e `subscribeEvents`. A assinatura aceita `projeto`, `agente`, `cwd` e `pasta`; os callbacks recebem `orq.inicio`, `orq.progresso`, `orq.fim`, `orq.erro` e `orq.precisa_decisao`. Em `run`, `texto` é o prompt em texto e `prompt` é o caminho de um arquivo de prompt.
 
 ## TypeScript
 
@@ -14,11 +16,9 @@ agent.on("text", delta => process.stdout.write(delta));
 await agent.prompt("responda OK");
 ```
 
-O SDK também expõe `registerHarness` para o método `harness.register`. Consulte o README do pacote para a assinatura exata.
-
 ## Python
 
-`sdk/python/` oferece `Agent.stream()` e `Agent.prompt()`. Os eventos do stream são dicionários com chaves `type` e `data`; não são objetos com atributo `event.type`.
+`sdk/python/` oferece `Agent.stream()` e `Agent.prompt()`. Os eventos do stream são dicionários com chaves `type` e `data`; não são objetos com atributo `event.type`. Os métodos de orquestração têm nomes em snake_case (`list_runs`) e em camelCase (`listRuns`).
 
 ```python
 from openheinerss import Agent
@@ -29,11 +29,11 @@ for event in agent.stream("responda OK"):
         print(event["data"]["delta"], end="")
 ```
 
-Não há módulo `openheinerss.aio` nem transporte WebSocket implementado neste SDK.
+Não há módulo `openheinerss.aio` nem transporte WebSocket neste SDK.
 
 ## PHP
 
-`sdk/php/` oferece `Agent::session()`, `prompt()` e `respondPermission()`. `prompt()` devolve uma string e aceita callback opcional de eventos; não existe método `stream()` separado, nem `registerHarness` ou transporte WebSocket.
+`sdk/php/` oferece `Agent::session()`, `prompt()` (devolve uma string e aceita callback opcional de eventos) e `respondPermission()`, além dos métodos de orquestração. Não existe método `stream()` separado nem transporte WebSocket.
 
 ## RPC mínimo em qualquer linguagem
 
@@ -42,7 +42,8 @@ Não há módulo `openheinerss.aio` nem transporte WebSocket implementado neste 
 {"jsonrpc":"2.0","id":2,"method":"session.prompt","params":{"sessionId":"sess_id","text":"responda OK"}}
 ```
 
-Os nomes oficiais e campos estão em [02-protocol-spec.md](02-protocol-spec.md). Os métodos de sessão disponíveis são `session.create`, `session.prompt`, `session.permission_respond`, `session.abort` e `session.list`; `session.resume` não existe.
+Os nomes oficiais e campos estão em [02-protocol-spec.md](02-protocol-spec.md). Para um cliente WebSocket completo e curto veja `scripts/ws-cliente.mjs`; o passo a passo de verificação está em [VERIFICACAO.md](VERIFICACAO.md).
+
 # SDKs 1.1.0
 
 Os SDKs TypeScript, Python e PHP usam JSON-RPC sobre STDIO por padrão e conversam com
@@ -59,7 +60,7 @@ Exemplo conceitual (os exemplos completos estão nos READMEs de cada SDK):
 ```text
 registerHarness({name: "meu-harness", base: "mock"})
 subscribeEvents({projeto: "demo"}, callback)
-run({nome: "demo", motor: "mock", prompt: "responda OK"})
+run({nome: "demo", motor: "mock", texto: "responda OK"})
 ```
 
 O changelog 1.1.0 registra a correção da porta que era 4799 na versão 0.1.0 e a

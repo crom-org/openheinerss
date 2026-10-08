@@ -23,9 +23,11 @@ Modelos locais podem ser passados ao CLI quando o motor instalado os suporta, po
 
 ## Cache, histórico e checkpoints
 
-Não há prompt caching Anthropic implementado pelo Openheinerss. O adaptador Claude define `DISABLE_PROMPT_CACHING=1` no processo.
+O Openheinerss não implementa prompt caching: ele só decide se o cache do próprio Claude Code fica ligado. Com a Anthropic direta o cache é deixado como está; com outro provedor (`provider` diferente de `anthropic`/vazio ou `ANTHROPIC_BASE_URL` fora da Anthropic) o adaptador define `DISABLE_PROMPT_CACHING=1`, porque provedores de terceiros costumam recusá-lo.
 
-Os pacotes `pkg/storage` e `pkg/checkpoint` existem como componentes, mas não são chamados automaticamente pelas sessões. Portanto não existe hoje transcript persistido garantido em `.openheinerss/sessions/`, nem rollback automático antes de uma ferramenta.
+As sessões gravam o transcript em `.openheinerss/sessions/<id>.jsonl` e criam um checkpoint por cópia de arquivos antes do primeiro prompt (`.openheinerss/checkpoints/`, sem tocar no git; pula dependências e arquivos grandes). `session.resume` e `run --retomar <id>` reabrem a sessão usando o ID nativo do motor (Codex e Claude Code). Não há rollback automático antes de cada ferramenta.
+
+No modo SDK do Claude Code o worker Node procura `@anthropic-ai/claude-agent-sdk` no `node_modules` do projeto, em `$OPENHEINERSS_CLAUDE_SDK_PATH` e em `~/.openheinerss/shims/node_modules`; sem ele, a sessão falha na hora com a correção sugerida (use o modo CLI).
 
 ## Harness custom
 

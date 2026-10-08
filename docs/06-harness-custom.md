@@ -16,7 +16,11 @@ finishRegex: '"type"\s*:\s*"end"'
 quotaRegex: 'quota|rate limit'
 ```
 
+`~/` no início de `command` e dos valores de `env` é expandido para a pasta do usuário (o shell não faz isso por nós), com ou sem `base`.
+
 O comando escreve uma linha JSON por evento. O protocolo aceita `text`, `tool`/`tool_call`, `error`, `usage` e `end`/`complete`; linhas não JSON viram texto. Os eventos são normalizados para `agent.text`, `agent.tool_call`, `agent.error`, `agent.usage` e `agent.complete`.
+
+Se o processo sair com erro sem ter emitido o evento de fim, o harness emite um `agent.error` com o código de saída e o fim do stderr, e termina com `reason: "process_error"` (o `rodar` conta como falha e tenta a próxima instância). Se o stderr casar com `quotaRegex`, o erro é reportado como limite de cota. Saída com código 0 sem evento de fim termina com `process_exit` (sucesso). Para cota, use `reserva: [outra-instancia]` e veja o exemplo completo no roteiro [VERIFICACAO.md](VERIFICACAO.md).
 
 Herança usa `base: claude-code` (ou outro harness custom já carregado) e faz merge de `env`; `command`, `args`, `model`, `prompt` e regexes podem ser substituídos. Veja `examples/cco-openrouter.yaml` e `examples/harness-ndjson.sh`.
 

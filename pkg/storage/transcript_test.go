@@ -53,3 +53,16 @@ func TestStoragePersistence(t *testing.T) {
 		t.Fatalf("listagem incorreta: %v", list)
 	}
 }
+
+func TestIDDeSessaoNaoSaiDaPasta(t *testing.T) {
+	s := storage.GetStorage()
+	dir := t.TempDir()
+	for _, id := range []string{"../fora", "a/b", "..", ""} {
+		if _, err := s.LoadSession(dir, id); err == nil {
+			t.Errorf("LoadSession aceitou %q", id)
+		}
+		if err := s.Record(dir, id, "system", nil, "", nil); err == nil {
+			t.Errorf("Record aceitou %q", id)
+		}
+	}
+}

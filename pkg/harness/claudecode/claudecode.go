@@ -93,6 +93,12 @@ func (c *ClaudeCodeHarness) Mode() harness.Mode {
 }
 
 func (c *ClaudeCodeHarness) ValidatePrerequisites(ctx context.Context) harness.PrerequisiteResult {
+	return c.ValidatePrerequisitesEnv(ctx, nil)
+}
+
+// ValidatePrerequisitesEnv valida com o env de uma instância (por exemplo, OPENHEINERSS_CLAUDE_SDK_PATH
+// declarado no arquivo da instância), que o processo ainda não recebeu antes do Start.
+func (c *ClaudeCodeHarness) ValidatePrerequisitesEnv(ctx context.Context, instanceEnv map[string]string) harness.PrerequisiteResult {
 	if c.mode == harness.ModeSDK {
 		if _, err := exec.LookPath("node"); err != nil {
 			return harness.PrerequisiteResult{
@@ -101,7 +107,11 @@ func (c *ClaudeCodeHarness) ValidatePrerequisites(ctx context.Context) harness.P
 				SuggestedFix: "Node.js 18+ é necessário para o modo SDK. Instale via nvm ('nvm install 20') ou use o modo CLI.",
 			}
 		}
-		check := exec.CommandContext(ctx, "node", "-e", "for (const p of [ '@anthropic-ai/claude-agent-sdk', '/home/j/Documentos/GitHub/claude-code-open/app/node_modules/@anthropic-ai/claude-agent-sdk' ]) { try { require.resolve(p); process.exit(0) } catch (_) {} } process.exit(1)")
+		check := exec.CommandContext(ctx, "node", "-e", "const path = require('path'); for (const p of [ '@anthropic-ai/claude-agent-sdk', process.env.OPENHEINERSS_CLAUDE_SDK_PATH || '', path.join(process.env.HOME || '', '.openheinerss/shims/node_modules/@anthropic-ai/claude-agent-sdk') ]) { if (!p) continue; try { require.resolve(p); process.exit(0) } catch (_) {} } process.exit(1)")
+		check.Env = os.Environ()
+		for k, v := range instanceEnv {
+			check.Env = append(check.Env, k+"="+v)
+		}
 		if err := check.Run(); err != nil {
 			return harness.PrerequisiteResult{Satisfied: false, MissingItems: []string{"@anthropic-ai/claude-agent-sdk"}, SuggestedFix: "Instale a versão do SDK compatível com o Claude Code ou use o modo CLI; o worker não deve esperar até timeout."}
 		}
@@ -183,8 +193,12 @@ func (c *ClaudeCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig
 		c.stdin = stdin
 
 		// Goroutines de leitura e streaming
-		go c.readEvents(stdout)
-		go c.readStderr(stderr)
+		var leitores sync.WaitGroup
+		leitores.Add(2)
+		go func() { defer leitores.Done(); c.readEvents(stdout) }()
+		go func() { defer leitores.Done(); c.readStderr(stderr) }()
+		// Colhe o worker depois que os dois pipes acabam, para não deixar processo zumbi.
+		go func() { leitores.Wait(); _ = cmd.Wait() }()
 
 		// Se for modo SDK, envia handshake de inicialização
 		initPayload := map[string]interface{}{

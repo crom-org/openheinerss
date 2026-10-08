@@ -49,12 +49,12 @@ try {
 } catch (e) {
   // Procura em caminhos conhecidos como fallback
   const fallbacks = [
-    '/home/j/Documentos/GitHub/claude-code-open/app/node_modules/@anthropic-ai/claude-agent-sdk',
+    process.env.OPENHEINERSS_CLAUDE_SDK_PATH || '',
     path.join(process.env.HOME || '', '.openheinerss/shims/node_modules/@anthropic-ai/claude-agent-sdk')
   ];
   for (const fb of fallbacks) {
     try {
-      if (fs.existsSync(fb)) {
+      if (fb && fs.existsSync(fb)) {
         sdk = require(fb);
         break;
       }

@@ -2,10 +2,13 @@ package claudecode_test
 
 import (
 	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/crom-org/openheinerss/pkg/harness"
-	_ "github.com/crom-org/openheinerss/pkg/harness/claudecode"
+	"github.com/crom-org/openheinerss/pkg/harness/claudecode"
 )
 
 func TestClaudeCodeHarnessRegistration(t *testing.T) {
@@ -36,5 +39,23 @@ func TestClaudeCodeHarnessRegistration(t *testing.T) {
 	// Como node está instalado na máquina de teste, deve satisfazer
 	if !res.Satisfied {
 		t.Logf("Aviso: pré-requisito não satisfeito (normal se faltar node no path de teste): %+v", res)
+	}
+}
+
+func TestPrerequisitosSDKUsamEnvDaInstancia(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("sem node")
+	}
+	sdk := t.TempDir()
+	if err := os.WriteFile(filepath.Join(sdk, "package.json"), []byte(`{"name":"falso-sdk","main":"index.js"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sdk, "index.js"), []byte("module.exports = {}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	h := claudecode.NewClaudeCodeHarness(harness.ModeSDK)
+	r := h.ValidatePrerequisitesEnv(context.Background(), map[string]string{"OPENHEINERSS_CLAUDE_SDK_PATH": sdk})
+	if !r.Satisfied {
+		t.Fatalf("o caminho do SDK vindo da instância deveria satisfazer o pré-requisito: %+v", r)
 	}
 }

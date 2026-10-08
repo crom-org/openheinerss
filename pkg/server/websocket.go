@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,10 +17,30 @@ import (
 	"github.com/crom-org/openheinerss/pkg/session"
 )
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Permite conexões de qualquer front-end local ou web
-	},
+var upgrader = websocket.Upgrader{CheckOrigin: origemPermitida}
+
+// origemPermitida bloqueia páginas web de terceiros: o servidor executa agentes na máquina,
+// então um site aberto no navegador não pode abrir WebSocket para 127.0.0.1.
+// Clientes sem cabeçalho Origin (SDKs, scripts) e origens locais passam; outras
+// origens precisam estar em OPENHEINERSS_ORIGENS (lista separada por vírgula, ou "*").
+func origemPermitida(r *http.Request) bool {
+	origem := r.Header.Get("Origin")
+	if origem == "" {
+		return true
+	}
+	if u, err := url.Parse(origem); err == nil {
+		switch u.Hostname() {
+		case "localhost", "127.0.0.1", "::1", "tauri.localhost":
+			return true
+		}
+	}
+	for _, permitida := range strings.Split(os.Getenv("OPENHEINERSS_ORIGENS"), ",") {
+		permitida = strings.TrimSpace(permitida)
+		if permitida == "*" || (permitida != "" && permitida == origem) {
+			return true
+		}
+	}
+	return false
 }
 
 type wsClient struct {

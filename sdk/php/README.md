@@ -23,7 +23,7 @@ $agent = Agent::session([
 
 $agent->registerHarness(['name' => 'meu-harness', 'base' => 'mock']);
 $agent->subscribeEvents([], ['orq.fim' => fn (array $evento) => print_r($evento)]);
-$execucao = $agent->run(['nome' => 'teste', 'motor' => 'mock', 'prompt' => 'responda OK', 'cwd' => getcwd()]);
+$execucao = $agent->run(['nome' => 'teste', 'motor' => 'mock', 'texto' => 'responda OK', 'cwd' => getcwd()]);
 var_dump($agent->listHarnesses(), $agent->getLimits(), $execucao);
 
 // Resposta com streaming no terminal:

@@ -95,6 +95,7 @@ type Orq struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	obsOn    bool
+	wg       sync.WaitGroup // execuções de rodar em andamento
 	agora    func() time.Time
 }
 
@@ -106,6 +107,13 @@ func newOrq() *Orq {
 // Close para as execuções, o observador e os temporizadores.
 func (o *Orq) Close() {
 	o.cancel()
+	// Dá tempo para os agentes fecharem log e meta.json (FIM 130) antes de o processo sair.
+	espera := make(chan struct{})
+	go func() { o.wg.Wait(); close(espera) }()
+	select {
+	case <-espera:
+	case <-time.After(5 * time.Second):
+	}
 	o.mu.Lock()
 	for _, l := range o.limites {
 		if l.timer != nil {
@@ -493,13 +501,15 @@ func (o *Orq) iniciar(p protocol.RodarIniciarParams) (protocol.RodarIniciarResul
 	ctx, cancel := context.WithCancel(o.ctx)
 	j.cancel = cancel
 	o.jobs[j.id] = j
+	o.wg.Add(1)
 	o.mu.Unlock()
 	o.observarSemVarrer(dir, projeto)
 
-	opts := orchestrator.Options{Name: p.Nome, Motor: p.Motor, Model: p.Modelo, Effort: p.Esforco, PromptFile: p.Prompt, Retomar: p.Retomar, AgentsDir: p.Pasta, BranchBase: p.BranchBase, MaxLoad: p.CargaMax, MaxAgents: p.MaxAgentes, Attempts: p.Tentativas, QuotaMax: p.CotaMax}
+	opts := orchestrator.Options{Name: p.Nome, Motor: p.Motor, Model: p.Modelo, Effort: p.Esforco, PromptFile: p.Prompt, PromptText: p.Texto, Retomar: p.Retomar, AgentsDir: p.Pasta, BranchBase: p.BranchBase, MaxLoad: p.CargaMax, MaxAgents: p.MaxAgentes, Attempts: p.Tentativas, QuotaMax: p.CotaMax, ViaServidor: true}
 	opts.OnEvent = func(e orchestrator.Evento) { o.deJob(j, e) }
 	opts.Decidir = func(ctx context.Context, q orchestrator.Pergunta) (bool, string) { return o.perguntar(ctx, j, q) }
 	go func() {
+		defer o.wg.Done()
 		defer cancel()
 		res, err := orchestrator.Run(ctx, cwd, opts)
 		if err != nil && !j.fimEmitido {

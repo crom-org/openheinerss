@@ -26,7 +26,7 @@ export interface HarnessRegistration {
 }
 
 export interface RunOptions {
-  nome: string; motor: string; modelo?: string; esforco?: string; prompt?: string;
+  nome: string; motor: string; modelo?: string; esforco?: string; prompt?: string; texto?: string;
   retomar?: boolean; pasta?: string; branchBase?: string; cargaMax?: number;
   maxAgentes?: number; tentativas?: number; cotaMax?: number; cwd?: string; projeto?: string;
 }

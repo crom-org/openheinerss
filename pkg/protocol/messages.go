@@ -195,7 +195,8 @@ type RunParams struct {
 	Motor      string  `json:"motor"`
 	Modelo     string  `json:"modelo,omitempty"`
 	Esforco    string  `json:"esforco,omitempty"`
-	Prompt     string  `json:"prompt,omitempty"`
+	Prompt     string  `json:"prompt,omitempty"` // arquivo de prompt
+	Texto      string  `json:"texto,omitempty"`  // prompt em texto (vale no lugar do arquivo)
 	Retomar    bool    `json:"retomar,omitempty"`
 	Pasta      string  `json:"pasta,omitempty"`
 	BranchBase string  `json:"branchBase,omitempty"`

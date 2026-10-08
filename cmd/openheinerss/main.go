@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -49,11 +50,28 @@ func main() {
 	}
 	rootCmd := newRootCmd()
 
-	if err := rootCmd.Execute(); err != nil {
+	// Ctrl-C/SIGTERM cancelam o contexto: o rodar fecha log e meta.json (FIM 130) e para o harness
+	// em vez de morrer deixando o CLI do motor órfão.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	err := rootCmd.ExecuteContext(ctx)
+	interrompido := ctx.Err() != nil
+	stop()
+	var saida codigoSaida
+	switch {
+	case errors.As(err, &saida):
+		os.Exit(int(saida))
+	case interrompido:
+		os.Exit(130)
+	case err != nil:
 		fmt.Fprintf(os.Stderr, "Erro: %v\n", err)
 		os.Exit(1)
 	}
 }
+
+// codigoSaida faz o processo terminar com o código do FIM do rodar (0 ok, 1 erro, 2 sem cota, 130 parado).
+type codigoSaida int
+
+func (c codigoSaida) Error() string { return fmt.Sprintf("código de saída %d", int(c)) }
 
 func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
@@ -62,6 +80,8 @@ func newRootCmd() *cobra.Command {
 		Long: `🎼 Openheinerss (crom-org)
 Regendo a orquestra universal de agentes e harnesses de IA.
 Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC de alta performance.`,
+		// O main imprime o erro uma vez só (e decide o código de saída).
+		SilenceErrors: true,
 	}
 
 	rootCmd.AddCommand(newServeCmd())
@@ -213,6 +233,7 @@ func newServeCmd() *cobra.Command {
 		Short:   "Inicia o servidor de orquestração Openheinerss (STDIO ou WebSocket)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			manager := session.NewManager()
+			defer manager.Close()
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
 
@@ -228,6 +249,11 @@ func newServeCmd() *cobra.Command {
 
 			go func() {
 				<-ctx.Done()
+				// Rede de segurança: se algo travar no desligamento (sessão, agente, conexão), não fica processo preso.
+				time.AfterFunc(10*time.Second, func() {
+					fmt.Fprintln(os.Stderr, "encerramento demorou mais de 10 s; saindo à força")
+					os.Exit(1)
+				})
 				shutdownCtx, sCancel := context.WithTimeout(context.Background(), 3*time.Second)
 				defer sCancel()
 				_ = wsServer.Shutdown(shutdownCtx)
@@ -351,7 +377,8 @@ func newRunCmd() *cobra.Command {
 			}
 
 			manager := session.NewManager()
-			ctx, cancel := context.WithCancel(context.Background())
+			defer manager.Close()
+			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
 
 			var sessRes *protocol.SessionCreateResult
@@ -375,7 +402,8 @@ func newRunCmd() *cobra.Command {
 
 			fmt.Printf("🚀 Sessão iniciada: %s (Harness: %s, Modo: %s)\n\n", sessRes.SessionID, sessRes.Harness, sessRes.Mode)
 
-			doneChan := make(chan bool)
+			// Com buffer: o fim do turno pode chegar antes de o laço principal começar a esperar.
+			doneChan := make(chan bool, 1)
 			reader := bufio.NewReader(os.Stdin)
 
 			manager.SubscribeEvents(func(notification protocol.Notification) {
@@ -407,6 +435,14 @@ func newRunCmd() *cobra.Command {
 						Decision:  decision,
 					})
 
+				case protocol.EventAgentError:
+					var p protocol.ErrorParams
+					remarshal(notification.Params, &p)
+					fmt.Fprintf(os.Stderr, "❌ %s\n", p.Message)
+					if p.SuggestedFix != "" {
+						fmt.Fprintf(os.Stderr, "   Como resolver: %s\n", p.SuggestedFix)
+					}
+
 				case protocol.EventAgentToolCall:
 					var p protocol.ToolCallParams
 					remarshal(notification.Params, &p)
@@ -433,8 +469,12 @@ func newRunCmd() *cobra.Command {
 				return err
 			}
 
-			<-doneChan
-			return nil
+			select {
+			case <-doneChan:
+				return nil
+			case <-ctx.Done():
+				return fmt.Errorf("interrompido")
+			}
 		},
 	}
 
@@ -458,7 +498,7 @@ func newRunCmd() *cobra.Command {
 }
 
 func newRodarCmd() *cobra.Command {
-	var modelo, esforco, prompt, pasta, branchBase string
+	var modelo, esforco, prompt, texto, pasta, branchBase string
 	var retomar bool
 	var carga, cargaAbaixo float64
 	var maxAgentes, tentativas int
@@ -469,6 +509,7 @@ func newRodarCmd() *cobra.Command {
 		Short:   "Executa uma missão com worktree, log e retomada",
 		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true // a partir daqui um erro não é de uso
 			if os.Getenv("RETOMAR") == "1" {
 				retomar = true
 			}
@@ -479,11 +520,17 @@ func newRodarCmd() *cobra.Command {
 			if cargaAbaixo > 0 {
 				carga = cargaAbaixo
 			}
-			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, PromptFile: prompt, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax})
-			if err != nil {
+			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, PromptFile: prompt, PromptText: texto, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax})
+			if err != nil && res.Name == "" {
 				return err
 			}
 			fmt.Printf("FIM %s código %d\nlog: %s\n", res.Name, res.Code, res.LogFile)
+			if err != nil {
+				return err // interrompido ou falha: o log já tem o FIM; o main escolhe o código de saída
+			}
+			if res.Code != 0 {
+				return codigoSaida(res.Code)
+			}
 			return nil
 		},
 	}
@@ -492,6 +539,8 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().StringVar(&esforco, "esforco", "", "Esforço de raciocínio")
 	cmd.Flags().StringVar(&esforco, "effort", "", "Alias em inglês de --esforco")
 	cmd.Flags().StringVar(&prompt, "prompt", "", "Arquivo de prompt alternativo")
+	cmd.Flags().StringVar(&texto, "texto", "", "Prompt em texto, no lugar do arquivo prompts/<nome>.md")
+	cmd.Flags().StringVar(&texto, "text", "", "Alias em inglês de --texto")
 	cmd.Flags().BoolVar(&retomar, "retomar", false, "Acrescenta o texto de continuação e preserva o log")
 	cmd.Flags().BoolVar(&retomar, "resume", false, "Alias em inglês de --retomar")
 	cmd.Flags().StringVar(&pasta, "pasta-agentes", "", "Pasta dos agentes (padrão .claude/agentes)")
@@ -694,6 +743,7 @@ func newHarnessCmd() *cobra.Command {
 		}
 		return nil
 	}, RunE: func(cmd *cobra.Command, args []string) error {
+		cmd.SilenceUsage = true
 		if todos {
 			return runHarnessTodos(cmd, prompt, jsonOutput, pular, timeout, incluirPrincipal)
 		}
@@ -708,7 +758,7 @@ func newHarnessCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 		defer cancel()
 		if r := h.ValidatePrerequisites(ctx); !r.Satisfied {
 			return fmt.Errorf("pré-requisito ausente: %s", strings.Join(r.MissingItems, ", "))
@@ -724,14 +774,28 @@ func newHarnessCmd() *cobra.Command {
 		if err := h.SendPrompt(ctx, prompt, nil); err != nil {
 			return err
 		}
+		failure := ""
 		for {
 			select {
 			case e := <-h.Events():
 				fmt.Printf("%s %v\n", e.Type, e.Payload)
-				if e.Type == harness.EventComplete || e.Type == harness.EventError {
+				if p, ok := e.Payload.(protocol.PermissionRequestParams); ok {
+					// O teste é só de conectividade: nega pedidos de ferramenta para o turno acabar em vez de esperar.
+					_ = h.RespondPermission(ctx, p.RequestID, false, "harness test não autoriza ferramentas")
+				}
+				if p, ok := e.Payload.(protocol.ErrorParams); ok && e.Type == harness.EventError && failure == "" {
+					failure = p.Message
+				}
+				if e.Type == harness.EventComplete {
+					if failure != "" {
+						return fmt.Errorf("%s: %s", classifyLabel(failure), failure)
+					}
 					return nil
 				}
 			case <-ctx.Done():
+				if failure != "" {
+					return fmt.Errorf("tempo esgotado testando harness '%s' (último erro: %s)", args[0], failure)
+				}
 				return fmt.Errorf("tempo esgotado testando harness '%s'", args[0])
 			}
 		}
@@ -752,42 +816,11 @@ func newHarnessCmd() *cobra.Command {
 	return root
 }
 
+// remarshal converte os parâmetros de um evento (struct ou mapa) no tipo de destino.
 func remarshal(src interface{}, dst interface{}) {
-	importJSON, _ := src.(map[string]interface{})
-	if importJSON != nil {
-		// já vem como map
-		data, _ := src.([]byte)
-		if len(data) == 0 {
-			// fallback para serialization rápida
-			importJSONBytes, _ := fmt.Sprintf("%v", src), 0
-			_ = importJSONBytes
-		}
+	data, err := json.Marshal(src)
+	if err != nil {
+		return
 	}
-	// Normalização segura
-	switch v := src.(type) {
-	case protocol.ThinkingParams:
-		if p, ok := dst.(*protocol.ThinkingParams); ok {
-			*p = v
-		}
-	case protocol.TextParams:
-		if p, ok := dst.(*protocol.TextParams); ok {
-			*p = v
-		}
-	case protocol.PermissionRequestParams:
-		if p, ok := dst.(*protocol.PermissionRequestParams); ok {
-			*p = v
-		}
-	case protocol.ToolCallParams:
-		if p, ok := dst.(*protocol.ToolCallParams); ok {
-			*p = v
-		}
-	case protocol.ToolResultParams:
-		if p, ok := dst.(*protocol.ToolResultParams); ok {
-			*p = v
-		}
-	case protocol.CompleteParams:
-		if p, ok := dst.(*protocol.CompleteParams); ok {
-			*p = v
-		}
-	}
+	_ = json.Unmarshal(data, dst)
 }
