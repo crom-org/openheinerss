@@ -1,0 +1,7 @@
+name: cco-openrouter
+displayName: CCO via OpenRouter
+base: claude-code
+env:
+  ANTHROPIC_BASE_URL: https://openrouter.ai/api
+model: anthropic/claude-3.7-sonnet
+prompt: argument

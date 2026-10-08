@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { spawn, type ChildProcess } from "node:child_process";
-import type { SessionOptions, PermissionRequest, OpenheinerssEvents, ToolCall, ToolResult } from "./types.js";
+import type { SessionOptions, HarnessRegistration, PermissionRequest, OpenheinerssEvents, ToolCall, ToolResult } from "./types.js";
 
 export * from "./types.js";
 export * from "./react.js";
@@ -29,6 +29,11 @@ export class Openheinerss extends EventEmitter {
       options: config.options || {},
       ...config,
     };
+  }
+
+  /** Registra um harness custom no processo do openheinerss. */
+  async registerHarness(spec: HarnessRegistration): Promise<void> {
+    await this.sendRPC("harness.register", spec as unknown as Record<string, unknown>);
   }
 
   /**

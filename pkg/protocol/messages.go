@@ -11,6 +11,7 @@ const (
 	MethodCatalogList              = "catalog.list"
 	MethodMCPList                  = "mcp.list"
 	MethodMCPAdd                   = "mcp.add"
+	MethodHarnessRegister          = "harness.register"
 )
 
 // MCPListParams parâmetros para mcp.list
@@ -155,9 +156,24 @@ type HarnessCatalogItem struct {
 	SupportedModes     []string       `json:"supportedModes"`
 	SupportedProtocols []string       `json:"supportedProtocols"`
 	DefaultProviders   []ProviderInfo `json:"defaultProviders,omitempty"`
+	Origin             string         `json:"origin,omitempty"`
 }
 
 // CatalogListResult retorno de catalog.list
 type CatalogListResult struct {
 	Harnesses []HarnessCatalogItem `json:"harnesses"`
+}
+
+// HarnessRegisterParams descreve um harness custom registrável em tempo de execução.
+type HarnessRegisterParams struct {
+	Name        string            `json:"name" yaml:"name"`
+	Base        string            `json:"base,omitempty" yaml:"base,omitempty"`
+	DisplayName string            `json:"displayName,omitempty" yaml:"displayName,omitempty"`
+	Command     string            `json:"command,omitempty" yaml:"command,omitempty"`
+	Args        []string          `json:"args,omitempty" yaml:"args,omitempty"`
+	Env         map[string]string `json:"env,omitempty" yaml:"env,omitempty"`
+	Model       string            `json:"model,omitempty" yaml:"model,omitempty"`
+	Prompt      string            `json:"prompt,omitempty" yaml:"prompt,omitempty"`
+	FinishRegex string            `json:"finishRegex,omitempty" yaml:"finishRegex,omitempty"`
+	QuotaRegex  string            `json:"quotaRegex,omitempty" yaml:"quotaRegex,omitempty"`
 }

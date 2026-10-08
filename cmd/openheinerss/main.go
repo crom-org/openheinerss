@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -14,9 +15,9 @@ import (
 
 	"github.com/crom-org/openheinerss/pkg/config"
 	"github.com/crom-org/openheinerss/pkg/doctor"
+	"github.com/crom-org/openheinerss/pkg/harness"
 	_ "github.com/crom-org/openheinerss/pkg/harness/agy"
 	_ "github.com/crom-org/openheinerss/pkg/harness/aider"
-	_ "github.com/crom-org/openheinerss/pkg/harness/cco"
 	_ "github.com/crom-org/openheinerss/pkg/harness/claudecode"
 	_ "github.com/crom-org/openheinerss/pkg/harness/codex"
 	_ "github.com/crom-org/openheinerss/pkg/harness/mock"
@@ -33,6 +34,11 @@ var (
 )
 
 func main() {
+	if cwd, err := os.Getwd(); err == nil {
+		if err := harness.LoadCustom(cwd); err != nil {
+			fmt.Fprintf(os.Stderr, "Aviso: %v\n", err)
+		}
+	}
 	rootCmd := &cobra.Command{
 		Use:   "openheinerss",
 		Short: "Openheinerss - O maestro universal de orquestração de AI Coding Agents",
@@ -47,6 +53,7 @@ Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC d
 	rootCmd.AddCommand(newRunCmd())
 	rootCmd.AddCommand(newMotorsCmd())
 	rootCmd.AddCommand(newMcpCmd())
+	rootCmd.AddCommand(newHarnessCmd())
 	rootCmd.AddCommand(newVersionCmd())
 
 	if err := rootCmd.Execute(); err != nil {
@@ -279,7 +286,7 @@ func newRunCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&role, "papel", "", "Papel definido em .openheinerss/motores.yaml")
-	cmd.Flags().StringVar(&motorName, "motor", "", "Perfil de motor (codex, claude-conta2, cco-zen, opencode...)")
+	cmd.Flags().StringVar(&motorName, "motor", "", "Harness base ou instância custom definida pelo usuário")
 	cmd.Flags().StringVar(&harnessName, "harness", "mock", "Nome do harness ('mock', 'claude-code', 'opencode')")
 	cmd.Flags().StringVar(&modeName, "mode", "mock", "Modo do harness ('mock', 'sdk', 'cli')")
 	cmd.Flags().StringVar(&provider, "provider", "", "Provedor do modelo")
@@ -381,6 +388,80 @@ func newVersionCmd() *cobra.Command {
 			fmt.Printf("openheinerss %s (github.com/crom-org/openheinerss)\n", version)
 		},
 	}
+}
+
+func newHarnessCmd() *cobra.Command {
+	root := &cobra.Command{Use: "harness", Short: "Lista, instala e testa harnesses"}
+	root.AddCommand(&cobra.Command{Use: "list", Short: "Lista harnesses embutidos e custom", RunE: func(cmd *cobra.Command, args []string) error {
+		for _, item := range harness.ListCatalog() {
+			origin := item.Origin
+			if origin == "" {
+				origin = "embutido"
+			}
+			fmt.Printf("%-24s %-10s %s\n", item.ID, origin, item.DisplayName)
+		}
+		return nil
+	}})
+	root.AddCommand(&cobra.Command{Use: "add <arquivo>", Short: "Valida e copia um arquivo de harness para o projeto", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		if err := harness.LoadCustomFile(args[0]); err != nil {
+			return err
+		}
+		cwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		dir := filepath.Join(cwd, ".openheinerss", "harnesses")
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+		data, err := os.ReadFile(args[0])
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dir, filepath.Base(args[0]))
+		if err := os.WriteFile(target, data, 0644); err != nil {
+			return err
+		}
+		fmt.Printf("Harness copiado para %s\n", target)
+		return nil
+	}})
+	var prompt string
+	test := &cobra.Command{Use: "test <nome>", Short: "Executa um prompt curto e mostra eventos", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		h, err := harness.Create(args[0], harness.ModeCLI)
+		if err != nil {
+			return err
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		if r := h.ValidatePrerequisites(ctx); !r.Satisfied {
+			return fmt.Errorf("pré-requisito ausente: %s", strings.Join(r.MissingItems, ", "))
+		}
+		cwd, _ := os.Getwd()
+		if err := h.Start(ctx, harness.SessionConfig{SessionID: "harness-test", CWD: cwd}); err != nil {
+			return err
+		}
+		defer h.Stop()
+		if prompt == "" {
+			prompt = "responda apenas OK"
+		}
+		if err := h.SendPrompt(ctx, prompt, nil); err != nil {
+			return err
+		}
+		for {
+			select {
+			case e := <-h.Events():
+				fmt.Printf("%s %v\n", e.Type, e.Payload)
+				if e.Type == harness.EventComplete || e.Type == harness.EventError {
+					return nil
+				}
+			case <-time.After(30 * time.Second):
+				return fmt.Errorf("tempo esgotado testando harness '%s'", args[0])
+			}
+		}
+	}}
+	test.Flags().StringVar(&prompt, "prompt", "", "Prompt curto para o teste")
+	root.AddCommand(test)
+	return root
 }
 
 func remarshal(src interface{}, dst interface{}) {

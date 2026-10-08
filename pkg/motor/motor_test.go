@@ -9,13 +9,12 @@ import (
 
 func TestPerfisMontamMotorModeloEAmbiente(t *testing.T) {
 	cases := map[string]struct{ harness, provider, model, env string }{
-		"codex":          {"codex", "", "gpt-reserve", ""},
-		"codex2":         {"codex2", "", "gpt-reserve", "CODEX_HOME="},
-		"claude":         {"claude", "", "claude-sonnet-5-5", ""},
-		"claude-conta2":  {"claude", "", "claude-sonnet-5-5", "CLAUDE_CONFIG_DIR="},
-		"cco-openrouter": {"cco", "openrouter", "", ""},
-		"cco-zen":        {"cco", "opencode-zen", "", ""},
-		"opencode":       {"opencode", "", "opencode/big-pickle", ""},
+		"codex":       {"codex", "", "", ""},
+		"claude-code": {"claude-code", "", "", ""},
+		"opencode":    {"opencode", "", "", ""},
+		"aider":       {"aider", "", "", ""},
+		"agy":         {"agy", "", "", ""},
+		"mock":        {"mock", "", "", ""},
 	}
 	for name, want := range cases {
 		p, err := Resolve(name, "", "")

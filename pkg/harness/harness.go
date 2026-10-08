@@ -105,6 +105,14 @@ func Create(name string, mode Mode) (Harness, error) {
 	return factory(mode)
 }
 
+// Exists informa se um harness já foi registrado no catálogo.
+func Exists(name string) bool {
+	defaultRegistry.mu.RLock()
+	defer defaultRegistry.mu.RUnlock()
+	_, ok := defaultRegistry.factories[name]
+	return ok
+}
+
 // ListCatalog retorna os metadados de todos os harnesses registrados
 func ListCatalog() []protocol.HarnessCatalogItem {
 	defaultRegistry.mu.RLock()

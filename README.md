@@ -123,15 +123,26 @@ Crie `.openheinerss/motores.yaml` e associe cada papel a um perfil. O formato ac
 `papel: motor/modelo` e, opcionalmente, `esforco=low|medium|high`:
 
 ```yaml
-roteirista: codex/gpt-reserve
+roteirista: codex
 revisor: claude-conta2/claude-sonnet-5-5
 rapido: opencode/opencode/big-pickle esforco=low
 ```
 
-Liste os perfis e papéis com `openheinerss motores` e rode uma tarefa com:
+Os únicos harnesses incluídos são `claude-code`, `codex`, `opencode`, `aider`,
+`agy` e `mock`. Instâncias como `claude-conta2`, `codex2` e `cco-openrouter`
+devem ser declaradas pelo usuário em `.openheinerss/harnesses/`, por exemplo:
+
+```yaml
+name: claude-conta2
+base: claude-code
+env: {CLAUDE_CONFIG_DIR: ~/.claude-conta2}
+model: claude-sonnet-5-5
+```
+
+Liste os harnesses e papéis com `openheinerss motores` e rode uma tarefa com:
 `openheinerss run --papel revisor "Revise este arquivo"`. Também é possível usar
-diretamente `--motor codex2`, `--motor cco-openrouter` ou `--motor cco-zen`, com
-`--modelo`/`--esforco` para substituir os padrões.
+diretamente `--motor claude-conta2`, depois de registrar a instância, com
+`--modelo`/`--esforco` para substituir os valores do arquivo.
 
 ### 5. Iniciar Servidor Maestro
 ```bash
@@ -220,8 +231,18 @@ Acesse a documentação completa, detalhada e estruturada na pasta [`documentaca
 
 ---
 
+## Harnesses custom
+
+Arquivos em `.openheinerss/harnesses/*.yaml` (ou JSON) e `~/.config/openheinerss/harnesses` são carregados sem recompilar. Use `base: claude-code` para herdar e sobrescreva `command`, `args`, `env`, `model`, `prompt` (`stdin` ou `argument`) e regexes de fim/cota. O comando custom escreve NDJSON com eventos `text`, `tool`, `error`, `usage` e `end`; veja [docs/06-harness-custom.md](docs/06-harness-custom.md).
+
+```sh
+openheinerss harness list
+openheinerss harness add examples/cco-openrouter.yaml
+openheinerss harness test cco-openrouter --prompt 'responda OK'
+```
+
+SDKs também expõem `registerHarness({...})` (método JSON-RPC `harness.register`).
+
 ## 📄 Licença
 
 Distribuído sob a licença MIT. Desenvolvido com orgulho pela organização [crom-org](https://github.com/crom-org).
-
-
