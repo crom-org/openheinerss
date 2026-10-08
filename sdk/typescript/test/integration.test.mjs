@@ -64,6 +64,40 @@ test("SDK TypeScript entrega thinking como thinking", async () => {
   } finally { client.close(); }
 });
 
+test("SDK TypeScript manda harnessArgs no JSON-RPC e entrega agent.raw", async () => {
+  const pasta = await mkdtemp(join(tmpdir(), "openheinerss-ponte-"));
+  const falso = join(pasta, "falso.mjs");
+  const registro = join(pasta, "reqs.jsonl");
+  await writeFile(falso, `#!/usr/bin/env node
+import { appendFileSync } from "node:fs";
+import { createInterface } from "node:readline";
+const out = (o) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...o }) + "\\n");
+createInterface({ input: process.stdin }).on("line", (l) => {
+  const req = JSON.parse(l);
+  appendFileSync(${JSON.stringify(registro)}, l + "\\n");
+  if (req.method === "session.create") out({ id: req.id, result: { sessionId: "s1" } });
+  if (req.method === "session.prompt") {
+    out({ id: req.id, result: { accepted: true } });
+    out({ method: "agent.raw", params: { sessionId: "s1", harness: "falso", stream: "stdout", line: "linha crua" } });
+  }
+});
+`);
+  await chmod(falso, 0o755);
+  const client = new Openheinerss({ binPath: falso, transport: "stdio" });
+  const raw = new Promise((resolve) => client.on("raw", resolve));
+  try {
+    await client.start({ harness: "falso", effort: "high", harnessArgs: ["--x=a,b", "/compact", "c d"] });
+    await client.prompt("/model x");
+    const r = await Promise.race([raw, new Promise((_, reject) => setTimeout(() => reject(new Error("sem agent.raw")), 3000))]);
+    assert.deepEqual(r, { sessionId: "s1", harness: "falso", stream: "stdout", line: "linha crua" });
+  } finally { client.close(); }
+  const { readFile } = await import("node:fs/promises");
+  const reqs = (await readFile(registro, "utf8")).trim().split("\n").map((l) => JSON.parse(l));
+  assert.deepEqual(reqs.find((q) => q.method === "session.create").params.options.harnessArgs, ["--x=a,b", "/compact", "c d"]);
+  assert.equal(reqs.find((q) => q.method === "session.create").params.options.effort, "high");
+  assert.equal(reqs.find((q) => q.method === "session.prompt").params.text, "/model x");
+});
+
 // Repositório git descartável: o teste nunca cria worktrees no repositório real.
 async function repoTemporario() {
   const { execFileSync } = await import("node:child_process");

@@ -35,3 +35,12 @@ $response = $agent->prompt("Gere um arquivo helper.php", function ($event, $para
 
 echo "\nResultado final recebido!";
 ```
+
+## Repasse ao harness (ponte)
+`harnessArgs` vai intacto e na ordem ao processo do harness, sem lista de permitidos; texto que começa com `/` vai literalmente (ver `docs/02-protocol-spec.md`). `agent.raw` chega ao callback de `prompt()` e a `on('agent.raw', fn)`.
+```php
+$agent = Agent::session(['harness' => 'codex', 'effort' => 'high', 'harnessArgs' => ['--add-dir', '../x']]);
+$agent->on('agent.raw', fn(array $p) => print("[raw {$p['stream']}] {$p['line']}\n"));
+$agent->prompt('/compact');
+// run: $agent->run(['nome' => 'a', 'motor' => 'codex', 'harnessArgs' => ['--x']]);
+```

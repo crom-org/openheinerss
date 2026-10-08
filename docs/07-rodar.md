@@ -68,6 +68,8 @@ MESMA instância até `--tentativas`, com espera curta crescente (2 s, 4 s, 6 s�
 até 10 s). Com `reserva`, troca de instância na hora. Cota sem reserva não é
 repetida (código 2).
 
+**Repasse ao harness.** `--harness-arg X` (alias `--arg`, repetível) manda `X` intacto e na ordem ao processo do motor, sem separar por vírgula nem filtrar; `--seco` mostra esses args. Linhas que o motor escreve e que não viram evento, e o stderr, aparecem no log como `[raw stdout] ...`/`[raw stderr] ...`. Um prompt que começa com `/` vai literalmente ao motor (ver `session.prompt` em `02-protocol-spec.md`).
+
 Um agente interrompido por Ctrl-C deixa a worktree e o log para o `--retomar`. Limites opcionais: `--carga-maxima`, `--max-agentes`, `--pasta-agentes` e
 `--branch-base`. O protocolo JSON-RPC oferece os mesmos recursos pelo método
 `run`, com os campos `nome`, `motor`, `prompt`, `retomar` e os limites. Use

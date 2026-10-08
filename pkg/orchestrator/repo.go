@@ -310,6 +310,18 @@ func baseHarness(name string) string {
 // dryRunCommand monta o comando completo que o `rodar` executaria: binário, modelo efetivo e argumentos.
 // Caminhos com espaço vão entre aspas (o texto pode ser colado num shell); valores de ambiente são mascarados.
 func dryRunCommand(o Options) string {
+	cmd := dryRunBase(o)
+	if len(o.HarnessArgs) == 0 {
+		return cmd
+	}
+	quoted := make([]string, len(o.HarnessArgs))
+	for i, a := range o.HarnessArgs {
+		quoted[i] = shQuote(a)
+	}
+	return cmd + "  [args do harness, na ordem: " + strings.Join(quoted, " ") + "]"
+}
+
+func dryRunBase(o Options) string {
 	spec, isCustom := harness.CustomSpecFor(o.Motor)
 	model, effort := o.Model, o.Effort
 	envSpec := map[string]string{}

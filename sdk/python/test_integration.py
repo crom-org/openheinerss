@@ -1,3 +1,4 @@
+import json
 import os
 import stat
 import threading
@@ -72,6 +73,56 @@ class SDKIntegrationTest(unittest.TestCase):
             self.assertIsInstance(resultado[0], TransportError)
             self.assertIn("conexão", str(resultado[0]))
             transporte.close()
+
+
+FALSO_PONTE = """#!/usr/bin/env python3
+import json, sys
+for linha in sys.stdin:
+    req = json.loads(linha)
+    with open(__import__("os").environ["PONTE_LOG"], "a") as f:
+        f.write(json.dumps(req) + "\\n")
+    if req["method"] == "session.create":
+        print(json.dumps({"jsonrpc": "2.0", "id": req["id"], "result": {"sessionId": "s1"}}), flush=True)
+    elif req["method"] == "session.prompt":
+        print(json.dumps({"jsonrpc": "2.0", "id": req["id"], "result": {"accepted": True}}), flush=True)
+        print(json.dumps({"jsonrpc": "2.0", "method": "agent.raw", "params": {"sessionId": "s1", "harness": "falso", "stream": "stderr", "line": "linha crua"}}), flush=True)
+        print(json.dumps({"jsonrpc": "2.0", "method": "agent.complete", "params": {"reason": "completed"}}), flush=True)
+"""
+
+
+class PonteTest(unittest.TestCase):
+    def test_harness_args_no_jsonrpc_e_agent_raw_entregue(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            falso = os.path.join(pasta, "falso")
+            with open(falso, "w", encoding="utf-8") as arquivo:
+                arquivo.write(FALSO_PONTE)
+            os.chmod(falso, os.stat(falso).st_mode | stat.S_IXUSR)
+            registro = os.path.join(pasta, "reqs.jsonl")
+            os.environ["PONTE_LOG"] = registro
+            agent = Agent(harness="falso", bin_path=falso, effort="high", harness_args=["--x=a,b", "/compact", "c d"])
+            try:
+                recebidos = []
+                agent.on("agent.raw", recebidos.append)
+                eventos = list(agent.stream("/model x"))
+                self.assertTrue(any(e["type"] == "agent.raw" and e["data"]["line"] == "linha crua" for e in eventos))
+                self.assertTrue(StdioTransportEsperar(lambda: recebidos))
+                self.assertEqual(recebidos[0]["stream"], "stderr")
+            finally:
+                agent.close()
+                del os.environ["PONTE_LOG"]
+            with open(registro, encoding="utf-8") as arquivo:
+                reqs = [json.loads(l) for l in arquivo]
+            criar = next(r for r in reqs if r["method"] == "session.create")
+            self.assertEqual(criar["params"]["options"], {"effort": "high", "harnessArgs": ["--x=a,b", "/compact", "c d"]})
+            prompt = next(r for r in reqs if r["method"] == "session.prompt")
+            self.assertEqual(prompt["params"]["text"], "/model x")
+
+
+def StdioTransportEsperar(condicao, segundos=1.0):
+    fim = time.monotonic() + segundos
+    while not condicao() and time.monotonic() < fim:
+        time.sleep(0.01)
+    return bool(condicao())
 
 
 def _request_eof(transporte):
