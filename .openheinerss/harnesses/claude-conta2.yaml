@@ -3,3 +3,5 @@ base: claude-code
 env:
   CLAUDE_CONFIG_DIR: ~/.claude-conta2
 model: claude-sonnet-5-5
+reserva:
+  - codex

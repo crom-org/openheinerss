@@ -23,3 +23,7 @@ A conta principal do Claude não faz trabalho pesado.
 
 Ordem e paralelismo: 0 e 2 juntos; depois 1 e 3; depois 4, 5 e 6; por fim 7. No máximo 2 agentes juntos
 (a carga da máquina passa de 10). A Central recebe um aviso no fim de cada etapa.
+
+## Achados no uso real (para a etapa 7)
+- `rodar` sem `reserva`: ao detectar falta de cota, não repetir as 4 tentativas na mesma instância; parar logo com `FIM código 2` e a hora de volta da cota (o Claude informa "resets 9am").
+- Instâncias do projeto com reserva: `claude-conta2` → `codex`.
