@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/crom-org/openheinerss/pkg/config"
 	"github.com/crom-org/openheinerss/pkg/harness"
 )
 
@@ -108,8 +109,15 @@ func LoadRoles(path string) (map[string]Perfil, error) {
 	return roles, nil
 }
 
+// FindRoles lê motores.yaml da pasta de configuração explícita (--config ou
+// OPENHEINERSS_CONFIG); sem ela, de <cwd>/.openheinerss/motores.yaml.
 func FindRoles(cwd string) (map[string]Perfil, string, error) {
 	path := filepath.Join(cwd, ".openheinerss", "motores.yaml")
+	if dir, err := config.ConfigDir(); err != nil {
+		return nil, "", err
+	} else if dir != "" {
+		path = filepath.Join(dir, "motores.yaml")
+	}
 	roles, err := LoadRoles(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

@@ -26,6 +26,10 @@ Available Commands:
   serve       Inicia o servidor de orquestração Openheinerss (STDIO ou WebSocket)
   version     Exibe a versão do Openheinerss
 
+Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
 Use "openheinerss [command] --help" for more information about a command.
 
 ```
@@ -52,6 +56,10 @@ Flags:
       --json                   Emite JSON
       --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
 
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
 Use "openheinerss agentes [command] --help" for more information about a command.
 
 ```
@@ -70,6 +78,10 @@ Aliases:
 Flags:
       --check   Falha se docs/09-cli.md não corresponder ao --help atual
 
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
 ```
 
 ## `openheinerss doctor --help`
@@ -86,6 +98,10 @@ Aliases:
 Flags:
       --harness string   Harness específico para validar pré-requisitos
 
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
 ```
 
 ## `openheinerss harness --help`
@@ -101,6 +117,10 @@ Available Commands:
   list        Lista harnesses embutidos e custom
   test        Executa um prompt curto e mostra eventos
 
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
 Use "openheinerss harness [command] --help" for more information about a command.
 
 ```
@@ -111,10 +131,14 @@ Use "openheinerss harness [command] --help" for more information about a command
 Inicializa o diretório .openheinerss no repositório atual
 
 Usage:
-  openheinerss init
+  openheinerss init [flags]
 
 Aliases:
   init, inicializar
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
 
 ```
 
@@ -132,6 +156,10 @@ Aliases:
 Flags:
       --json   Emite JSON
 
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
 ```
 
 ## `openheinerss mcp --help`
@@ -146,6 +174,10 @@ Available Commands:
   add         Registra um novo servidor MCP local no projeto
   list        Lista os servidores MCP configurados em .openheinerss/mcp.json
 
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
 Use "openheinerss mcp [command] --help" for more information about a command.
 
 ```
@@ -156,10 +188,14 @@ Use "openheinerss mcp [command] --help" for more information about a command.
 Lista perfis de motores e papéis configurados
 
 Usage:
-  openheinerss motores
+  openheinerss motores [flags]
 
 Aliases:
   motores, engines
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
 
 ```
 
@@ -216,6 +252,10 @@ Flags:
       --texto string                Prompt em texto, no lugar do arquivo prompts/<nome>.md
       --when-load-below float       Alias em inglês de --quando-carga-abaixo
 
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
 ```
 
 ## `openheinerss run --help`
@@ -246,6 +286,10 @@ Flags:
       --retomar string    Retoma a sessão persistida pelo ID
       --role string       Alias em inglês de --papel
 
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
 ```
 
 ## `openheinerss serve --help`
@@ -268,6 +312,10 @@ Flags:
       --porta int           Porta para o servidor WebSocket (default 4820)
       --stdio               Executa via pipes padrão STDIO (JSON-RPC / NDJSON)
 
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
 ```
 
 ## `openheinerss version --help`
@@ -276,10 +324,14 @@ Flags:
 Exibe a versão do Openheinerss
 
 Usage:
-  openheinerss version
+  openheinerss version [flags]
 
 Aliases:
   version, versao
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
 
 ```
 
@@ -296,6 +348,8 @@ Aliases:
 
 Global Flags:
       --agents-dir string      Alias em inglês de --pasta-agentes (default ".claude/agentes")
+      --config string          Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string    Alias de --config
       --json                   Emite JSON
       --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
 
@@ -314,6 +368,8 @@ Aliases:
 
 Global Flags:
       --agents-dir string      Alias em inglês de --pasta-agentes (default ".claude/agentes")
+      --config string          Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string    Alias de --config
       --json                   Emite JSON
       --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
 
@@ -332,6 +388,8 @@ Aliases:
 
 Global Flags:
       --agents-dir string      Alias em inglês de --pasta-agentes (default ".claude/agentes")
+      --config string          Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string    Alias de --config
       --json                   Emite JSON
       --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
 
@@ -343,10 +401,14 @@ Global Flags:
 Valida e copia um arquivo de harness para o projeto
 
 Usage:
-  openheinerss harness add <arquivo>
+  openheinerss harness add <arquivo> [flags]
 
 Aliases:
   add, adicionar
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
 
 ```
 
@@ -356,10 +418,14 @@ Aliases:
 Lista harnesses embutidos e custom
 
 Usage:
-  openheinerss harness list
+  openheinerss harness list [flags]
 
 Aliases:
   list, listar
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
 
 ```
 
@@ -388,6 +454,10 @@ Flags:
       --timeout duration    Tempo máximo de cada teste (default 2m0s)
       --todos               Testa todos os harnesses e instâncias em sequência
 
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
 ```
 
 ## `openheinerss mcp add --help`
@@ -396,10 +466,14 @@ Flags:
 Registra um novo servidor MCP local no projeto
 
 Usage:
-  openheinerss mcp add [nome] [comando] [argumentos...]
+  openheinerss mcp add [nome] [comando] [argumentos...] [flags]
 
 Aliases:
   add, adicionar
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
 
 ```
 
@@ -409,10 +483,14 @@ Aliases:
 Lista os servidores MCP configurados em .openheinerss/mcp.json
 
 Usage:
-  openheinerss mcp list
+  openheinerss mcp list [flags]
 
 Aliases:
   list, listar
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
 
 ```
 

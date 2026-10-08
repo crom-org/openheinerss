@@ -107,3 +107,37 @@ func GetGlobalDir() (string, error) {
 	}
 	return dir, nil
 }
+
+// EnvConfigDir aponta a pasta de configuração (instâncias de harness e motores.yaml)
+// sem depender da pasta atual. A flag global --config/--configuracao vence a variável.
+const EnvConfigDir = "OPENHEINERSS_CONFIG"
+
+var dirOverride string
+
+// SetConfigDir registra a pasta vinda da flag --config (vazio desfaz).
+func SetConfigDir(dir string) { dirOverride = dir }
+
+// ConfigDir resolve a pasta de configuração explícita: flag > OPENHEINERSS_CONFIG.
+// Retorna "" quando nenhuma das duas foi dada (vale a busca a partir da pasta atual).
+// Se a pasta contém .openheinerss/, usa essa subpasta; senão usa a própria pasta
+// (que então deve conter harnesses/ e/ou motores.yaml). Pasta inexistente é erro.
+func ConfigDir() (string, error) {
+	dir, origem := dirOverride, "--config"
+	if dir == "" {
+		dir, origem = os.Getenv(EnvConfigDir), EnvConfigDir
+	}
+	if dir == "" {
+		return "", nil
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	if st, err := os.Stat(abs); err != nil || !st.IsDir() {
+		return "", fmt.Errorf("pasta de configuração %s (%s) não existe ou não é pasta", abs, origem)
+	}
+	if st, err := os.Stat(filepath.Join(abs, WorkspaceDirName)); err == nil && st.IsDir() {
+		return filepath.Join(abs, WorkspaceDirName), nil
+	}
+	return abs, nil
+}

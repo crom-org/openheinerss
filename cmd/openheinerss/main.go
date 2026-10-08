@@ -53,6 +53,18 @@ func main() {
 	if exe, err := os.Executable(); err == nil {
 		process.UseSupervisor(exe)
 	}
+	// --config precisa valer antes do cobra: as instâncias entram no catálogo antes dos comandos.
+	if dir := flagConfig(os.Args[1:]); dir != "" {
+		config.SetConfigDir(dir)
+		// Processos filhos (agentes que chamam o openheinerss) herdam a mesma pasta.
+		if abs, err := filepath.Abs(dir); err == nil {
+			_ = os.Setenv(config.EnvConfigDir, abs)
+		}
+	}
+	if _, err := config.ConfigDir(); err != nil {
+		fmt.Fprintf(os.Stderr, "Erro: %v\n", err)
+		os.Exit(1)
+	}
 	if cwd, err := os.Getwd(); err == nil {
 		if err := carregarInstancias(cwd); err != nil {
 			fmt.Fprintf(os.Stderr, "Aviso: %v\n", err)
@@ -78,10 +90,47 @@ func main() {
 	}
 }
 
-// carregarInstancias carrega as instâncias custom da raiz do REPOSITÓRIO. Isso
-// torna o catálogo e limites independentes da subpasta/worktree de onde o CLI
-// foi chamado; fora de um repositório, usa a pasta atual como configuração.
+// flagConfig acha --config/--configuracao (com valor separado ou após "=") antes do "--".
+func flagConfig(args []string) string {
+	dir := ""
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			break
+		}
+		for _, nome := range []string{"--config", "--configuracao"} {
+			if a == nome && i+1 < len(args) {
+				dir = args[i+1]
+				i++
+			} else if strings.HasPrefix(a, nome+"=") {
+				dir = strings.TrimPrefix(a, nome+"=")
+			}
+		}
+	}
+	return dir
+}
+
+// pastaHarnesses é onde ficam as instâncias: <config>/harnesses com --config/OPENHEINERSS_CONFIG,
+// senão <base>/.openheinerss/harnesses.
+func pastaHarnesses(base string) (string, error) {
+	dir, err := config.ConfigDir()
+	if err != nil {
+		return "", err
+	}
+	if dir != "" {
+		return filepath.Join(dir, "harnesses"), nil
+	}
+	return filepath.Join(base, config.WorkspaceDirName, "harnesses"), nil
+}
+
+// carregarInstancias carrega as instâncias custom. Ordem: --config > OPENHEINERSS_CONFIG >
+// raiz do REPOSITÓRIO (independe da subpasta/worktree) > pasta atual fora de repositório.
 func carregarInstancias(cwd string) error {
+	if dir, err := config.ConfigDir(); err != nil {
+		return err
+	} else if dir != "" {
+		return harness.LoadCustomDir(filepath.Join(dir, "harnesses"))
+	}
 	if root, err := orchestrator.RepoRoot(cwd); err == nil {
 		if err := harness.LoadCustom(root); err != nil {
 			return err
@@ -109,6 +158,9 @@ Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC d
 		// O main imprime o erro uma vez só (e decide o código de saída).
 		SilenceErrors: true,
 	}
+	// Lidas também pelo main antes do cobra (ver flagConfig); declaradas aqui para aparecer na ajuda.
+	rootCmd.PersistentFlags().String("config", "", "Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence "+config.EnvConfigDir+" e a busca pela pasta atual")
+	rootCmd.PersistentFlags().String("configuracao", "", "Alias de --config")
 
 	rootCmd.AddCommand(newServeCmd())
 	rootCmd.AddCommand(newDoctorCmd())
@@ -810,7 +862,10 @@ func newHarnessCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		dir := filepath.Join(cwd, ".openheinerss", "harnesses")
+		dir, err := pastaHarnesses(cwd)
+		if err != nil {
+			return err
+		}
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return err
 		}

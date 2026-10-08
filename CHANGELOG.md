@@ -6,6 +6,10 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 
 ## [Não lançado]
 
+### Adicionado (pasta de configuração)
+
+- Flag global `--config <pasta>` (alias `--configuracao`) e variável `OPENHEINERSS_CONFIG`: apontam a pasta de instâncias (`harnesses/`) e `motores.yaml` para todos os comandos (`limites`, `harness`, `rodar`, `run`, `motores`, `serve`), sem depender da pasta atual. Ordem: flag > variável > busca atual. Pedido da crom-central (`limites --json` mudava conforme o cwd).
+
 ### Corrigido (5ª verificação do `rodar`)
 - Cota/sobrecarga só valem em canal de erro (evento de erro, stderr do motor sem trabalho útil, resultado com
   `is_error`); o texto livre do agente nunca é examinado. `agy` só falha por evento de erro/stderr.
