@@ -141,7 +141,7 @@ func carregarInstancias(cwd string) error {
 	return harness.LoadCustom(cwd)
 }
 
-// codigoSaida faz o processo terminar com o código do FIM do rodar (0 ok, 1 erro, 2 sem cota, 130 parado).
+// codigoSaida faz o processo terminar com o código do FIM do rodar (0 ok, 1 erro, 2 sem cota, 3 negado, 4 filho falhou, 130 parado).
 type codigoSaida int
 
 func (c codigoSaida) Error() string { return fmt.Sprintf("código de saída %d", int(c)) }
@@ -215,6 +215,12 @@ func newAgentesCmd() *cobra.Command {
 			}
 			if len(a.Filhos) > 0 {
 				fmt.Printf(" filhos=%s", strings.Join(a.Filhos, ","))
+			}
+			if len(a.Orfaos) > 0 {
+				fmt.Printf(" órfãos=%s", strings.Join(a.Orfaos, ","))
+			}
+			if a.Orfao {
+				fmt.Printf(" ÓRFÃO(pai terminou)")
 			}
 			fmt.Printf(" última=%s\n", a.UltimaLinha)
 		}
@@ -670,6 +676,7 @@ func newRodarCmd() *cobra.Command {
 	var harnessArgs []string
 	var esperarFilhos string
 	var rodadasFilhos int
+	var filhosObrigatorios bool
 	cmd := &cobra.Command{
 		Use:     "rodar <nome> <instância|harness>",
 		Aliases: []string{"launch", "dispatch"},
@@ -695,7 +702,7 @@ func newRodarCmd() *cobra.Command {
 				// Agente filho: sessão própria, para não morrer junto com o grupo do harness do pai.
 				orchestrator.DesligarDoGrupo()
 			}
-			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Mode: modo, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog, HarnessArgs: harnessArgs, EsperarFilhos: espera, RodadasFilhos: rodadasFilhos, Pai: os.Getenv(orchestrator.EnvPai), PaiLogs: os.Getenv(orchestrator.EnvPaiLogs)})
+			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Mode: modo, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog, HarnessArgs: harnessArgs, EsperarFilhos: espera, RodadasFilhos: rodadasFilhos, FilhosObrigatorios: filhosObrigatorios, Pai: os.Getenv(orchestrator.EnvPai), PaiLogs: os.Getenv(orchestrator.EnvPaiLogs)})
 			if err != nil && res.Name == "" {
 				return err
 			}
@@ -763,6 +770,8 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().StringVar(&esperarFilhos, "wait-children", "", "Alias em inglês de --esperar-filhos")
 	cmd.Flags().IntVar(&rodadasFilhos, "rodadas-filhos", 0, "Máximo de retomadas automáticas depois dos filhos (padrão 5)")
 	cmd.Flags().IntVar(&rodadasFilhos, "child-rounds", 0, "Alias em inglês de --rodadas-filhos")
+	cmd.Flags().BoolVar(&filhosObrigatorios, "filhos-obrigatorios", false, "Falha (código 4, motivo \"filho falhou\") se algum agente filho terminou com código ≠ 0, sem FIM ou ainda rodando")
+	cmd.Flags().BoolVar(&filhosObrigatorios, "require-children", false, "Alias em inglês de --filhos-obrigatorios")
 	addHarnessArgFlags(cmd, &harnessArgs)
 	return cmd
 }
@@ -953,7 +962,8 @@ func newHarnessCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		// Instâncias levam env (chaves, URLs de provedor): pasta 0700 e arquivo 0600.
+		if err := config.PastaPrivada(dir); err != nil {
 			return err
 		}
 		data, err := os.ReadFile(args[0])
@@ -961,7 +971,7 @@ func newHarnessCmd() *cobra.Command {
 			return err
 		}
 		target := filepath.Join(dir, filepath.Base(args[0]))
-		if err := os.WriteFile(target, data, 0644); err != nil {
+		if err := os.WriteFile(target, data, 0600); err != nil {
 			return err
 		}
 		fmt.Printf("Harness copiado para %s\n", target)

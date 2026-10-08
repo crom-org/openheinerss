@@ -105,6 +105,15 @@ Localizado na pasta home do usuário:
 └── shims/               # Workers headless empacotados pelo Openheinerss
 ```
 
+### C. Permissões das pastas com segredo
+Pastas que guardam login, prompts ou anotações ficam com **0700** e seus arquivos com **0600**, inclusive
+quando já existiam mais abertas (são fechadas na primeira vez que o openheinerss as usa em cada processo):
+`~/.openheinerss/` e `profiles/` (cada `CLAUDE_CONFIG_DIR` de perfil), `.openheinerss/sessions/`
+(transcripts), a pasta do `comandos.yaml` (`~/.config/openheinerss/` ou a de `--config`) e a pasta de
+instâncias usada por `harness add`. `mcp.json` é gravado com 0600 e o `--arquivo-chaves` é fechado para
+0600 ao ser lido. Quando não dá para ajustar (pasta de outro dono, sistema de arquivos sem chmod), sai um
+`AVISO: não consegui ajustar <caminho> para 0700…` no stderr e a execução continua. No Windows nada muda.
+
 ---
 
 ## 3. Subsistema Doctor & Gestão de Dependências

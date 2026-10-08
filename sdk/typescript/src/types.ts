@@ -32,7 +32,7 @@ export interface HarnessRegistration {
 export interface RunOptions {
   nome: string; motor: string; modelo?: string; esforco?: string; prompt?: string; texto?: string;
   retomar?: boolean; pasta?: string; branchBase?: string; cargaMax?: number;
-  maxAgentes?: number; tentativas?: number; cotaMax?: number; cwd?: string; projeto?: string;
+  maxAgentes?: number; tentativas?: number; cotaMax?: number; filhosObrigatorios?: boolean; cwd?: string; projeto?: string;
   /** Argumentos nativos extras do harness: vão intactos e na ordem, sem filtro. */
   harnessArgs?: string[];
 }
@@ -48,7 +48,7 @@ export type CommandRelay = "literal" | "traduzido" | "sem_equivalente";
 /** Comando nativo do harness (harness.comandos), já mesclado com a anotação do usuário. */
 export interface HarnessCommand { nome: string; descricao: string; repasse: CommandRelay; detalhe?: string; origem: "embutido" | "descoberto" | "usuario"; anotacao?: string; confirmado: boolean; }
 export interface HarnessCommandList { harness: string; base: string; cadeia: string[]; desconhecido: CommandRelay; arquivo: string; comandos: HarnessCommand[]; }
-export type OrchestrationEventName = "orq.inicio" | "orq.progresso" | "orq.fim" | "orq.erro" | "orq.precisa_decisao";
+export type OrchestrationEventName = "orq.inicio" | "orq.progresso" | "orq.fim" | "orq.erro" | "orq.precisa_decisao" | "orq.filhos_orfaos";
 export type OrchestrationEvent = { method: OrchestrationEventName; params: Record<string, unknown> & { geracao: string }; };
 export type OrchestrationCallback = (params: Record<string, unknown>) => void;
 
@@ -98,4 +98,5 @@ export interface OpenheinerssEvents {
   "orq.fim": OrchestrationCallback;
   "orq.erro": OrchestrationCallback;
   "orq.precisa_decisao": OrchestrationCallback;
+  "orq.filhos_orfaos": OrchestrationCallback;
 }

@@ -32,6 +32,7 @@ const (
 	EventOrqFim            = "orq.fim"
 	EventOrqErro           = "orq.erro"
 	EventOrqPrecisaDecisao = "orq.precisa_decisao"
+	EventOrqFilhosOrfaos   = "orq.filhos_orfaos"
 )
 
 // OrqInicioParams payload de orq.inicio (um por tentativa).
@@ -65,7 +66,20 @@ type OrqFimParams struct {
 	Tentativas int     `json:"tentativas"`
 	Duracao    float64 `json:"duracao"`
 	Relatorio  string  `json:"relatorio,omitempty"`
-	Motivo     string  `json:"motivo,omitempty"` // "negado" quando uma negação encerrou a execução
+	Motivo     string  `json:"motivo,omitempty"` // "negado", "filho falhou" ou "filhos órfãos"
+	// Filhos lista os agentes filhos que falharam (motivo "filho falhou") ou ficaram rodando
+	// depois do fim do pai (motivo "filhos órfãos").
+	Filhos []string `json:"filhos,omitempty"`
+}
+
+// OrqFilhosOrfaosParams payload de orq.filhos_orfaos: o pai terminou com filhos ainda rodando.
+type OrqFilhosOrfaosParams struct {
+	Geracao  string   `json:"geracao"`
+	ID       string   `json:"id,omitempty"`
+	Agente   string   `json:"agente"`
+	Projeto  string   `json:"projeto"`
+	Filhos   []string `json:"filhos"`
+	Mensagem string   `json:"mensagem"`
 }
 
 // OrqErroParams payload de orq.erro.

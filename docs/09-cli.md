@@ -260,6 +260,7 @@ Flags:
       --esperar-filhos string       Espera os agentes filhos e retoma a sessão: sim (padrão, até 2h), nao, ou a espera máxima (ex.: 30m)
       --eventos-log string          Acrescenta FIM ao arquivo de eventos (desligado por padrão)
       --events-log string           Alias em inglês de --eventos-log
+      --filhos-obrigatorios         Falha (código 4, motivo "filho falhou") se algum agente filho terminou com código ≠ 0, sem FIM ou ainda rodando
       --harness-arg stringArray     Argumento nativo extra para o harness, intacto e na ordem (repetível) (default [])
       --keys-file string            Alias em inglês de --arquivo-chaves
       --max-agentes int             Máximo de agentes simultâneos
@@ -276,6 +277,7 @@ Flags:
       --quando-carga-abaixo float   Só começa quando a carga numérica ficar abaixo deste valor
       --quota-max float             Alias em inglês de --cota-max
       --regras string               Arquivo de regras do prompt
+      --require-children            Alias em inglês de --filhos-obrigatorios
       --resume                      Alias em inglês de --retomar
       --retomar                     Acrescenta o texto de continuação e preserva o log
       --retries int                 Alias em inglês de --tentativas

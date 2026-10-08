@@ -1,4 +1,4 @@
-# Openheinerss PHP SDK 1.1.0
+# Openheinerss PHP SDK 1.2.0
 
 SDK oficial em **PHP** para automações e backends consumirem o orquestrador **Openheinerss** (crom-org).
 
@@ -44,3 +44,14 @@ $agent->on('agent.raw', fn(array $p) => print("[raw {$p['stream']}] {$p['line']}
 $agent->prompt('/compact');
 // run: $agent->run(['nome' => 'a', 'motor' => 'codex', 'harnessArgs' => ['--x']]);
 ```
+
+## Modo WebSocket
+
+Além do STDIO (padrão), o SDK fala com um `openheinerss serve --porta N` já rodando, sem dependências do composer:
+
+```php
+$agent = Agent::session(['harness' => 'mock', 'transport' => 'websocket', 'host' => '127.0.0.1', 'port' => 4820]); // port padrão: OPENHEINERSS_PORTA ou 4820
+$agent = Agent::session(['harness' => 'mock', 'url' => 'ws://127.0.0.1:4820/ws', 'origin' => 'http://localhost:3000']);
+```
+
+A API é a mesma nos dois modos. O servidor só aceita `Origin` local ou as de `OPENHEINERSS_ORIGENS`; origem recusada lança `RuntimeException` (HTTP 403). Se a conexão cair, a chamada em andamento lança `RuntimeException`.

@@ -119,7 +119,8 @@ func (h *Hub) RegisterServer(cwd, name string, s ServerConfig) error {
 	}
 	filePath := filepath.Join(dir, config.McpFileName)
 	tmp := filePath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
+	// mcp.json costuma levar tokens no env dos servidores.
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, filePath)

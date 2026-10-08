@@ -1,6 +1,8 @@
 # Changelog
 
-## Não lançado
+## 1.2.0 (não publicada)
+- `filhosObrigatorios` em `run` (o pai termina com código 4, motivo "filho falhou"); `subscribe_events` também recebe `orq.filhos_orfaos`; `orq.fim` traz `filhos`.
+- Adiciona `WebSocketTransport` (RFC 6455, sem dependências) e `Agent(transport="websocket", host=, port=, origin=)` / `url=`; padrão continua STDIO.
 - `Agent.stream`/`prompt`: erro RPC de `session.prompt` (ex.: `/compact` sem equivalente) levanta `RuntimeError` em vez de travar; teto `prompt_timeout` (3600 s) e `timeout` por chamada levantam `TimeoutError`.
 - Adiciona `list_commands`, `annotate_command`, `confirm_command` (e os aliases camelCase) para `harness.comandos*`.
 - Adiciona `harness_args` e `effort` no `Agent`, `harnessArgs` em `run`, `on(método, callback)` e o evento `agent.raw`.

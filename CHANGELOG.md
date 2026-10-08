@@ -1,10 +1,38 @@
 # Changelog
 
 Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
-[Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Nada abaixo foi publicado ainda
-(sem tag, release ou pacote): a publicação depende do ok do dono do projeto.
+[Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). A 1.2.0 está preparada mas
+**não publicada** (sem tag, release ou pacote): a publicação depende do ok do dono do projeto.
 
-## [Não lançado]
+## [1.2.0] — não publicada
+
+Tudo o que mudou desde a v1.1.0. SDKs TypeScript, Python e PHP em **1.2.0**.
+
+### Adicionado (pai falha quando filho falha; filhos órfãos)
+
+- `rodar --filhos-obrigatorios` (alias `--require-children`; `filhosObrigatorios` em `rodar.iniciar` e nos SDKs): se algum agente filho terminou com código ≠ 0, morreu sem FIM ou ainda roda quando o pai acaba, o pai termina com **código 4** (`FIM HH:MM código 4`, saída 4), `motivo` `"filho falhou"`, `filhos_falhos` no `meta.json`, a lista no log e `filhos` no `orq.fim`.
+- O pai não dá mais FIM em silêncio com filho vivo (espera de `--esperar-filhos` vencida, limite de rodadas ou espera desligada): `AVISO: o pai terminou com N agente(s) filho(s) ainda rodando (órfãos): …` no log e no stderr, `filhos_orfaos` (e `motivo` `"filhos órfãos"`) no `meta.json`, novo evento `orq.filhos_orfaos` (antes do `orq.fim`, também para agentes lançados pelo CLI), e `agentes` mostra `órfãos=` no pai e `ÓRFÃO(pai terminou)` no filho (`orfaos`/`orfao` no `--json`).
+
+### Adicionado (SDKs por WebSocket)
+
+- SDKs Python e PHP falam com o `serve` por WebSocket além do STDIO, com a mesma API nos dois modos; host/porta/URL e origem configuráveis. Sem dependências novas.
+
+### Segurança (permissões)
+
+- Pastas que guardam login, prompts ou anotações ficam com 0700 e seus arquivos com 0600 **mesmo quando já existiam** mais abertas: `~/.openheinerss/` e `profiles/` (perfis do Claude), `.openheinerss/sessions/` (transcripts, agora 0600), a pasta do `comandos.yaml` e a pasta de instâncias do `harness add` (arquivo 0600). `mcp.json` gravado com 0600; `--arquivo-chaves` fechado para 0600 ao ser lido. Se não der para ajustar, sai um aviso no stderr e a execução segue.
+
+### Adicionado (ponte total)
+
+- `harness_args`/`harnessArgs`/`--harness-arg` (`--arg`): argumentos nativos vão intactos e na ordem para o processo de cada harness (claude-code, codex, opencode, aider, agy, custom, mock), sem lista de permitidos. Opções tipadas (`effort`, `add_dirs`, `sandbox`, `agent`…) como atalhos.
+- Comandos `/x`: literais quando o harness aceita no modo sem tela; traduzidos quando há equivalente (`/model`, `/effort`, `/new`, `/clear`…); erro claro quando não há.
+- Evento `agent.raw` com toda linha do harness que não vira outro evento (stdout sem mapeamento e stderr), também na CLI e no log do `rodar`. `docs/PONTE.md` com a tabela por harness.
+- Cota no claude-code só quando o turno termina sem resultado bom; reserva usa o modelo/esforço da própria instância.
+
+### Adicionado (servidor)
+
+- `geracao`: id aleatório de cada `serve` nas respostas, nos parâmetros dos `orq.*` e no envelope de todos os eventos; `rodar.decidir` aceita `geracao` e `run` opcionais e recusa respostas que não batem.
+- `serve --max-agentes N` limita os agentes lançados pelo servidor.
+- CLI aceita `--version`.
 
 ### Adicionado (orquestrador que espera os filhos)
 
@@ -13,6 +41,7 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 ### Corrigido (alinhamento de `comandos`)
 
 - `openheinerss comandos <harness>` calcula a largura das colunas pelo maior nome (teto 40) e pelo número de runes, não de bytes: nomes longos como `/crom-tv-agentes-externos` e acentos não desalinham mais a tabela.
+
 ### Corrigido (aceitação das novidades — análise 26 da Central)
 
 - `comandos.yaml` não perde anotações entre processos: trava `comandos.yaml.lock` (flock; Windows: arquivo exclusivo) em volta de ler+alterar+gravar, temporário único (`CreateTemp` na mesma pasta) e erro real se a gravação falhar. Teste com 2 processos × 25 anotações: 50/50 (antes 23/50).
@@ -32,6 +61,8 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 ### Adicionado (pasta de configuração)
 
 - Flag global `--config <pasta>` (alias `--configuracao`) e variável `OPENHEINERSS_CONFIG`: apontam a pasta de instâncias (`harnesses/`) e `motores.yaml` para todos os comandos (`limites`, `harness`, `rodar`, `run`, `motores`, `serve`), sem depender da pasta atual. Ordem: flag > variável > busca atual. Pedido da crom-central (`limites --json` mudava conforme o cwd).
+
+## [1.1.0] — 2026-10-08
 
 ### Corrigido (5ª verificação do `rodar`)
 - Cota/sobrecarga só valem em canal de erro (evento de erro, stderr do motor sem trabalho útil, resultado com

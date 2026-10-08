@@ -1,4 +1,4 @@
-# Openheinerss Python SDK 1.1.0
+# Openheinerss Python SDK 1.2.0
 
 SDK oficial em **Python** para integração com o maestro **Openheinerss** (crom-org).
 
@@ -40,3 +40,14 @@ agent.on("agent.raw", lambda p: print("[raw]", p["stream"], p["line"]))
 agent.prompt("/compact")
 # run: agent.run({"nome": "a", "motor": "codex", "harnessArgs": ["--x"]})
 ```
+
+## Modo WebSocket
+
+Além do STDIO (padrão), o SDK fala com um `openheinerss serve --porta N` já rodando, sem dependências externas:
+
+```python
+agent = Agent(harness="mock", transport="websocket", host="127.0.0.1", port=4820)  # port padrão: OPENHEINERSS_PORTA ou 4820
+agent = Agent(harness="mock", url="ws://127.0.0.1:4820/ws", origin="http://localhost:3000")
+```
+
+A API é a mesma nos dois modos. O servidor só aceita `Origin` local ou as de `OPENHEINERSS_ORIGENS`; origem recusada levanta `TransportError` (HTTP 403). Se a conexão cair, as chamadas pendentes falham com `TransportError`.

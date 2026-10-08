@@ -1,6 +1,9 @@
 # Changelog
 
-## Não lançado
+## 1.2.0 (não publicada)
+- `filhosObrigatorios` em `run` (o pai termina com código 4, motivo "filho falhou"); callback para `orq.filhos_orfaos` em `subscribeEvents`; `orq.fim` traz `filhos`.
+- Adiciona `WebSocketTransport` (RFC 6455, sem dependências), `TransportInterface` e as opções `transport => 'websocket'`, `host`, `port`, `origin`, `url`; padrão continua STDIO.
+- Corrige `Agent::session()` retornando sem erro quando o servidor encerra durante `session.create`.
 - `Agent::prompt`: erro RPC de `session.prompt` (ex.: `/compact` sem equivalente) lança `RuntimeException` em vez de travar; teto `$promptTimeout` (3600 s) e `$timeout` por chamada.
 - Adiciona `listCommands`, `annotateCommand`, `confirmCommand` para `harness.comandos*`.
 - Adiciona `harnessArgs` e `effort` nas opções da sessão, `harnessArgs` em `run`, `on($método, $callback)` e o evento `agent.raw`.

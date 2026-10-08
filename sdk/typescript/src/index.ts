@@ -254,7 +254,7 @@ export class Openheinerss extends EventEmitter {
         case "agent.error":
           this.emit("error", p);
           break;
-        case "orq.inicio": case "orq.progresso": case "orq.fim": case "orq.erro": case "orq.precisa_decisao":
+        case "orq.inicio": case "orq.progresso": case "orq.fim": case "orq.erro": case "orq.precisa_decisao": case "orq.filhos_orfaos":
           this.emit(msg.method, p);
           break;
       }

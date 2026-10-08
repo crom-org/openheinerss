@@ -100,7 +100,20 @@ Sem filhos e sem esse caso, nada muda. Se o pai é interrompido, os filhos vivos
 - `--esperar-filhos sim|nao|<duração>` (alias `--wait-children`; env `OPENHEINERSS_ESPERAR_FILHOS`): padrão
   ligado, espera até 2 h; vencido o prazo, retoma assim mesmo e marca os filhos como `AINDA RODANDO`.
 - `--rodadas-filhos N` (alias `--child-rounds`; env `OPENHEINERSS_RODADAS_FILHOS`): máximo de retomadas (padrão 5).
-- `openheinerss agentes` mostra `pai=` e `filhos=` (e os campos `pai`/`filhos` no `--json`).
+- `--filhos-obrigatorios` (alias `--require-children`; `filhosObrigatorios` em `rodar.iniciar`): se algum filho
+  terminou com código ≠ 0, morreu sem FIM ou ainda roda quando o pai acaba, o pai termina com **código 4**
+  (`FIM HH:MM código 4`, saída do processo 4), `motivo` `"filho falhou"` e `filhos_falhos` no `meta.json`, e a
+  linha `filho falhou (--filhos-obrigatorios): a (código 1); b (ainda rodando, PID n)` no log. Sem a flag, o
+  código do pai é o do próprio turno.
+- Filhos órfãos: o pai nunca dá FIM em silêncio com filho vivo (espera vencida, limite de rodadas ou
+  `--esperar-filhos nao`). O log e o stderr ganham `AVISO: o pai terminou com N agente(s) filho(s) ainda
+  rodando (órfãos): …`, o `meta.json` ganha `filhos_orfaos` (e `motivo` `"filhos órfãos"` se não houver outro),
+  e o servidor emite `orq.filhos_orfaos` antes do `orq.fim`.
+- `openheinerss agentes` mostra `pai=`, `filhos=`, `órfãos=` (filhos vivos de um pai que já terminou) e marca
+  o filho com `ÓRFÃO(pai terminou)`; no `--json`, `pai`, `filhos`, `orfaos` e `orfao`.
+
+Códigos de FIM do `rodar`: 0 ok, 1 erro, 2 sem cota, 3 negado (`--negar-encerra`), 4 filho falhou
+(`--filhos-obrigatorios`), 130 interrompido.
 
 As regras padrão do prompt incluem: "Se lançar agentes filhos ou comandos em segundo plano, o openheinerss te
 acorda quando eles terminarem; não encerre dizendo que vai esperar sem ter lançado nada."

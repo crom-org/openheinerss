@@ -54,12 +54,13 @@ func (s *Storage) Record(cwd, sessionID, entryType string, notification *protoco
 	defer s.mu.Unlock()
 
 	sessionsDir := filepath.Join(cwd, config.WorkspaceDirName, config.SessionsDirName)
-	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+	// O transcript guarda os prompts: pasta 0700 e arquivos 0600.
+	if err := config.PastaPrivada(sessionsDir); err != nil {
 		return err
 	}
 
 	filePath := filepath.Join(sessionsDir, fmt.Sprintf("%s.jsonl", sessionID))
-	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
