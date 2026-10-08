@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { spawn, type ChildProcess } from "node:child_process";
-import type { SessionOptions, HarnessRegistration, PermissionRequest, OpenheinerssEvents, ToolCall, ToolResult } from "./types.js";
+import type { SessionOptions, HarnessRegistration, PermissionRequest, ToolCall, ToolResult, RunOptions, RunStarted, RunList, Limits, EventFilter, OrchestrationEventName, OrchestrationCallback } from "./types.js";
 
 export * from "./types.js";
 export * from "./react.js";
@@ -10,6 +10,7 @@ export interface ClientConfig {
   wsEndpoint?: string;
   binPath?: string;
   options?: SessionOptions;
+  port?: number;
 }
 
 export class Openheinerss extends EventEmitter {
@@ -24,7 +25,7 @@ export class Openheinerss extends EventEmitter {
     super();
     this.config = {
       transport: config.transport || (typeof window !== "undefined" ? "websocket" : "stdio"),
-      wsEndpoint: config.wsEndpoint || "ws://127.0.0.1:4820",
+      wsEndpoint: config.wsEndpoint || `ws://127.0.0.1:${config.port || (typeof process !== "undefined" ? process.env.OPENHEINERSS_PORTA || "4820" : "4820")}`,
       binPath: config.binPath || "openheinerss",
       options: config.options || {},
       ...config,
@@ -33,7 +34,24 @@ export class Openheinerss extends EventEmitter {
 
   /** Registra um harness custom no processo do openheinerss. */
   async registerHarness(spec: HarnessRegistration): Promise<void> {
+    this.ensureTransport();
     await this.sendRPC("harness.register", spec as unknown as Record<string, unknown>);
+  }
+
+  async listHarnesses(): Promise<any[]> { this.ensureTransport(); return (await this.sendRPC("harness.listar", {})).harnesses || []; }
+  async run(options: RunOptions): Promise<RunStarted> { this.ensureTransport(); return this.sendRPC("rodar.iniciar", options as unknown as Record<string, unknown>); }
+  async listRuns(filter: EventFilter = {}): Promise<RunList> { this.ensureTransport(); return this.sendRPC("rodar.listar", filter as Record<string, unknown>); }
+  async stopRun(idOrAgent: { id?: string; agente?: string }): Promise<void> { await this.sendRPC("rodar.parar", idOrAgent); }
+  async decideRun(id: string, resposta: string, mensagem?: string): Promise<void> { await this.sendRPC("rodar.decidir", { id, resposta, mensagem }); }
+  async getLimits(): Promise<Limits> { this.ensureTransport(); return this.sendRPC("limites.obter", {}); }
+  async subscribeEvents(filter: EventFilter = {}, callbacks: Partial<Record<OrchestrationEventName, OrchestrationCallback>> = {}): Promise<void> {
+    this.ensureTransport();
+    for (const [name, callback] of Object.entries(callbacks)) if (callback) this.on(name, callback as (...args: any[]) => void);
+    await this.sendRPC("eventos.assinar", filter as Record<string, unknown>);
+  }
+
+  private ensureTransport(): void {
+    if (this.config.transport === "stdio" && !this.proc) this.initStdio();
   }
 
   /**
@@ -205,6 +223,9 @@ export class Openheinerss extends EventEmitter {
           break;
         case "agent.error":
           this.emit("error", p);
+          break;
+        case "orq.inicio": case "orq.progresso": case "orq.fim": case "orq.erro": case "orq.precisa_decisao":
+          this.emit(msg.method, p);
           break;
       }
     }

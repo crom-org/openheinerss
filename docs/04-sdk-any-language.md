@@ -43,3 +43,24 @@ Não há módulo `openheinerss.aio` nem transporte WebSocket implementado neste 
 ```
 
 Os nomes oficiais e campos estão em [02-protocol-spec.md](02-protocol-spec.md). Os métodos de sessão disponíveis são `session.create`, `session.prompt`, `session.permission_respond`, `session.abort` e `session.list`; `session.resume` não existe.
+# SDKs 0.2.0
+
+Os SDKs TypeScript, Python e PHP usam JSON-RPC sobre STDIO por padrão e conversam com
+`openheinerss serve --stdio`. A porta WebSocket padrão é **4820**; defina
+`OPENHEINERSS_PORTA` (ou `port`/`wsEndpoint` no TypeScript) quando usar o transporte WebSocket.
+
+Todos expõem sessões, `registerHarness`/`harness.listar`, `rodar.iniciar`, `rodar.listar`,
+`rodar.parar`, `rodar.decidir`, `limites.obter` e `eventos.assinar`. A assinatura aceita
+`projeto`, `agente`, `cwd` e `pasta`; os callbacks recebem `orq.inicio`, `orq.progresso`,
+`orq.fim`, `orq.erro` e `orq.precisa_decisao`.
+
+Exemplo conceitual (os exemplos completos estão nos READMEs de cada SDK):
+
+```text
+registerHarness({name: "meu-harness", base: "mock"})
+subscribeEvents({projeto: "demo"}, callback)
+run({nome: "demo", motor: "mock", prompt: "responda OK"})
+```
+
+O changelog 0.2.0 registra a correção da porta que era 4799 na versão 0.1.0 e a
+referência antiga ao `codex run`; o adaptador atual usa `codex exec`.

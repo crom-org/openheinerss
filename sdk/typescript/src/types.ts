@@ -22,7 +22,24 @@ export interface HarnessRegistration {
   prompt?: "stdin" | "argument";
   finishRegex?: string;
   quotaRegex?: string;
+  reserva?: string[];
 }
+
+export interface RunOptions {
+  nome: string; motor: string; modelo?: string; esforco?: string; prompt?: string;
+  retomar?: boolean; pasta?: string; branchBase?: string; cargaMax?: number;
+  maxAgentes?: number; tentativas?: number; cotaMax?: number; cwd?: string; projeto?: string;
+}
+export interface RunStarted { id: string; agente: string; projeto: string; }
+export interface AgentInfo { id?: string; agente: string; projeto: string; estado: string; motor?: string; modelo?: string; tentativa?: number; inicio?: string; fim?: string; codigo?: number; pid?: number; log?: string; }
+export interface OrchestrationDecision { id: string; agente: string; projeto: string; pergunta: string; opcoes: string[]; }
+export interface RunList { agentes: AgentInfo[]; decisoes: OrchestrationDecision[]; }
+export interface LimitsWindow { nome: string; percentual: number; reiniciaEm?: string; }
+export interface Limits { agora: string; instancias: Array<{ nome: string; base: string; janelas: LimitsWindow[]; }>; }
+export interface EventFilter { projeto?: string; agente?: string; cwd?: string; pasta?: string; }
+export type OrchestrationEventName = "orq.inicio" | "orq.progresso" | "orq.fim" | "orq.erro" | "orq.precisa_decisao";
+export type OrchestrationEvent = { method: OrchestrationEventName; params: Record<string, unknown>; };
+export type OrchestrationCallback = (params: Record<string, unknown>) => void;
 
 export interface PermissionRequest {
   sessionId: string;
@@ -56,4 +73,9 @@ export interface OpenheinerssEvents {
   permission: (req: PermissionRequest) => void;
   complete: (reason: string) => void;
   error: (err: { message: string; code?: number }) => void;
+  "orq.inicio": OrchestrationCallback;
+  "orq.progresso": OrchestrationCallback;
+  "orq.fim": OrchestrationCallback;
+  "orq.erro": OrchestrationCallback;
+  "orq.precisa_decisao": OrchestrationCallback;
 }

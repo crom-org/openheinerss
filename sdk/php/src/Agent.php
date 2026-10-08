@@ -9,6 +9,8 @@ class Agent
     private StdioTransport $transport;
     private string $sessionId;
     private int $reqId = 1;
+    /** @var array<string, callable> */
+    private array $callbacks = [];
 
     public function __construct(array $options = [], string $binPath = "openheinerss")
     {
@@ -16,9 +18,9 @@ class Agent
         $this->initSession($options);
     }
 
-    public static function session(array $options = []): self
+    public static function session(array $options = [], string $binPath = "openheinerss"): self
     {
-        return new self($options);
+        return new self($options, $binPath);
     }
 
     private function initSession(array $options): void
@@ -107,5 +109,40 @@ class Agent
                 "decision"  => $allow ? "allow" : "deny"
             ]
         ]);
+    }
+
+    private function request(string $method, array $params): mixed
+    {
+        $id = $this->reqId++;
+        $this->transport->send(["jsonrpc" => "2.0", "id" => $id, "method" => $method, "params" => $params]);
+        while ($line = $this->transport->readLine()) {
+            $msg = json_decode($line, true);
+            if (isset($msg['method'])) {
+                $name = $msg['method'];
+                if (isset($this->callbacks[$name])) ($this->callbacks[$name])($msg['params'] ?? []);
+            }
+            if (($msg['id'] ?? null) === $id) {
+                if (isset($msg['error'])) throw new \RuntimeException($msg['error']['message']);
+                return $msg['result'] ?? null;
+            }
+        }
+        throw new \RuntimeException("Servidor encerrou a conexão durante {$method}");
+    }
+
+    public function registerHarness(array $spec): void { $this->request('harness.register', $spec); }
+    public function listHarnesses(): array { return $this->request('harness.listar', [])['harnesses'] ?? []; }
+    public function run(array|RunOptions $options): array { return $this->request('rodar.iniciar', $options instanceof RunOptions ? $options->toArray() : $options); }
+    public function listRuns(array $filter = []): array { return $this->request('rodar.listar', $filter); }
+    public function stopRun(?string $id = null, ?string $agente = null): void {
+        $this->request('rodar.parar', array_filter(['id' => $id, 'agente' => $agente]));
+    }
+    public function decideRun(string $id, string $resposta, ?string $mensagem = null): void {
+        $this->request('rodar.decidir', array_filter(['id' => $id, 'resposta' => $resposta, 'mensagem' => $mensagem]));
+    }
+    public function getLimits(): array { return $this->request('limites.obter', []); }
+    /** @param array<string, callable(array): void> $callbacks */
+    public function subscribeEvents(array|EventFilter $filter = [], array $callbacks = []): void {
+        $this->callbacks = $callbacks;
+        $this->request('eventos.assinar', $filter instanceof EventFilter ? $filter->toArray() : $filter);
     }
 }
