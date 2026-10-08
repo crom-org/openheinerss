@@ -214,6 +214,11 @@ func (c *ClaudeCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig
 				"resume":         optionString(cfg.Options, "claude_session_id", "resume_session"),
 			},
 		}
+		// O worker repassa ao SDK o que o SDK sabe receber (extraArgs cobre as flags nativas).
+		initParams := initPayload["params"].(map[string]interface{})
+		for k, v := range sdkExtras(cfg) {
+			initParams[k] = v
+		}
 		data, _ := json.Marshal(initPayload)
 		_, _ = fmt.Fprintf(c.stdin, "%s\n", data)
 	}
@@ -270,6 +275,22 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 
 	// Modo CLI: executa claude -p com streaming em tempo real
 	sessID := c.cfg.SessionID
+	// O claude -p entende comandos de barra (skills, comandos personalizados e embutidos):
+	// eles seguem literalmente. Só /model e /effort mudam o que a ponte passa nas próximas chamadas.
+	if name, rest, ok := harness.SlashCommand(text); ok && rest != "" {
+		switch name {
+		case "model":
+			c.cfg.Model = rest
+			c.announceLocal(sessID, "Modelo das próximas chamadas: "+rest)
+			return nil
+		case "effort":
+			c.cfg.Options = harness.WithOption(c.cfg.Options, "effort", rest)
+			c.announceLocal(sessID, "Esforço das próximas chamadas: "+rest)
+			return nil
+		}
+	}
+	args := buildCLIArgs(c.cfg, c.resumeOption(), c.cliPermissionMode(), text)
+	cwd, env, ctxProc := c.cfg.CWD, c.env, c.ctx
 	go func() {
 		c.emit(harness.Event{
 			Type: harness.EventThinking,
@@ -279,11 +300,10 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 			},
 		})
 
-		args := buildCLIArgs(c.cfg, c.resumeOption(), c.cliPermissionMode(), text)
-		cmd := exec.CommandContext(c.ctx, "claude", args...)
+		cmd := exec.CommandContext(ctxProc, "claude", args...)
 		process.Configure(cmd)
-		cmd.Dir = c.cfg.CWD
-		cmd.Env = c.env
+		cmd.Dir = cwd
+		cmd.Env = env
 
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
@@ -368,6 +388,15 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 	return nil
 }
 
+// announceLocal avisa que a ponte tratou o comando sozinha, sem chamar o processo.
+// Roda em goroutine porque emit pega o mesmo mutex que SendPrompt segura.
+func (c *ClaudeCodeHarness) announceLocal(sessID, msg string) {
+	go func() {
+		c.emit(harness.Event{Type: harness.EventText, Payload: protocol.TextParams{SessionID: sessID, Delta: msg + "\n"}})
+		c.emit(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessID, Reason: "completed"}})
+	}()
+}
+
 func (c *ClaudeCodeHarness) resumeOption() string {
 	for _, key := range []string{"claude_session_id", "resume_session", "session_id"} {
 		if value, ok := c.cfg.Options[key].(string); ok && value != "" {
@@ -420,11 +449,89 @@ func buildCLIArgs(cfg harness.SessionConfig, resume, permission, text string) []
 	}
 	if resume != "" {
 		args = append([]string{"--resume", resume}, args...)
+	} else if on, _ := cfg.Options["continue"].(bool); on {
+		args = append([]string{"--continue"}, args...)
 	}
 	if permission != "" {
 		args = append(args, "--permission-mode", permission)
 	}
+	args = append(args, typedArgs(cfg)...)
+	// Argumentos nativos extras: intactos e na ordem, antes do prompt.
+	args = append(args, harness.HarnessArgs(cfg.Options)...)
 	return append(args, "--", text)
+}
+
+// sdkExtras monta as opções do modo SDK: o que tem campo próprio no SDK vai nele e o resto
+// (harness_args, mcp_config, effort) vai em extraArgs, que o SDK converte em flags do claude.
+func sdkExtras(cfg harness.SessionConfig) map[string]interface{} {
+	out := map[string]interface{}{}
+	extra := map[string]interface{}{}
+	if v := optionString(cfg.Options, "effort"); v != "" {
+		extra["effort"] = v
+	}
+	if m := harness.OptionStrings(cfg.Options, "mcp_config"); len(m) > 0 {
+		extra["mcp-config"] = strings.Join(m, " ")
+	}
+	// harness_args: "--flag valor" vira {flag: valor}; "--flag" sozinho vira {flag: null}.
+	// Argumentos posicionais não existem no SDK e são ignorados.
+	ha := harness.HarnessArgs(cfg.Options)
+	for i := 0; i < len(ha); i++ {
+		if !strings.HasPrefix(ha[i], "--") {
+			continue
+		}
+		flag := strings.TrimPrefix(ha[i], "--")
+		if k, v, ok := strings.Cut(flag, "="); ok {
+			extra[k] = v
+		} else if i+1 < len(ha) && !strings.HasPrefix(ha[i+1], "-") {
+			extra[flag] = ha[i+1]
+			i++
+		} else {
+			extra[flag] = nil
+		}
+	}
+	if len(extra) > 0 {
+		out["extraArgs"] = extra
+	}
+	if cfg.SystemPrompt != "" {
+		out["appendSystemPrompt"] = cfg.SystemPrompt
+	}
+	if d := harness.OptionStrings(cfg.Options, "add_dirs"); len(d) > 0 {
+		out["additionalDirectories"] = d
+	}
+	if t := harness.OptionStrings(cfg.Options, "allowed_tools"); len(t) > 0 {
+		out["allowedTools"] = t
+	}
+	if t := harness.OptionStrings(cfg.Options, "disallowed_tools"); len(t) > 0 {
+		out["disallowedTools"] = t
+	}
+	if on, _ := cfg.Options["continue"].(bool); on {
+		out["continue"] = true
+	}
+	return out
+}
+
+// typedArgs traduz as opções conhecidas para flags do claude (todas conferidas no --help).
+func typedArgs(cfg harness.SessionConfig) []string {
+	var args []string
+	if v := optionString(cfg.Options, "effort"); v != "" {
+		args = append(args, "--effort", v)
+	}
+	if cfg.SystemPrompt != "" {
+		args = append(args, "--append-system-prompt", cfg.SystemPrompt)
+	}
+	for _, dir := range harness.OptionStrings(cfg.Options, "add_dirs") {
+		args = append(args, "--add-dir", dir)
+	}
+	for _, m := range harness.OptionStrings(cfg.Options, "mcp_config") {
+		args = append(args, "--mcp-config", m)
+	}
+	if tools := harness.OptionStrings(cfg.Options, "allowed_tools"); len(tools) > 0 {
+		args = append(args, "--allowed-tools", strings.Join(tools, ","))
+	}
+	if tools := harness.OptionStrings(cfg.Options, "disallowed_tools"); len(tools) > 0 {
+		args = append(args, "--disallowed-tools", strings.Join(tools, ","))
+	}
+	return args
 }
 
 func (c *ClaudeCodeHarness) parseCLIEvent(data []byte, fallbackSession string, turn *cliTurn) {
@@ -433,6 +540,7 @@ func (c *ClaudeCodeHarness) parseCLIEvent(data []byte, fallbackSession string, t
 		c.emit(harness.Event{Type: harness.EventText, Payload: protocol.TextParams{SessionID: fallbackSession, Delta: string(data) + "\n"}})
 		return
 	}
+	line := string(data)
 	sessionID := stringField(msg, "session_id")
 	if sessionID == "" {
 		sessionID = fallbackSession
@@ -445,12 +553,11 @@ func (c *ClaudeCodeHarness) parseCLIEvent(data []byte, fallbackSession string, t
 	switch stringField(msg, "type") {
 	case "system":
 		// init só estabelece o ID; post_turn_summary não é texto para a Central.
-	case "assistant":
+		// A linha original segue como raw para quem quiser o detalhe.
+		c.emit(harness.RawEvent(sessionID, "claude-code", "stdout", line))
+	case "assistant", "user":
 		message, _ := msg["message"].(map[string]interface{})
-		c.parseContentBlocks(message["content"], sessionID)
-	case "user":
-		message, _ := msg["message"].(map[string]interface{})
-		c.parseContentBlocks(message["content"], sessionID)
+		c.parseContentBlocks(message["content"], sessionID, line)
 	case "result":
 		usage, _ := msg["usage"].(map[string]interface{})
 		if usage != nil {
@@ -483,10 +590,13 @@ func (c *ClaudeCodeHarness) parseCLIEvent(data []byte, fallbackSession string, t
 		if stringField(msg, "status") == "rejected" || stringField(info, "status") == "rejected" {
 			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessionID, Message: "limite de cota do Claude Code atingido"}})
 		}
+		c.emit(harness.RawEvent(sessionID, "claude-code", "stdout", line))
+	default:
+		c.emit(harness.RawEvent(sessionID, "claude-code", "stdout", line))
 	}
 }
 
-func (c *ClaudeCodeHarness) parseContentBlocks(value interface{}, sessionID string) {
+func (c *ClaudeCodeHarness) parseContentBlocks(value interface{}, sessionID, line string) {
 	blocks, _ := value.([]interface{})
 	for _, raw := range blocks {
 		block, _ := raw.(map[string]interface{})
@@ -508,6 +618,8 @@ func (c *ClaudeCodeHarness) parseContentBlocks(value interface{}, sessionID stri
 				out = []byte(text)
 			}
 			c.emit(harness.Event{Type: harness.EventToolResult, Payload: protocol.ToolResultParams{SessionID: sessionID, CallID: stringField(block, "tool_use_id"), Status: status, Output: string(out)}})
+		default:
+			c.emit(harness.RawEvent(sessionID, "claude-code", "stdout", line))
 		}
 	}
 }
@@ -692,6 +804,9 @@ func (c *ClaudeCodeHarness) handleSDKMessage(method string, params map[string]in
 			Type:    harness.EventComplete,
 			Payload: protocol.CompleteParams{SessionID: sessID, Reason: reason},
 		})
+	case "agent.raw":
+		line, _ := params["line"].(string)
+		c.emit(harness.RawEvent(sessID, "claude-code", "stdout", line))
 	case "agent.error":
 		msg, _ := params["message"].(string)
 		c.emit(harness.Event{
@@ -705,6 +820,7 @@ func (c *ClaudeCodeHarness) readStderr(r io.Reader) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	for scanner.Scan() {
+		c.emit(harness.RawEvent(c.cfg.SessionID, "claude-code", "stderr", scanner.Text()))
 		c.mu.Lock()
 		c.stderrTail += scanner.Text() + "\n"
 		if len(c.stderrTail) > 2048 {

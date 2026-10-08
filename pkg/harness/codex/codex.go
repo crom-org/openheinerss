@@ -3,6 +3,7 @@ package codex
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -95,6 +96,31 @@ func (c *CodexHarness) SendPrompt(ctx context.Context, text string, attachments 
 	if c.mode != harness.ModeCLI {
 		return fmt.Errorf("modo Codex não suportado: %s; use cli", c.mode)
 	}
+	// codex exec não interpreta "/": a ponte traduz o que tem equivalente e recusa o resto.
+	if name, rest, ok := harness.SlashCommand(text); ok {
+		sessID := c.cfg.SessionID
+		switch name {
+		case "model", "effort", "reasoning":
+			if rest == "" {
+				return harness.NoEquivalent("codex", name, "informe o valor, por exemplo /"+name+" <valor>")
+			}
+			if name == "model" {
+				c.cfg.Model = rest
+			} else {
+				c.cfg.Options = harness.WithOption(c.cfg.Options, "effort", rest)
+			}
+			c.announceLocal(sessID, "Próximas chamadas com "+name+" "+rest)
+			return nil
+		case "new", "clear":
+			c.threadID = ""
+			c.announceLocal(sessID, "Conversa nova: a próxima chamada não retoma a thread anterior")
+			return nil
+		case "compact":
+			return harness.NoEquivalent("codex", name, "codex exec não tem compactação; use /new para recomeçar ou harnessArgs com -c (ex.: model_auto_compact_token_limit=N)")
+		default:
+			return harness.NoEquivalent("codex", name, "use harnessArgs (flags do codex exec) ou o comando nativo no codex interativo")
+		}
+	}
 	cmdCtx := c.ctx
 	if ctx != nil {
 		cmdCtx = ctx
@@ -102,20 +128,27 @@ func (c *CodexHarness) SendPrompt(ctx context.Context, text string, attachments 
 	if cmdCtx == nil {
 		cmdCtx = context.Background()
 	}
-	cmd := exec.CommandContext(cmdCtx, "codex", buildExecArgs(c.cfg, c.threadID, text)...)
+	imageFiles, err := writeImages(attachments)
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(cmdCtx, "codex", buildExecArgs(c.cfg, c.threadID, text, imageFiles...)...)
 	// O CLI pode criar processos auxiliares. O grupo próprio garante que timeout
 	// e Stop não deixem filhos segurando os pipes de streaming abertos.
 	configureProcessGroup(cmd)
 	cmd.Dir, cmd.Env = c.cfg.CWD, mergedEnv(c.cfg.Env, c.cfg.CWD)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		removeAll(imageFiles)
 		return fmt.Errorf("stdout do codex: %w", err)
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
+		removeAll(imageFiles)
 		return fmt.Errorf("stderr do codex: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
+		removeAll(imageFiles)
 		return fmt.Errorf("falha ao iniciar codex exec: %w", err)
 	}
 	c.cmd = cmd
@@ -128,6 +161,7 @@ func (c *CodexHarness) SendPrompt(ctx context.Context, text string, attachments 
 	go func() {
 		leitores.Wait()
 		err := cmd.Wait()
+		removeAll(imageFiles)
 		c.mu.Lock()
 		stopped := c.stopped
 		if c.cmd == cmd {
@@ -145,6 +179,55 @@ func (c *CodexHarness) SendPrompt(ctx context.Context, text string, attachments 
 		c.emit(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessionID, Reason: "completed"}})
 	}()
 	return nil
+}
+
+// announceLocal avisa que a ponte tratou o comando sozinha. Roda em goroutine porque
+// emit pega o mesmo mutex que SendPrompt segura.
+func (c *CodexHarness) announceLocal(sessID, msg string) {
+	go func() {
+		c.emit(harness.Event{Type: harness.EventText, Payload: protocol.TextParams{SessionID: sessID, Delta: msg + "\n"}})
+		c.emit(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessID, Reason: "completed"}})
+	}()
+}
+
+// writeImages grava os anexos (base64) em arquivos temporários para o -i do codex exec.
+func writeImages(attachments []protocol.Attachment) ([]string, error) {
+	var files []string
+	for _, a := range attachments {
+		data, err := base64.StdEncoding.DecodeString(a.Data)
+		if err != nil {
+			removeAll(files)
+			return nil, fmt.Errorf("anexo inválido (base64): %w", err)
+		}
+		ext := ".png"
+		switch a.MediaType {
+		case "image/jpeg", "image/jpg":
+			ext = ".jpg"
+		case "image/gif":
+			ext = ".gif"
+		case "image/webp":
+			ext = ".webp"
+		}
+		f, err := os.CreateTemp("", "openheinerss-img-*"+ext)
+		if err != nil {
+			removeAll(files)
+			return nil, err
+		}
+		_, werr := f.Write(data)
+		cerr := f.Close()
+		files = append(files, f.Name())
+		if werr != nil || cerr != nil {
+			removeAll(files)
+			return nil, fmt.Errorf("falha gravando anexo: %v %v", werr, cerr)
+		}
+	}
+	return files, nil
+}
+
+func removeAll(files []string) {
+	for _, f := range files {
+		_ = os.Remove(f)
+	}
 }
 
 func configureProcessGroup(cmd *exec.Cmd) {
@@ -198,8 +281,12 @@ func (c *CodexHarness) readJSONL(r io.Reader, sessionID string) {
 				c.mu.Unlock()
 			}
 		}
-		for _, event := range parseJSONL(line, sessionID) {
+		events := parseJSONL(line, sessionID)
+		for _, event := range events {
 			c.emit(event)
+		}
+		if len(events) == 0 {
+			c.emit(harness.RawEvent(sessionID, "codex", "stdout", line))
 		}
 	}
 	if err := s.Err(); err != nil {
@@ -210,6 +297,7 @@ func (c *CodexHarness) readStderr(r io.Reader, sessionID string) {
 	s := bufio.NewScanner(r)
 	s.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	for s.Scan() {
+		c.emit(harness.RawEvent(sessionID, "codex", "stderr", s.Text()))
 		// Aviso informativo do codex exec, não é erro.
 		if text := strings.TrimSpace(s.Text()); text != "" && !strings.HasPrefix(text, "Reading additional input from stdin") {
 			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessionID, Message: text}})
@@ -238,7 +326,7 @@ func mergedEnv(extra map[string]string, cwd ...string) []string {
 	}
 	return env
 }
-func buildExecArgs(cfg harness.SessionConfig, threadID, prompt string) []string {
+func buildExecArgs(cfg harness.SessionConfig, threadID, prompt string, images ...string) []string {
 	effort := optionString(cfg.Options, "effort")
 	if effort == "" {
 		effort = EsforcoPadrao
@@ -247,10 +335,38 @@ func buildExecArgs(cfg harness.SessionConfig, threadID, prompt string) []string 
 	if model == "" {
 		model = ModeloPadrao
 	}
+	args := []string{"exec"}
 	if threadID != "" {
-		return []string{"exec", "resume", "--json", "-m", model, "-c", "model_reasoning_effort=" + effort, "--dangerously-bypass-approvals-and-sandbox", threadID, "--", prompt}
+		args = append(args, "resume")
 	}
-	return []string{"exec", "--json", "-m", model, "-c", "model_reasoning_effort=" + effort, "--dangerously-bypass-approvals-and-sandbox", "--", prompt}
+	args = append(args, "--json", "-m", model, "-c", "model_reasoning_effort="+effort)
+	sandbox := optionString(cfg.Options, "sandbox")
+	switch {
+	case sandbox == "":
+		args = append(args, "--dangerously-bypass-approvals-and-sandbox")
+	case threadID != "":
+		// exec resume não tem -s; o -c equivale.
+		args = append(args, "-c", "sandbox_mode=\""+sandbox+"\"")
+	default:
+		args = append(args, "--sandbox", sandbox)
+	}
+	// exec resume não aceita --profile: a retomada herda a configuração da thread.
+	if profile := optionString(cfg.Options, "profile"); profile != "" && threadID == "" {
+		args = append(args, "--profile", profile)
+	}
+	for _, kv := range harness.OptionStrings(cfg.Options, "config") {
+		args = append(args, "-c", kv)
+	}
+	for _, img := range images {
+		// Forma com "=": --image aceita lista e engoliria o próximo argumento.
+		args = append(args, "--image="+img)
+	}
+	// Argumentos nativos extras: intactos e na ordem, antes do id da thread e do prompt.
+	args = append(args, harness.HarnessArgs(cfg.Options)...)
+	if threadID != "" {
+		args = append(args, threadID)
+	}
+	return append(args, "--", prompt)
 }
 func optionString(options map[string]interface{}, names ...string) string {
 	for _, name := range names {

@@ -80,7 +80,8 @@ rl.on('line', async (line) => {
         send('agent.error', { message: '@anthropic-ai/claude-agent-sdk não encontrado no ambiente Node.' });
         return;
       }
-      const { cwd, env, model, permissionMode, resume } = params || {};
+      const { cwd, env, model, permissionMode, resume, extraArgs, appendSystemPrompt, additionalDirectories, allowedTools, disallowedTools } = params || {};
+      const continueLast = !!(params && params.continue);
       
       activeQuery = sdk.query({
         prompt: inputQueue,
@@ -92,6 +93,12 @@ rl.on('line', async (line) => {
           ...(permissionMode === 'always_allow' || permissionMode === 'bypassPermissions' ? { allowDangerouslySkipPermissions: true } : {}),
           ...(model ? { model } : {}),
           ...(resume ? { resume } : {}),
+          ...(!resume && continueLast ? { continue: true } : {}),
+          ...(extraArgs ? { extraArgs } : {}),
+          ...(appendSystemPrompt ? { systemPrompt: { type: 'preset', preset: 'claude_code', append: appendSystemPrompt } } : {}),
+          ...(additionalDirectories ? { additionalDirectories } : {}),
+          ...(allowedTools ? { allowedTools } : {}),
+          ...(disallowedTools ? { disallowedTools } : {}),
           canUseTool: (toolName, input, o) => {
             return new Promise((resolve) => {
               const reqId = o.requestId || 'perm_' + Math.random().toString(36).substring(2, 9);
@@ -111,6 +118,7 @@ rl.on('line', async (line) => {
       (async () => {
         try {
           for await (const m of activeQuery) {
+            if (m.type !== 'assistant' && m.type !== 'result') send('agent.raw', { line: JSON.stringify(m) });
             if (m.type === 'assistant') {
               const content = (m.message && m.message.content) || [];
               for (const b of content) {

@@ -81,3 +81,33 @@ func NoEquivalent(harnessName, command, hint string) error {
 func RawEvent(sessionID, harnessName, stream, line string) Event {
 	return Event{Type: EventRaw, Payload: protocol.RawParams{SessionID: sessionID, Harness: harnessName, Stream: stream, Line: line}}
 }
+
+// OptionStrings devolve uma opção do tipo lista de textos. Aceita []string, []interface{}
+// e um texto único (JSON decodificado ou valor da CLI).
+func OptionStrings(options map[string]interface{}, key string) []string {
+	switch v := options[key].(type) {
+	case []string:
+		return append([]string(nil), v...)
+	case []interface{}:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			out = append(out, fmt.Sprint(item))
+		}
+		return out
+	case string:
+		if v != "" {
+			return []string{v}
+		}
+	}
+	return nil
+}
+
+// WithOption devolve uma cópia de options com key=value, sem alterar o mapa original.
+func WithOption(options map[string]interface{}, key string, value interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(options)+1)
+	for k, v := range options {
+		out[k] = v
+	}
+	out[key] = value
+	return out
+}
