@@ -41,3 +41,6 @@ Hoje só dá para adicionar harness escrevendo Go e chamando `harness.Register` 
 - Também via código (SDK TS/Python/Go: `registerHarness({...})`).
 - Modelo de inspiração: o `cco` (Claude Code com outro provedor). Ex.: `cco-openrouter` = `base: claude-code` + env do provedor.
 - Comandos: `openheinerss harness list | add | test <nome>` (teste com prompt curto).
+
+## Ideias (não implementar)
+- **Passar o bastão entre motores** (pedido do usuário, 08/10 10:30): quando trocar de motor/conta por cota, o motor novo recebe um resumo do que o anterior fez. Inspirado no ai-memory 2.6 do Akita (github.com/akitaonrails/ai-memory; análise em ~/Documentos/Central/analises/08-akita-post.md). Cuidado: memória grava prompts; excluir pastas sensíveis.
