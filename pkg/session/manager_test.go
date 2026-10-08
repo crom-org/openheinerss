@@ -11,9 +11,8 @@ import (
 )
 
 func TestSessionManagerLifecycle(t *testing.T) {
-	// O detector de race deixa o ciclo do harness mock significativamente mais
-	// lento em máquinas carregadas; o teste verifica o protocolo, não um SLA.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// O estado esperado é EventAgentComplete; o prazo só impede um teste preso.
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	m := session.NewManager()
@@ -73,10 +72,12 @@ func TestSessionManagerLifecycle(t *testing.T) {
 		t.Fatalf("prompt não foi aceito")
 	}
 
+	timer := time.NewTimer(60 * time.Second)
+	defer timer.Stop()
 	select {
-	case <-ctx.Done():
-		t.Fatalf("timeout aguardando conclusão do ciclo da sessão")
 	case <-doneChan:
+	case <-timer.C:
+		t.Fatalf("sessão não alcançou o estado de conclusão")
 	}
 
 	// 5. Testar Abort

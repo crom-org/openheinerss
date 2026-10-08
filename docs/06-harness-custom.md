@@ -14,6 +14,7 @@ env:
 model: meu-modelo
 finishRegex: '"type"\s*:\s*"end"'
 quotaRegex: 'quota|rate limit'
+eventosLog: '/caminho/para/eventos.log' # opcional; também há --events-log/--eventos-log
 ```
 
 `~/` no início de `command` e dos valores de `env` é expandido para a pasta do usuário (o shell não faz isso por nós), com ou sem `base`.

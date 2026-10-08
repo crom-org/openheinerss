@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -20,6 +22,23 @@ type ProjectConfig struct {
 	DefaultHarness string `json:"default_harness" yaml:"default_harness"`
 	DefaultMode    string `json:"default_mode" yaml:"default_mode"`
 	PermissionMode string `json:"permission_mode" yaml:"permission_mode"`
+	EventosLog     string `json:"eventos_log" yaml:"eventos_log"`
+}
+
+// LoadProject lê a configuração opcional do projeto. Arquivo ausente não é erro.
+func LoadProject(cwd string) (ProjectConfig, error) {
+	var cfg ProjectConfig
+	b, err := os.ReadFile(filepath.Join(cwd, WorkspaceDirName, ConfigFileName))
+	if os.IsNotExist(err) {
+		return cfg, nil
+	}
+	if err != nil {
+		return cfg, err
+	}
+	if err := yaml.Unmarshal(b, &cfg); err != nil {
+		return cfg, fmt.Errorf("ler %s: %w", ConfigFileName, err)
+	}
+	return cfg, nil
 }
 
 // InitWorkspace cria a estrutura de diretórios .openheinerss na raiz do projeto

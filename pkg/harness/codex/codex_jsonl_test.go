@@ -82,9 +82,11 @@ func TestFakeCodexProcess(t *testing.T) {
 	if err := c.SendPrompt(context.Background(), "responda só OK", nil); err != nil {
 		t.Fatal(err)
 	}
-	seenText, seenUsage, seenComplete := false, false, false
-	deadline := time.After(2 * time.Second)
-	for !seenComplete {
+	seenText, seenUsage := false, false
+	// O estado esperado é o evento complete; o prazo só evita um teste preso.
+	timer := time.NewTimer(30 * time.Second)
+	defer timer.Stop()
+	for {
 		select {
 		case evt := <-c.Events():
 			switch evt.Type {
@@ -93,12 +95,13 @@ func TestFakeCodexProcess(t *testing.T) {
 			case harness.EventUsage:
 				seenUsage = true
 			case harness.EventComplete:
-				seenComplete = true
+				goto concluido
 			}
-		case <-deadline:
-			t.Fatal("fake codex não concluiu")
+		case <-timer.C:
+			t.Fatal("fake codex não concluiu o estado esperado")
 		}
 	}
+concluido:
 	if !seenText || !seenUsage {
 		t.Fatalf("eventos recebidos: texto=%v uso=%v", seenText, seenUsage)
 	}

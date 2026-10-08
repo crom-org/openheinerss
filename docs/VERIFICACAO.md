@@ -235,7 +235,32 @@ cd "$REPO" && git worktree prune; rm -rf "$DEMO"
 
 Esperado: nenhuma saída. (As worktrees do `$DEMO` somem junto com ele; o repositório do clone não é tocado pelos passos acima.)
 
-## 14. Opcional: motores reais (gasta uma frase de cota por teste)
+## 14. Verificações adicionais da Central
+
+### Nomes iguais em paralelo
+
+Inicie uma execução lenta e, antes de ela terminar, tente lançar o mesmo nome em outro terminal:
+
+```sh
+openheinerss rodar duplicado mock --texto "tarefa lenta" &
+openheinerss rodar duplicado mock --texto "segunda tentativa"
+```
+
+Esperado: a segunda execução falha com `já está rodando` e código diferente de zero. `openheinerss agentes parar duplicado` deve parar o processo vivo registrado no `meta.json`.
+
+### Falha no meio
+
+Use um harness falso que morra sem emitir `end`/`complete` durante o prompt.
+
+Esperado: a execução registra `FIM ... código` diferente de zero, e `agentes listar` não deixa o agente como `rodando`.
+
+### Cota real do Claude Code
+
+Use uma amostra NDJSON com `result` contendo `is_error: true` e `result: "You've hit your session limit · resets 9am"` (ou `You have hit your session limit`).
+
+Esperado: o evento vira falha de processo/cota, o log não registra sucesso código 0 e uma instância em `reserva` é tentada quando configurada.
+
+## 15. Opcional: motores reais (gasta uma frase de cota por teste)
 
 Só com contas de teste, nunca a conta principal do Claude, e com prompts curtíssimos. As instâncias vivem em `.openheinerss/harnesses/` do projeto que as usa (aqui, o próprio clone):
 

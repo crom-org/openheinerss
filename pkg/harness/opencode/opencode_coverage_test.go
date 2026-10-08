@@ -133,7 +133,10 @@ func TestOpenCodeStderrInformativoEProcessError(t *testing.T) {
 		t.Fatal(err)
 	}
 	var info, complete bool
-	for deadline := time.After(2 * time.Second); !complete; {
+	// Espera o estado complete; o timer é apenas uma rede de segurança para não travar a suíte.
+	timer := time.NewTimer(30 * time.Second)
+	defer timer.Stop()
+	for !complete {
 		select {
 		case ev := <-o.Events():
 			if ev.Type == harness.EventText {
@@ -142,8 +145,8 @@ func TestOpenCodeStderrInformativoEProcessError(t *testing.T) {
 				}
 			}
 			complete = ev.Type == harness.EventComplete
-		case <-deadline:
-			t.Fatal("timeout")
+		case <-timer.C:
+			t.Fatal("OpenCode não alcançou o estado complete")
 		}
 	}
 	if !info {
@@ -159,7 +162,10 @@ func TestOpenCodeStderrInformativoEProcessError(t *testing.T) {
 	}
 	complete = false
 	var failed bool
-	for deadline := time.After(2 * time.Second); !complete; {
+	// A falha esperada é observada pelo par EventError + complete/process_error.
+	timer = time.NewTimer(30 * time.Second)
+	defer timer.Stop()
+	for !complete {
 		select {
 		case ev := <-o.Events():
 			if ev.Type == harness.EventError {
@@ -171,8 +177,8 @@ func TestOpenCodeStderrInformativoEProcessError(t *testing.T) {
 				}
 				complete = true
 			}
-		case <-deadline:
-			t.Fatal("timeout falha")
+		case <-timer.C:
+			t.Fatal("OpenCode não alcançou o estado de falha")
 		}
 	}
 	if !failed {

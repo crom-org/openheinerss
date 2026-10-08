@@ -72,6 +72,7 @@ type estadoMeta struct {
 	fim       bool
 	logPos    int64
 	iniciado  bool
+	travou    bool
 }
 
 type pasta struct {
@@ -432,6 +433,10 @@ func (o *Orq) varrerAgente(p *pasta, conhecida bool, nome, prefixo string) {
 		}
 		o.fim(protocol.OrqFimParams{Agente: nome, Projeto: p.projeto, Codigo: cod, Tentativas: m.Tentativa, Duracao: dur, Relatorio: rel})
 		return
+	}
+	if !st.travou && orchestrator.LogParado(logPath, o.agora()) {
+		st.travou = true
+		o.emitir(protocol.EventOrqErro, p.projeto, nome, protocol.OrqErroParams{Agente: nome, Projeto: p.projeto, Mensagem: fmt.Sprintf("agente %s travou: sem escrever no log pelo prazo configurado", nome)})
 	}
 	if morto {
 		st.fim = true

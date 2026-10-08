@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/crom-org/openheinerss/pkg/config"
 	"github.com/crom-org/openheinerss/pkg/harness"
 	_ "github.com/crom-org/openheinerss/pkg/harness/agy"
 	_ "github.com/crom-org/openheinerss/pkg/harness/aider"
@@ -38,6 +39,7 @@ type Options struct {
 	MaxLoad               float64
 	MaxAgents, Attempts   int
 	QuotaMax              float64
+	EventLog              string
 	Load                  func() (float64, error)
 	Sleep                 func(time.Duration)
 	Now                   func() time.Time
@@ -169,6 +171,9 @@ func (o Options) defaults() Options {
 	if o.Now == nil {
 		o.Now = time.Now
 	}
+	if o.EventLog == "" {
+		o.EventLog = os.Getenv("OPENHEINERSS_EVENTOS_LOG")
+	}
 	return o
 }
 
@@ -190,11 +195,24 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	if o.EventLog == "" {
+		if cfg, cfgErr := config.LoadProject(repo); cfgErr == nil {
+			o.EventLog = cfg.EventosLog
+		}
+	}
 	agents := o.AgentsDir
 	if !filepath.IsAbs(agents) {
 		agents = filepath.Join(repo, agents)
 	}
 	if err := os.MkdirAll(filepath.Join(agents, "logs"), 0755); err != nil {
+		return Result{}, err
+	}
+	lock, err := acquireNameLock(agents, o.Name)
+	if err != nil {
+		return Result{}, err
+	}
+	defer releaseNameLock(lock)
+	if err := rejectLiveMeta(agents, o.Name); err != nil {
 		return Result{}, err
 	}
 	// Respeita os limites antes de criar uma worktree, que pode ser uma
@@ -378,6 +396,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				m.Fim, m.Codigo = o.Now().Format(time.RFC3339), &parado
 				_ = writeMeta(metaPath, m)
 				write(fmt.Sprintf("\nFIM %s código %d\n", o.Now().Format("15:04"), parado))
+				appendEventLog(o, filepath.Base(repo), o.Name, parado, candidate)
 				o.emit(Evento{Tipo: EvFim, Motor: candidate, Codigo: parado, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: relatorio(work)})
 				return Result{o.Name, work, logPath, metaPath, attempts, parado}, ctx.Err()
 			}
@@ -394,6 +413,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			m.Fim, m.Codigo = o.Now().Format(time.RFC3339), &finalCode
 			_ = writeMeta(metaPath, m)
 			write(fmt.Sprintf("FIM %s código %d\n", o.Now().Format("15:04"), finalCode))
+			appendEventLog(o, filepath.Base(repo), o.Name, finalCode, candidate)
 			o.emit(Evento{Tipo: EvFim, Motor: candidate, Codigo: finalCode, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: relatorio(work)})
 			return Result{o.Name, work, logPath, metaPath, attempts, finalCode}, nil
 		}
@@ -424,6 +444,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	m.Fim, m.Codigo = o.Now().Format(time.RFC3339), &code
 	_ = writeMeta(filepath.Join(agents, "logs", o.Name+".meta.json"), m)
 	write(fmt.Sprintf("FIM %s código %d\n", o.Now().Format("15:04"), code))
+	appendEventLog(o, filepath.Base(repo), o.Name, code, o.Motor)
 	o.emit(Evento{Tipo: EvFim, Motor: o.Motor, Codigo: code, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: relatorio(work)})
 	result := Result{o.Name, work, logPath, filepath.Join(agents, "logs", o.Name+".meta.json"), attempts, code}
 	if code == 2 {
@@ -537,7 +558,65 @@ func quotaPattern(name string) *regexp.Regexp {
 	if s, ok := harness.CustomSpecFor(name); ok && s.QuotaRegex != "" {
 		return regexp.MustCompile(s.QuotaRegex)
 	}
-	return regexp.MustCompile(`(?i)(SEM COTA|RESOURCE_EXHAUSTED|quota.*(exceeded|limit)|rate limit|limite.*cota)`)
+	return regexp.MustCompile(`(?i)(SEM COTA|RESOURCE_EXHAUSTED|quota.*(exceeded|limit)|session limit|usage limit|hit your limit|rate limit|limite.*cota)`)
+}
+
+func acquireNameLock(agents, name string) (*os.File, error) {
+	path := filepath.Join(agents, "logs", name+".lock")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("criar trava do agente %q: %w", name, err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		_ = f.Close()
+		return nil, fmt.Errorf("agente %q já está rodando (trava de nome ocupada)", name)
+	}
+	return f, nil
+}
+
+func releaseNameLock(f *os.File) {
+	if f == nil {
+		return
+	}
+	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+	_ = f.Close()
+}
+
+func rejectLiveMeta(agents, name string) error {
+	path := filepath.Join(agents, "logs", name+".meta.json")
+	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("ler meta do agente %q: %w", name, err)
+	}
+	var m meta
+	if json.Unmarshal(b, &m) != nil || m.Fim != "" || m.PID <= 0 {
+		return nil
+	}
+	if processAlive(m.PID) {
+		return fmt.Errorf("agente %q já está rodando (PID %d); use 'agentes parar %s'", name, m.PID, name)
+	}
+	return nil
+}
+
+func appendEventLog(o Options, projeto, nome string, codigo int, motor string) {
+	path := o.EventLog
+	if path == "" {
+		if spec, ok := harness.CustomSpecFor(motor); ok {
+			path = spec.EventLog
+		}
+	}
+	if path == "" {
+		return
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = fmt.Fprintf(f, "[%s] FIM %s código %d\n", projeto, nome, codigo)
 }
 func writeMeta(path string, m meta) error {
 	b, err := json.Marshal(m)

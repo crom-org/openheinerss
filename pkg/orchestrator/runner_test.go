@@ -67,6 +67,38 @@ func TestRunMockCriaWorktreeLogEMeta(t *testing.T) {
 	}
 }
 
+func TestRunRecusaMesmoNomeComMetaVivo(t *testing.T) {
+	root, agents := repoFixture(t)
+	if err := os.WriteFile(filepath.Join(agents, "prompts", "duplicado.md"), []byte("prompt"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(agents, "logs"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeMeta(filepath.Join(agents, "logs", "duplicado.meta.json"), meta{PID: os.Getpid(), Inicio: time.Now().Format(time.RFC3339)}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Run(context.Background(), root, Options{Name: "duplicado", Motor: "mock", AgentsDir: agents})
+	if err == nil || !strings.Contains(err.Error(), "já está rodando") {
+		t.Fatalf("esperava recusa clara, veio %v", err)
+	}
+}
+
+func TestRunEscreveEventoFimQuandoConfigurado(t *testing.T) {
+	root, agents := repoFixture(t)
+	if err := os.WriteFile(filepath.Join(agents, "prompts", "evento.md"), []byte("prompt"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	log := filepath.Join(root, "eventos.log")
+	if _, err := Run(context.Background(), root, Options{Name: "evento", Motor: "mock", AgentsDir: agents, EventLog: log, MaxAgents: 99}); err != nil {
+		t.Fatal(err)
+	}
+	got := mustRead(t, log)
+	if !strings.Contains(got, "["+filepath.Base(root)+"] FIM evento código 0") {
+		t.Fatalf("evento final ausente: %q", got)
+	}
+}
+
 func TestRunRetomarPreservaLogEUsaReserva(t *testing.T) {
 	root, agents := repoFixture(t)
 	script := filepath.Join(root, "falso.sh")
@@ -126,6 +158,14 @@ func TestRunCotaSemReservaParaSemRepetir(t *testing.T) {
 	log := mustRead(t, res.LogFile)
 	if !strings.Contains(log, "FIM ") || !strings.Contains(log, "resets 9am") {
 		t.Fatalf("log sem encerramento ou aviso de retorno: %s", log)
+	}
+}
+
+func TestPadraoCotaClaudeReconheceAmostrasReais(t *testing.T) {
+	for _, amostra := range []string{"You've hit your session limit · resets 9am", "You have hit your session limit", "usage limit reached"} {
+		if !quotaPattern("claude-code").MatchString(amostra) {
+			t.Fatalf("amostra não reconhecida: %q", amostra)
+		}
 	}
 }
 

@@ -1,12 +1,57 @@
 package server
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/crom-org/openheinerss/pkg/protocol"
 )
+
+func TestObservadorAvisaAgenteTravado(t *testing.T) {
+	t.Setenv("OPENHEINERSS_LOG_PARADO_MIN", "1")
+	dir := t.TempDir()
+	logs := filepath.Join(dir, "logs")
+	if err := os.MkdirAll(logs, 0755); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-2 * time.Minute)
+	if err := os.WriteFile(filepath.Join(logs, "x.log"), []byte("última linha\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(filepath.Join(logs, "x.log"), old, old); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(map[string]interface{}{"motor": "mock", "tentativa": 1, "inicio": old.Format(time.RFC3339), "pid": os.Getpid()})
+	if err := os.WriteFile(filepath.Join(logs, "x.meta.json"), append(b, '\n'), 0644); err != nil {
+		t.Fatal(err)
+	}
+	o := newOrq()
+	defer o.Close()
+	var mu sync.Mutex
+	var mensagens []string
+	o.subs[&conexao{send: func(v interface{}) {
+		n := v.(protocol.Notification)
+		if n.Method == protocol.EventOrqErro {
+			mu.Lock()
+			mensagens = append(mensagens, n.Params.(protocol.OrqErroParams).Mensagem)
+			mu.Unlock()
+		}
+	}}] = assinatura{}
+	o.pastas[dir] = &pasta{dir: dir, projeto: "teste", estados: map[string]*estadoMeta{}}
+	o.varrer(dir)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(mensagens) != 1 || !containsMensagem(mensagens[0], "travou") {
+		t.Fatalf("aviso de travamento: %v", mensagens)
+	}
+}
+
+func containsMensagem(s, parte string) bool { return strings.Contains(s, parte) }
 
 func TestProgressoLimitadoPorAgente(t *testing.T) {
 	old := intervaloProgresso

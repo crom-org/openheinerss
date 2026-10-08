@@ -32,6 +32,7 @@ type CustomSpec struct {
 	FinishRegex string            `json:"finishRegex,omitempty" yaml:"finishRegex,omitempty"`
 	QuotaRegex  string            `json:"quotaRegex,omitempty" yaml:"quotaRegex,omitempty"`
 	Reserva     []string          `json:"reserva,omitempty" yaml:"reserva,omitempty"`
+	EventLog    string            `json:"eventosLog,omitempty" yaml:"eventosLog,omitempty"`
 }
 
 var customMu sync.RWMutex
@@ -174,6 +175,9 @@ func resolveSpec(s CustomSpec, seen map[string]bool) (CustomSpec, error) {
 	}
 	if s.Reserva != nil {
 		base.Reserva = append([]string(nil), s.Reserva...)
+	}
+	if s.EventLog != "" {
+		base.EventLog = s.EventLog
 	}
 	return base, nil
 }
