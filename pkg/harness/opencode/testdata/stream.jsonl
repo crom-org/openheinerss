@@ -1,0 +1,4 @@
+{"type":"step_start","timestamp":1791455875541,"sessionID":"ses_exemplo","part":{"type":"step-start"}}
+{"type":"text","timestamp":1791455875542,"sessionID":"ses_exemplo","part":{"type":"text","text":"OK"}}
+{"type":"tool_use","sessionID":"ses_exemplo","part":{"type":"tool","tool":"glob","callID":"call_1","state":{"status":"completed","input":{"pattern":"*.go"},"output":"main.go"}}}
+{"type":"step_finish","timestamp":1791455875542,"sessionID":"ses_exemplo","part":{"type":"step-finish","tokens":{"total":12022,"input":9988,"output":8,"reasoning":31,"cache":{"write":0,"read":1995}},"cost":0}}

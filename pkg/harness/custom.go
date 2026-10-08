@@ -364,6 +364,7 @@ func (c *customHarness) SendPrompt(ctx context.Context, text string, _ []protoco
 }
 func (c *customHarness) read(r io.Reader) {
 	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	for sc.Scan() {
 		c.parseLine(sc.Text())
 	}

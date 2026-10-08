@@ -154,6 +154,7 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 		}()
 
 		scanner := bufio.NewScanner(pr)
+		scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
 		for scanner.Scan() {
 			line := scanner.Text()
 			if events := harness.ParseJSONEvent(line, sessID); len(events) > 0 {
@@ -239,6 +240,7 @@ func (a *AGYHarness) Stop() error {
 
 func (a *AGYHarness) readEvents(r io.Reader) {
 	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	sessID := a.cfg.SessionID
 
 	for scanner.Scan() {
