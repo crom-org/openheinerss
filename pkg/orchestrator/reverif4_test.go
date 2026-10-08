@@ -253,16 +253,19 @@ func texto(s string) string {
 	return "printf '%s\\n' '{\"type\":\"text\",\"text\":\"" + s + "\"}'\n" + fimOK
 }
 
-func TestCotaSoNoStdoutSemRegexViraFalha(t *testing.T) {
-	res, err, _ := rodarCom(t, "stdout-cota", texto("You have hit your session limit · resets 3pm"), harness.CustomSpec{}, Options{Attempts: 3})
+// stderrDoMotor simula o motor dizendo a frase no stderr (canal de erro) e saindo 0 sem trabalho útil.
+func stderrDoMotor(s string) string { return "echo '" + s + "' >&2\n" + fimOK }
+
+func TestCotaNoStderrDoMotorSemRegexViraFalha(t *testing.T) {
+	res, err, _ := rodarCom(t, "stderr-cota", stderrDoMotor("You have hit your session limit · resets 3pm"), harness.CustomSpec{}, Options{Attempts: 3})
 	if err != nil || res.Code != 2 || res.Attempts != 1 {
 		t.Fatalf("cota em stdout: err=%v código=%d tentativas=%d", err, res.Code, res.Attempts)
 	}
 }
 
-func TestSobrecargaSoNoStdoutUsaReserva(t *testing.T) {
+func TestSobrecargaNoStderrDoMotorUsaReserva(t *testing.T) {
 	root, agents := repoFixture(t)
-	registrar(t, harness.CustomSpec{Name: "stdout-sobrecarga", Command: scriptTeste(t, root, "so", texto("Service temporarily overloaded")), Reserva: []string{"stdout-reserva"}})
+	registrar(t, harness.CustomSpec{Name: "stdout-sobrecarga", Command: scriptTeste(t, root, "so", stderrDoMotor("Service temporarily overloaded")), Reserva: []string{"stdout-reserva"}})
 	registrar(t, harness.CustomSpec{Name: "stdout-reserva", Command: scriptTeste(t, root, "sr", texto("feito"))})
 	res, err := Run(context.Background(), root, Options{Name: "ag", Motor: "stdout-sobrecarga", AgentsDir: agents, PromptText: "x", Attempts: 2, MaxAgents: 9})
 	if err != nil || res.Code != 0 || res.Attempts != 2 {
@@ -277,6 +280,10 @@ func TestTextoSobreCotaNaoEFalsoPositivo(t *testing.T) {
 		"resumo-curto":   texto("tratei o caso de quota exceeded e de SEM COTA no código"),
 		"resumo-longo":   texto(longo),
 		"diz-limite":     texto("O rate limit da API é de 60 por minuto, documentei"),
+		// 5ª verificação (bug 1): respostas legítimas curtas, sem ferramenta, exit 0.
+		"rate-limit-readme":     texto("rate limit documentado no README"),
+		"frase-do-exemplo":      texto("Service temporarily overloaded é a frase do exemplo"),
+		"stderr-com-ferramenta": "printf '%s\\n' '{\"type\":\"tool_call\",\"tool\":\"Bash\"}'\necho 'rate limit warning' >&2\n" + fimOK,
 	}
 	for nome, corpo := range casos {
 		res, err, log := rodarCom(t, "fp-"+nome, corpo, harness.CustomSpec{}, Options{Attempts: 2})

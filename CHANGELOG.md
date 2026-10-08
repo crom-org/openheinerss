@@ -6,6 +6,18 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 
 ## [Não lançado]
 
+### Corrigido (5ª verificação do `rodar`)
+- Cota/sobrecarga só valem em canal de erro (evento de erro, stderr do motor sem trabalho útil, resultado com
+  `is_error`); o texto livre do agente nunca é examinado. `agy` só falha por evento de erro/stderr.
+- Chaves (`--arquivo-chaves`) vão no ambiente de cada execução, sem `os.Setenv` global nem trava compartilhada.
+- Esperas de `.worktree.lock` e `.vagas.lock` respeitam o cancelamento.
+- `--seco` mascara todo valor de ambiente (exceto `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `PWD`…), mostra `-p` do `agy`
+  e coloca caminhos com espaço entre aspas.
+- Missões (`missao-*`) rodam num clone `--shared` descartável (sem escrita nas refs do repositório) e o
+  `RELATORIO-AGENTE.md` é copiado para `relatorios/<nome>.md` antes de apagar a pasta.
+- Meta do codex mostra modelo/esforço reais; filhos do motor morrem junto com o runner (Pdeathsig no Linux);
+  falha ao gravar `--eventos-log` avisa; instâncias custom da raiz carregam de dentro de uma worktree.
+
 ### Adicionado
 - **`rodar`** (apelidos `launch`, `dispatch`): executa uma missão com worktree `agente/<nome>`, log em
   `logs/<nome>.log`, `logs/<nome>.meta.json` (gravação atômica), linha final `FIM hh:mm código N`,

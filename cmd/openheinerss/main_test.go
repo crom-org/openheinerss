@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"github.com/crom-org/openheinerss/pkg/harness"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -40,5 +42,33 @@ func TestManualCLIAtualizado(t *testing.T) {
 	}
 	if !bytes.Equal(gerado, manual) {
 		t.Fatal("docs/09-cli.md está desatualizado; execute 'go run ./cmd/openheinerss docs'")
+	}
+}
+
+func TestInstanciaCustomDaRaizCarregaDeDentroDaWorktree(t *testing.T) {
+	root := t.TempDir()
+	run := func(dir string, args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v (%s)", args, err, out)
+		}
+	}
+	run(root, "init", "-q", "-b", "main")
+	run(root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i")
+	dir := filepath.Join(root, ".openheinerss", "harnesses")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	// A instância existe só na raiz (não versionada): a worktree não a tem.
+	if err := os.WriteFile(filepath.Join(dir, "so-na-raiz-r5.yaml"), []byte("name: so-na-raiz-r5\nbase: codex\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	wt := filepath.Join(t.TempDir(), "wt")
+	run(root, "worktree", "add", "-q", wt, "-b", "agente/x")
+	if err := carregarInstancias(wt); err != nil {
+		t.Fatal(err)
+	}
+	if !harness.Exists("so-na-raiz-r5") {
+		t.Fatal("instância da raiz do repositório não carregou ao lançar de dentro da worktree")
 	}
 }

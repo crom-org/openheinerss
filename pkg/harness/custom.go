@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/crom-org/openheinerss/pkg/harness/process"
 	"github.com/crom-org/openheinerss/pkg/protocol"
@@ -284,6 +285,14 @@ type customHarness struct {
 	cmd       *exec.Cmd
 	stopped   bool
 	completed bool
+	// usedTool marca que o turno chamou ferramentas (resultado útil); o stderr de um turno sem isso é erro do motor.
+	usedTool bool
+	// Fim do turno: o stderr só é conferido quando o processo saiu (ou, se ele segue vivo, após uma espera curta).
+	exited       chan struct{}
+	stderr       *tailBuffer
+	pending      string
+	stderrJudged bool
+	finMu        sync.Mutex
 }
 
 func newCustom(s CustomSpec, mode Mode) *customHarness {
@@ -431,6 +440,8 @@ func (c *customHarness) SendPrompt(ctx context.Context, text string, _ []protoco
 	}
 	c.mu.Lock()
 	c.cmd = cmd
+	c.usedTool, c.pending, c.stderrJudged = false, "", false
+	c.exited, c.stderr = make(chan struct{}), stderr
 	c.mu.Unlock()
 	if spec.Prompt == "stdin" && !hasPrompt {
 		go func() { _, _ = io.WriteString(in, text+"\n"); _ = in.Close() }()
@@ -451,8 +462,14 @@ func (c *customHarness) read(cmd *exec.Cmd, r io.Reader, stderr *tailBuffer) {
 	_, _ = io.Copy(io.Discard, r)
 	err := cmd.Wait()
 	c.mu.Lock()
-	parado := c.stopped
+	parado, pending, exited := c.stopped, c.pending, c.exited
 	c.mu.Unlock()
+	defer close(exited)
+	c.finMu.Lock()
+	defer c.finMu.Unlock()
+	if err == nil && !parado {
+		c.erroDeStderr()
+	}
 	if err != nil && !parado {
 		tail := strings.TrimSpace(stderr.String())
 		if c.quotaRe != nil && c.quotaRe.MatchString(tail) {
@@ -462,10 +479,57 @@ func (c *customHarness) read(cmd *exec.Cmd, r io.Reader, stderr *tailBuffer) {
 		} else {
 			c.emit(Event{Type: EventError, Payload: protocol.ErrorParams{SessionID: c.cfg.SessionID, Message: fmt.Sprintf("harness custom '%s' terminou com erro: %v %s", c.spec.Name, err, tail)}})
 		}
+		if pending != "" {
+			c.complete(pending)
+			return
+		}
 		c.complete("process_error")
 		return
 	}
+	if pending != "" {
+		c.complete(pending)
+		return
+	}
 	c.complete("process_exit")
+}
+
+// erroDeStderr: saída limpa (ou fim já declarado) sem ferramenta usada = turno sem resultado útil; o que o
+// motor escreveu no stderr (cota, sobrecarga) é o motivo e vira evento de erro. Com ferramentas é só aviso.
+// Chamar com finMu seguro.
+func (c *customHarness) erroDeStderr() {
+	c.mu.Lock()
+	if c.stderrJudged || c.usedTool || c.stopped || c.stderr == nil {
+		c.mu.Unlock()
+		return
+	}
+	c.stderrJudged = true
+	tail := strings.TrimSpace(c.stderr.String())
+	c.mu.Unlock()
+	if tail != "" {
+		c.emit(Event{Type: EventError, Payload: protocol.ErrorParams{SessionID: c.cfg.SessionID, Message: tail}})
+	}
+}
+
+// fimDeclarado trata o "end"/finishRegex: espera o processo sair (até 300 ms) para o stderr chegar antes do fim.
+func (c *customHarness) fimDeclarado(reason string) {
+	c.mu.Lock()
+	if c.pending == "" {
+		c.pending = reason
+	}
+	exited := c.exited
+	c.mu.Unlock()
+	go func() {
+		if exited != nil {
+			select {
+			case <-exited:
+			case <-time.After(300 * time.Millisecond):
+			}
+		}
+		c.finMu.Lock()
+		defer c.finMu.Unlock()
+		c.erroDeStderr()
+		c.complete(reason)
+	}()
 }
 func (c *customHarness) parseLine(line string) {
 	if c.quotaRe != nil && c.quotaRe.MatchString(line) {
@@ -477,7 +541,7 @@ func (c *customHarness) parseLine(line string) {
 		return
 	}
 	if c.finishRe != nil && c.finishRe.MatchString(line) {
-		c.complete("finish_regex")
+		c.fimDeclarado("finish_regex")
 		return
 	}
 	var m map[string]interface{}
@@ -502,6 +566,9 @@ func (c *customHarness) parseLine(line string) {
 		}
 		c.emit(Event{Type: EventText, Payload: protocol.TextParams{SessionID: sid, Delta: d}})
 	case "tool", "tool_call", "agent.tool_call":
+		c.mu.Lock()
+		c.usedTool = true
+		c.mu.Unlock()
 		c.emit(Event{Type: EventToolCall, Payload: protocol.ToolCallParams{SessionID: sid, CallID: str(m, "callId"), Tool: str(m, "tool"), Input: m["input"]}})
 	case "error", "agent.error":
 		c.emit(Event{Type: EventError, Payload: protocol.ErrorParams{SessionID: sid, Message: str(m, "message")}})
@@ -512,7 +579,7 @@ func (c *customHarness) parseLine(line string) {
 		if reason == "" {
 			reason = "completed"
 		}
-		c.complete(reason)
+		c.fimDeclarado(reason)
 	default:
 		if payload != nil {
 			b, _ := json.Marshal(payload)

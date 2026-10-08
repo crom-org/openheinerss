@@ -44,7 +44,7 @@ var (
 
 func main() {
 	if cwd, err := os.Getwd(); err == nil {
-		if err := harness.LoadCustom(cwd); err != nil {
+		if err := carregarInstancias(cwd); err != nil {
 			fmt.Fprintf(os.Stderr, "Aviso: %v\n", err)
 		}
 	}
@@ -66,6 +66,17 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Erro: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// carregarInstancias carrega as instâncias custom da raiz do REPOSITÓRIO (mesmo quando lançado de dentro de
+// uma worktree de agente, onde .openheinerss pode não existir) e depois as da pasta atual, que vencem.
+func carregarInstancias(cwd string) error {
+	if root, err := orchestrator.RepoRoot(cwd); err == nil && root != cwd {
+		if err := harness.LoadCustom(root); err != nil {
+			return err
+		}
+	}
+	return harness.LoadCustom(cwd)
 }
 
 // codigoSaida faz o processo terminar com o código do FIM do rodar (0 ok, 1 erro, 2 sem cota, 130 parado).

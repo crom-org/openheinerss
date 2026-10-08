@@ -134,8 +134,9 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 		cmd.Env = a.env
 
 		pr, pw := io.Pipe()
+		er, ew := io.Pipe()
 		cmd.Stdout = pw
-		cmd.Stderr = pw
+		cmd.Stderr = ew
 
 		if err := cmd.Start(); err != nil {
 			a.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: "falha ao iniciar agy: " + err.Error()}})
@@ -150,24 +151,61 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 		go func() {
 			waitDone <- cmd.Wait()
 			_ = pw.Close()
+			_ = ew.Close()
+		}()
+
+		// O stderr do agy é um canal de erro; o stdout é a resposta do agente e só vale por eventos de erro.
+		sawOutput, toolFailure := false, ""
+		var failMu sync.Mutex
+		setFailure := func(f string) {
+			failMu.Lock()
+			if toolFailure == "" {
+				toolFailure = f
+			}
+			failMu.Unlock()
+		}
+		stderrDone := make(chan struct{})
+		go func() {
+			defer close(stderrDone)
+			es := bufio.NewScanner(er)
+			es.Buffer(make([]byte, 64*1024), 16*1024*1024)
+			for es.Scan() {
+				line := es.Text()
+				if line == "" {
+					continue
+				}
+				failMu.Lock()
+				sawOutput = true
+				failMu.Unlock()
+				if f := agyFailureLine(line); f != "" {
+					setFailure(f)
+				}
+				a.emit(harness.Event{Type: harness.EventText, Payload: protocol.TextParams{SessionID: sessID, Delta: line + "\n"}})
+			}
 		}()
 
 		scanner := bufio.NewScanner(pr)
 		scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
-		sawOutput, toolFailure := false, ""
 		for scanner.Scan() {
 			line := scanner.Text()
 			if line != "" {
+				failMu.Lock()
 				sawOutput = true
-				if failure := agyFailureLine(line); failure != "" && toolFailure == "" {
-					toolFailure = failure
-				}
+				failMu.Unlock()
 			}
 			if events := harness.ParseJSONEvent(line, sessID); len(events) > 0 {
 				for _, event := range events {
+					if p, ok := event.Payload.(protocol.ErrorParams); ok && event.Type == harness.EventError {
+						if f := agyFailureLine(p.Message); f != "" {
+							setFailure(f)
+						}
+					}
 					a.emit(event)
 				}
 				continue
+			}
+			if f := agyPlainFailure(line); f != "" {
+				setFailure(f)
 			}
 			a.emit(harness.Event{
 				Type: harness.EventText,
@@ -178,6 +216,7 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 			})
 		}
 		waitErr := <-waitDone
+		<-stderrDone
 		a.mu.Lock()
 		if a.cmd == cmd {
 			a.cmd = nil
@@ -224,10 +263,27 @@ func (a *AGYHarness) RespondPermission(ctx context.Context, reqID string, allow 
 	return nil
 }
 
+// agyFailureLine examina uma linha de ERRO do agy (evento de erro ou stderr): é onde o agy avisa que
+// não conseguiu usar ferramentas. Nunca deve receber o texto livre do agente.
 func agyFailureLine(line string) string {
 	lower := strings.ToLower(line)
 	if strings.Contains(lower, "no output produced") || strings.Contains(lower, "tool required") || (strings.Contains(lower, "permission") && strings.Contains(lower, "denied")) {
 		return strings.TrimSpace(line)
+	}
+	return ""
+}
+
+// agyPlainFailure trata uma linha de stdout que não é JSON: só conta quando a linha COMEÇA com a frase do
+// agy (opcionalmente após "Error:"); "Corrigi permission denied no README" é texto do agente.
+func agyPlainFailure(line string) string {
+	t := strings.ToLower(strings.TrimSpace(line))
+	for _, p := range []string{"error:", "erro:", "[error]"} {
+		t = strings.TrimSpace(strings.TrimPrefix(t, p))
+	}
+	for _, p := range []string{"no output produced", "tool required", "permission denied"} {
+		if strings.HasPrefix(t, p) {
+			return strings.TrimSpace(line)
+		}
 	}
 	return ""
 }
