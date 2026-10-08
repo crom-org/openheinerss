@@ -21,7 +21,7 @@ test("SDK TypeScript conversa com o servidor real", async () => {
       "orq.fim": () => { eventos.push("orq.fim"); fim(); },
       "orq.precisa_decisao": (p) => {
         decisao = p;
-        void client.decideRun(p.id, "permitir");
+        void client.decideRun(p.id, "permitir", undefined, p.run);
       },
     });
     const limits = await client.getLimits();

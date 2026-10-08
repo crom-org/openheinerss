@@ -233,6 +233,8 @@ Quando ocorre um erro de execução ou dependência ausente, a resposta de erro 
 
 ## 5. Orquestração (`rodar`, limites e eventos `orq.*`)
 
+Cada processo `serve` cria uma `geracao` aleatória no início. Ela aparece no envelope de todas as respostas JSON-RPC e nos parâmetros de todos os eventos `orq.*`; clientes devem usá-la junto aos IDs, pois `rodar-1` e `dec-2` podem ser reciclados depois de um reinício.
+
 Os mesmos métodos valem no STDIO (NDJSON) e no WebSocket (`ws://127.0.0.1:4820/ws`). **Segurança do WebSocket:** o servidor executa agentes na máquina, então só aceita conexões sem cabeçalho `Origin` (SDKs e scripts) ou de origens locais (`localhost`, `127.0.0.1`, `[::1]`, Tauri). Para liberar a página de um painel remoto, defina `OPENHEINERSS_ORIGENS` com as origens separadas por vírgula (ou `*` para liberar todas, por sua conta e risco); qualquer outra recebe `403`. O `crom-central` (ou qualquer cliente) lança agentes pelo servidor e acompanha tudo por eventos. Os eventos `agent.*` continuam como na seção 2; os `orq.*` descrevem a **missão** (um agente do `rodar`), não a conversa.
 
 ### `eventos.assinar`
@@ -255,8 +257,10 @@ Mesmas opções do `openheinerss rodar` (nomes em português, como em `run`), ma
 {"jsonrpc":"2.0","id":2,"method":"rodar.iniciar","params":{"nome":"etapa-1","motor":"codex2","modelo":"","esforco":"high","prompt":"","retomar":false,"pasta":"","branchBase":"main","cargaMax":0,"maxAgentes":4,"tentativas":4,"cotaMax":0,"cwd":"/home/j/projetos/crom-tv","projeto":"crom-tv"}}
 ```
 ```json
-{"jsonrpc":"2.0","id":2,"result":{"id":"rodar-1","agente":"etapa-1","projeto":"crom-tv"}}
+{"jsonrpc":"2.0","id":2,"geracao":"geracao-a1b2c3","result":{"geracao":"geracao-a1b2c3","id":"rodar-1","agente":"etapa-1","projeto":"crom-tv"}}
 ```
+Se o servidor foi iniciado com `serve --max-agentes N`, `maxAgentes` vira no máximo `N` (0 ou ausente também vira `N`).
+
 Erros (`-32602`): nome ou motor vazio; agente com o mesmo nome já rodando neste servidor.
 
 ### `rodar.listar`
@@ -280,13 +284,13 @@ Para uma execução **lançada por este servidor**, por `id` ou `agente`. O fim 
 ```
 
 ### `rodar.decidir`
-Responde um `orq.precisa_decisao`. `resposta`: `"permitir"` ou `"negar"` (aceita também `sim`/`não`, `allow`/`deny`); `mensagem` é opcional. O agente fica parado até a resposta (ou até `rodar.parar`). `rodar.listar` mostra as decisões ainda pendentes para quem conectar depois. Rodando pelo CLI (sem servidor) as permissões são aprovadas automaticamente, como antes.
+Responde um `orq.precisa_decisao`. `resposta`: `"permitir"` ou `"negar"` (aceita também `sim`/`não`, `allow`/`deny`); `mensagem` é opcional. O agente fica parado até a resposta (ou até `rodar.parar`). `run` (id da execução) e `geracao` são opcionais; se enviados e não baterem com os da decisão/servidor, a resposta é recusada (`-32602`) e a decisão continua pendente. `rodar.listar` mostra as decisões ainda pendentes para quem conectar depois. Rodando pelo CLI (sem servidor) as permissões são aprovadas automaticamente, como antes.
 
 ```json
-{"jsonrpc":"2.0","id":5,"method":"rodar.decidir","params":{"id":"dec-2","resposta":"permitir"}}
+{"jsonrpc":"2.0","id":5,"method":"rodar.decidir","params":{"geracao":"geracao-a1b2c3","run":"rodar-1","id":"dec-2","resposta":"permitir"}}
 ```
 ```json
-{"jsonrpc":"2.0","id":5,"result":{"id":"dec-2","resposta":"permitir"}}
+{"jsonrpc":"2.0","id":5,"geracao":"geracao-a1b2c3","result":{"id":"dec-2","resposta":"permitir"}}
 ```
 
 ### `limites.obter` e `harness.listar`
@@ -304,11 +308,11 @@ Notificações sem `id`. Os eventos de execuções lançadas por `rodar.iniciar`
 
 | Evento | Quando | Campos |
 | :--- | :--- | :--- |
-| `orq.inicio` | começa cada tentativa | `agente`, `projeto`, `motor`, `modelo`, `tentativa`, `worktree` |
-| `orq.progresso` | texto ou ferramenta nova; **no máximo 1 a cada 2 s por agente** (o excedente sai no fim da janela, só o mais recente) | `agente`, `projeto`, `resumo` (até ~160 caracteres) |
-| `orq.precisa_decisao` | `agent.permission_request` do agente | `id`, `agente`, `projeto`, `pergunta`, `opcoes` |
-| `orq.erro` | falha de uma tentativa, cota ou erro antes de começar | `agente`, `projeto`, `mensagem`, `cota` (bool) |
-| `orq.fim` | missão terminou (também após erro ou parada) | `agente`, `projeto`, `codigo`, `tentativas`, `duracao` (segundos), `relatorio` (caminho do `RELATORIO-AGENTE.md`, se existir) |
+| `orq.inicio` | começa cada tentativa | `geracao`, `agente`, `projeto`, `motor`, `modelo`, `tentativa`, `worktree` |
+| `orq.progresso` | texto ou ferramenta nova; **no máximo 1 a cada 2 s por agente** (o excedente sai no fim da janela, só o mais recente) | `geracao`, `agente`, `projeto`, `resumo` (até ~160 caracteres) |
+| `orq.precisa_decisao` | `agent.permission_request` do agente | `geracao`, `run`, `id`, `agente`, `projeto`, `pergunta`, `opcoes` |
+| `orq.erro` | falha de uma tentativa, cota ou erro antes de começar | `geracao`, `agente`, `projeto`, `mensagem`, `cota` (bool) |
+| `orq.fim` | missão terminou (também após erro ou parada) | `geracao`, `agente`, `projeto`, `codigo`, `tentativas`, `duracao` (segundos), `relatorio` (caminho do `RELATORIO-AGENTE.md`, se existir) |
 
 Ordem garantida por agente: `orq.inicio` → (`orq.progresso` | `orq.precisa_decisao` | `orq.erro`)* → `orq.fim`; nenhum progresso depois do fim. Com reservas ou novas tentativas há um `orq.inicio` por tentativa e um só `orq.fim`.
 

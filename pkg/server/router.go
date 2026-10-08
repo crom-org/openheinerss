@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,19 +16,35 @@ import (
 	"github.com/crom-org/openheinerss/pkg/session"
 )
 
+func novaGeracao() string {
+	b := make([]byte, 12)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("geracao-%d", os.Getpid())
+	}
+	return fmt.Sprintf("geracao-%x", b)
+}
+
 // Router processa requisições JSON-RPC e delega para o SessionManager ou subsistemas
 type Router struct {
 	manager *session.Manager
 	orq     *Orq
+	geracao string
 }
 
 // NewRouter cria um novo despachante de métodos
 func NewRouter(m *session.Manager) *Router {
-	return &Router{manager: m, orq: newOrq()}
+	return NewRouterWithMaxAgents(m, 0)
+}
+
+// NewRouterWithMaxAgents cria um servidor com uma geração nova e limite opcional.
+func NewRouterWithMaxAgents(m *session.Manager, maxAgents int) *Router {
+	o := newOrq(maxAgents)
+	return &Router{manager: m, orq: o, geracao: o.geracao}
 }
 
 // HandleRequest executa a lógica do método solicitado e devolve a resposta JSON-RPC
-func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) protocol.Response {
+func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (response protocol.Response) {
+	defer func() { response.Geracao = r.geracao }()
 	switch req.Method {
 	case protocol.MethodSessionCreate:
 		var params protocol.SessionCreateParams

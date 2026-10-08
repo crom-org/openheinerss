@@ -66,8 +66,13 @@ type WSServer struct {
 
 // NewWSServer cria um novo servidor WebSocket
 func NewWSServer(m *session.Manager) *WSServer {
+	return NewWSServerWithMaxAgents(m, 0)
+}
+
+// NewWSServerWithMaxAgents cria o servidor WebSocket com limite de agentes opcional.
+func NewWSServerWithMaxAgents(m *session.Manager, maxAgents int) *WSServer {
 	s := &WSServer{
-		router:  NewRouter(m),
+		router:  NewRouterWithMaxAgents(m, maxAgents),
 		manager: m,
 		clients: make(map[*wsClient]bool),
 	}
@@ -118,6 +123,7 @@ func (s *WSServer) handleWS(w http.ResponseWriter, r *http.Request) {
 		var req protocol.Request
 		if err := json.Unmarshal(message, &req); err != nil {
 			errResp := protocol.NewErrorResponse(nil, protocol.CodeParseError, fmt.Sprintf("JSON inválido: %v", err), nil)
+			errResp.Geracao = s.router.geracao
 			_ = client.writeJSON(errResp)
 			continue
 		}

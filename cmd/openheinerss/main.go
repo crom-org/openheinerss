@@ -256,9 +256,10 @@ func renderCLIDoc(root *cobra.Command) ([]byte, error) {
 
 func newServeCmd() *cobra.Command {
 	var (
-		useStdio bool
-		port     int
-		host     string
+		useStdio   bool
+		port       int
+		host       string
+		maxAgentes int
 	)
 
 	cmd := &cobra.Command{
@@ -272,12 +273,12 @@ func newServeCmd() *cobra.Command {
 			defer cancel()
 
 			if useStdio {
-				stdioServer := server.NewStdioServer(manager, os.Stdin, os.Stdout)
+				stdioServer := server.NewStdioServerWithMaxAgents(manager, os.Stdin, os.Stdout, maxAgentes)
 				return stdioServer.Run(ctx)
 			}
 
 			addr := fmt.Sprintf("%s:%d", host, port)
-			wsServer := server.NewWSServer(manager)
+			wsServer := server.NewWSServerWithMaxAgents(manager, maxAgentes)
 			listener, err := net.Listen("tcp", addr)
 			if err != nil {
 				return fmt.Errorf("abrir porta %s: %w", addr, err)
@@ -309,6 +310,8 @@ func newServeCmd() *cobra.Command {
 	cmd.Flags().IntVar(&port, "porta", defaultPort, "Porta para o servidor WebSocket")
 	cmd.Flags().StringVar(&host, "host", "127.0.0.1", "Host de vinculação do WebSocket")
 	cmd.Flags().StringVar(&host, "hospedeiro", "127.0.0.1", "Alias em português de --host")
+	cmd.Flags().IntVar(&maxAgentes, "max-agentes", 0, "Máximo de agentes simultâneos no servidor")
+	cmd.Flags().IntVar(&maxAgentes, "max-agents", 0, "Alias em inglês de --max-agentes")
 
 	return cmd
 }

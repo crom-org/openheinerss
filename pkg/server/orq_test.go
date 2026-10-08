@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -56,6 +57,10 @@ type clienteWS struct {
 }
 
 func novoServidorWS(t *testing.T) string {
+	return novoServidorWSComLimite(t, 0)
+}
+
+func novoServidorWSComLimite(t *testing.T, limite int) string {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -63,7 +68,7 @@ func novoServidorWS(t *testing.T) string {
 	}
 	addr := ln.Addr().String()
 	_ = ln.Close()
-	s := server.NewWSServer(session.NewManager())
+	s := server.NewWSServerWithMaxAgents(session.NewManager(), limite)
 	go func() { _ = s.ListenAndServe(addr) }()
 	t.Cleanup(func() { _ = s.Shutdown(context.Background()) })
 	return addr
@@ -181,13 +186,16 @@ func TestOrqRodarIniciarInicioProgressoDecisaoFim(t *testing.T) {
 
 	var ini protocol.RodarIniciarResult
 	c.resultado(protocol.MethodRodarIniciar, protocol.RodarIniciarParams{RunParams: protocol.RunParams{Nome: "mock-a", Motor: "mock", CWD: root, MaxAgentes: 99}, Projeto: "demo"}, &ini)
+	if ini.Geracao == "" || ini.ID == "" {
+		t.Fatalf("resposta sem geração/id: %+v", ini)
+	}
 	if ini.ID == "" || ini.Projeto != "demo" {
 		t.Fatalf("resultado inesperado: %+v", ini)
 	}
 
 	var inicio protocol.OrqInicioParams
 	_ = json.Unmarshal(c.proximo(protocol.EventOrqInicio), &inicio)
-	if inicio.Agente != "mock-a" || inicio.Motor != "mock" || inicio.Tentativa != 1 || inicio.ID != ini.ID || inicio.Projeto != "demo" || inicio.Worktree == "" {
+	if inicio.Geracao != ini.Geracao || inicio.Agente != "mock-a" || inicio.Motor != "mock" || inicio.Tentativa != 1 || inicio.ID != ini.ID || inicio.Projeto != "demo" || inicio.Worktree == "" {
 		t.Fatalf("inicio: %+v", inicio)
 	}
 	var prog protocol.OrqProgressoParams
@@ -200,6 +208,9 @@ func TestOrqRodarIniciarInicioProgressoDecisaoFim(t *testing.T) {
 	if dec.ID == "" || dec.Agente != "mock-a" || len(dec.Opcoes) != 2 || dec.Pergunta == "" {
 		t.Fatalf("decisão: %+v", dec)
 	}
+	if dec.Geracao != ini.Geracao || dec.Run != ini.ID {
+		t.Fatalf("decisão sem geração/run: %+v", dec)
+	}
 
 	// rodar.listar mostra o agente rodando e a decisão pendente.
 	var lista protocol.RodarListarResult
@@ -208,17 +219,23 @@ func TestOrqRodarIniciarInicioProgressoDecisaoFim(t *testing.T) {
 		t.Fatalf("listar durante: %+v", lista)
 	}
 
-	if r := c.chamar(protocol.MethodRodarDecidir, protocol.RodarDecidirParams{ID: dec.ID, Resposta: "talvez"}); r.Error == nil {
+	if r := c.chamar(protocol.MethodRodarDecidir, protocol.RodarDecidirParams{Run: dec.Run, ID: dec.ID, Resposta: "talvez"}); r.Error == nil {
 		t.Fatal("resposta inválida deveria falhar")
 	}
-	c.resultado(protocol.MethodRodarDecidir, protocol.RodarDecidirParams{ID: dec.ID, Resposta: "permitir"}, nil)
+	if r := c.chamar(protocol.MethodRodarDecidir, protocol.RodarDecidirParams{Geracao: "geracao-inexistente", Run: dec.Run, ID: dec.ID, Resposta: "permitir"}); r.Error == nil || !strings.Contains(r.Error.Message, "geração") {
+		t.Fatalf("geração errada deveria ser recusada: %+v", r.Error)
+	}
+	if r := c.chamar(protocol.MethodRodarDecidir, protocol.RodarDecidirParams{Geracao: dec.Geracao, Run: "rodar-errado", ID: dec.ID, Resposta: "permitir"}); r.Error == nil || !strings.Contains(r.Error.Message, "não pertence") {
+		t.Fatalf("run errado deveria ser recusado: %+v", r.Error)
+	}
+	c.resultado(protocol.MethodRodarDecidir, protocol.RodarDecidirParams{Run: dec.Run, ID: dec.ID, Resposta: "permitir"}, nil)
 
 	var fim protocol.OrqFimParams
 	_ = json.Unmarshal(c.proximo(protocol.EventOrqFim, protocol.EventOrqProgresso), &fim)
 	if fim.Codigo != 0 || fim.Agente != "mock-a" || fim.Tentativas != 1 || fim.ID != ini.ID {
 		t.Fatalf("fim: %+v", fim)
 	}
-	if r := c.chamar(protocol.MethodRodarDecidir, protocol.RodarDecidirParams{ID: dec.ID, Resposta: "permitir"}); r.Error == nil {
+	if r := c.chamar(protocol.MethodRodarDecidir, protocol.RodarDecidirParams{Run: dec.Run, ID: dec.ID, Resposta: "permitir"}); r.Error == nil {
 		t.Fatal("decisão repetida deveria falhar")
 	}
 
@@ -230,6 +247,17 @@ func TestOrqRodarIniciarInicioProgressoDecisaoFim(t *testing.T) {
 	}
 }
 
+func TestGeracaoDiferenteEntreServes(t *testing.T) {
+	a := conectar(t, novoServidorWS(t))
+	b := conectar(t, novoServidorWS(t))
+	var ra, rb protocol.Response
+	ra = a.chamar(protocol.MethodHarnessListar, nil)
+	rb = b.chamar(protocol.MethodHarnessListar, nil)
+	if ra.Geracao == "" || rb.Geracao == "" || ra.Geracao == rb.Geracao {
+		t.Fatalf("servidores deveriam ter gerações distintas: %q %q", ra.Geracao, rb.Geracao)
+	}
+}
+
 func TestOrqDecisaoNegadaGeraErroEFimComFalha(t *testing.T) {
 	root := repoOrq(t, "mock-n")
 	c := conectar(t, novoServidorWS(t))
@@ -237,7 +265,7 @@ func TestOrqDecisaoNegadaGeraErroEFimComFalha(t *testing.T) {
 	c.resultado(protocol.MethodRodarIniciar, protocol.RodarIniciarParams{RunParams: protocol.RunParams{Nome: "mock-n", Motor: "mock", CWD: root, MaxAgentes: 99, Tentativas: 1}}, nil)
 	var dec protocol.OrqDecisaoParams
 	_ = json.Unmarshal(c.proximo(protocol.EventOrqPrecisaDecisao, protocol.EventOrqInicio, protocol.EventOrqProgresso), &dec)
-	c.resultado(protocol.MethodRodarDecidir, protocol.RodarDecidirParams{ID: dec.ID, Resposta: "negar"}, nil)
+	c.resultado(protocol.MethodRodarDecidir, protocol.RodarDecidirParams{Run: dec.Run, ID: dec.ID, Resposta: "negar"}, nil)
 	var erro protocol.OrqErroParams
 	_ = json.Unmarshal(c.proximo(protocol.EventOrqErro, protocol.EventOrqProgresso), &erro)
 	if erro.Agente != "mock-n" || erro.Mensagem == "" || erro.Cota {
@@ -264,6 +292,7 @@ func TestOrqFiltrosDeAssinatura(t *testing.T) {
 	var dec protocol.OrqDecisaoParams
 	_ = json.Unmarshal(todos.proximo(protocol.EventOrqPrecisaDecisao, protocol.EventOrqInicio, protocol.EventOrqProgresso), &dec)
 	_ = certo.proximo(protocol.EventOrqPrecisaDecisao, protocol.EventOrqInicio, protocol.EventOrqProgresso)
+	// Sem run nem geração (cliente antigo): continua aceito.
 	todos.resultado(protocol.MethodRodarDecidir, protocol.RodarDecidirParams{ID: dec.ID, Resposta: "permitir"}, nil)
 	_ = todos.proximo(protocol.EventOrqFim, protocol.EventOrqProgresso)
 	_ = certo.proximo(protocol.EventOrqFim, protocol.EventOrqProgresso)
@@ -379,7 +408,8 @@ func TestOrqViaStdio(t *testing.T) {
 	enviar(`{"jsonrpc":"2.0","id":2,"method":"rodar.iniciar","params":{"nome":"mock-s","motor":"mock","cwd":` + string(mustJSON(root)) + `,"maxAgentes":99}}`)
 	d := esperar(func(m map[string]interface{}) bool { return m["method"] == protocol.EventOrqPrecisaDecisao })
 	id := d["params"].(map[string]interface{})["id"].(string)
-	enviar(`{"jsonrpc":"2.0","id":3,"method":"rodar.decidir","params":{"id":"` + id + `","resposta":"permitir"}}`)
+	run := d["params"].(map[string]interface{})["run"].(string)
+	enviar(`{"jsonrpc":"2.0","id":3,"method":"rodar.decidir","params":{"run":"` + run + `","id":"` + id + `","resposta":"permitir"}}`)
 	f := esperar(func(m map[string]interface{}) bool { return m["method"] == protocol.EventOrqFim })
 	if f["params"].(map[string]interface{})["codigo"] != float64(0) {
 		t.Fatalf("fim: %v", f)

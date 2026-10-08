@@ -22,6 +22,7 @@ const (
 
 // OrqInicioParams payload de orq.inicio (um por tentativa).
 type OrqInicioParams struct {
+	Geracao   string `json:"geracao"`
 	ID        string `json:"id,omitempty"`
 	Agente    string `json:"agente"`
 	Projeto   string `json:"projeto"`
@@ -33,6 +34,7 @@ type OrqInicioParams struct {
 
 // OrqProgressoParams payload de orq.progresso.
 type OrqProgressoParams struct {
+	Geracao string `json:"geracao"`
 	ID      string `json:"id,omitempty"`
 	Agente  string `json:"agente"`
 	Projeto string `json:"projeto"`
@@ -41,6 +43,7 @@ type OrqProgressoParams struct {
 
 // OrqFimParams payload de orq.fim. Duracao em segundos.
 type OrqFimParams struct {
+	Geracao    string  `json:"geracao"`
 	ID         string  `json:"id,omitempty"`
 	Agente     string  `json:"agente"`
 	Projeto    string  `json:"projeto"`
@@ -52,6 +55,7 @@ type OrqFimParams struct {
 
 // OrqErroParams payload de orq.erro.
 type OrqErroParams struct {
+	Geracao  string `json:"geracao"`
 	ID       string `json:"id,omitempty"`
 	Agente   string `json:"agente"`
 	Projeto  string `json:"projeto"`
@@ -61,7 +65,9 @@ type OrqErroParams struct {
 
 // OrqDecisaoParams payload de orq.precisa_decisao.
 type OrqDecisaoParams struct {
+	Geracao  string   `json:"geracao"`
 	ID       string   `json:"id"`
+	Run      string   `json:"run"`
 	Agente   string   `json:"agente"`
 	Projeto  string   `json:"projeto"`
 	Pergunta string   `json:"pergunta"`
@@ -76,6 +82,7 @@ type RodarIniciarParams struct {
 
 // RodarIniciarResult devolve o id da execução, que vale nos eventos e em rodar.parar.
 type RodarIniciarResult struct {
+	Geracao string `json:"geracao"`
 	ID      string `json:"id"`
 	Agente  string `json:"agente"`
 	Projeto string `json:"projeto"`
@@ -118,6 +125,8 @@ type RodarPararParams struct {
 
 // RodarDecidirParams responde um orq.precisa_decisao. Resposta: "permitir" ou "negar".
 type RodarDecidirParams struct {
+	Geracao  string `json:"geracao,omitempty"`
+	Run      string `json:"run,omitempty"` // id da execução; se vier, precisa bater com o da decisão
 	ID       string `json:"id"`
 	Resposta string `json:"resposta"`
 	Mensagem string `json:"mensagem,omitempty"`

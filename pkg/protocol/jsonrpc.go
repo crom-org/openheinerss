@@ -32,6 +32,7 @@ type Request struct {
 type Response struct {
 	JSONRPC string      `json:"jsonrpc"`
 	ID      interface{} `json:"id"`
+	Geracao string      `json:"geracao"`
 	Result  interface{} `json:"result,omitempty"`
 	Error   *RPCError   `json:"error,omitempty"`
 }
