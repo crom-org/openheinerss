@@ -14,7 +14,9 @@ Uma versão específica pode ser fixada (com ou sem `v`):
 curl -fsSL https://raw.githubusercontent.com/crom-org/openheinerss/main/install.sh | bash -s -- --versao 0.1.0
 ```
 
-Dentro de um clone, `./install.sh --local` ignora o release e compila o código do clone (o release v1.0.0 já publicado é anterior a `rodar`, `agentes` e ao servidor de orquestração: baixe-o só se quiser exatamente essa versão). Se não houver rede ou release disponível, o script compila `./cmd/openheinerss` quando executado dentro do clone do projeto. O destino pode ser alterado para testes com `OPENHEINERSS_INSTALL_DIR`.
+Dentro de um clone, `./install.sh --local` ignora o release e compila o código do clone, injetando versão, commit e data no binário. O destino padrão é `~/.local/bin`; para testar sem alterar a instalação global, use `OPENHEINERSS_INSTALL_DIR=$(pwd)/bin ./install.sh --local`. O alvo `make build` deixa o binário em `bin/openheinerss`. Se não houver rede ou release disponível, o script compila `./cmd/openheinerss` quando executado dentro do clone do projeto.
+
+Quem usa o binário global precisa reinstalá-lo para receber esta versão (`./install.sh --local` ou o instalador de release). O binário global não é alterado por `make build`; executar `bin/openheinerss` usa sempre o build local.
 
 ## Go
 
@@ -35,4 +37,4 @@ Por fim, confirme:
 openheinerss version
 ```
 
-Um build local sem `ldflags` informa `dev`; releases informam versão, commit e data injetados pelo GoReleaser.
+Um `go build` direto também mostra o commit e a data quando o Go consegue registrar `vcs.revision` e `vcs.time`; `make build` e `install.sh --local` injetam explicitamente os três valores. Releases informam os valores injetados pelo GoReleaser.

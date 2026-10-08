@@ -7,16 +7,16 @@ Todo comando e flag do CLI aceita o nome padrão em português e em inglês; `ro
 ## Início rápido
 
 ```bash
-go build -o openheinerss ./cmd/openheinerss
-./openheinerss doctor
-./openheinerss init
-./openheinerss run --harness mock "Analise o repositório"   # o mock pede permissão: responda s ou N
-./openheinerss harness test mock --prompt "responda OK"     # nega a permissão sozinho e termina em segundos
-./openheinerss rodar demo mock --texto "responda OK"         # missão com worktree, log e meta.json (exige repositório git)
-./openheinerss agentes
+make build
+bin/openheinerss doctor
+bin/openheinerss init
+bin/openheinerss run --harness mock "Analise o repositório"   # o mock pede permissão: responda s ou N
+bin/openheinerss harness test mock --prompt "responda OK"     # nega a permissão sozinho e termina em segundos
+bin/openheinerss rodar demo mock --texto "responda OK"         # missão com worktree, log e meta.json (exige repositório git)
+bin/openheinerss agentes
 ```
 
-O `mock` é determinístico, offline e não consome tokens. O roteiro completo, passo a passo e com o resultado esperado de cada comando, está em [docs/VERIFICACAO.md](docs/VERIFICACAO.md). Para conferir todos os comandos e flags do binário instalado, use `./openheinerss docs` ou leia [docs/09-cli.md](docs/09-cli.md). O manual é gerado automaticamente e tem teste de consistência.
+O `mock` é determinístico, offline e não consome tokens. O roteiro completo, passo a passo e com o resultado esperado de cada comando, está em [docs/VERIFICACAO.md](docs/VERIFICACAO.md). Para conferir todos os comandos e flags do binário local, use `bin/openheinerss docs` ou leia [docs/09-cli.md](docs/09-cli.md). O manual é gerado automaticamente e tem teste de consistência.
 
 ## Instalação
 
@@ -50,13 +50,13 @@ Ou baixe manualmente o arquivo `openheinerss_<versão>_<sistema>_<arquitetura>.t
 ## Comandos úteis
 
 ```bash
-./openheinerss serve --stdio
-./openheinerss serve --port 4820
-./openheinerss run --harness opencode --mode cli --model ollama/qwen2.5-coder:32b "Escreva testes"
-./openheinerss limites --json
-./openheinerss harness list
-./openheinerss agentes ver <nome>
-./openheinerss mcp list
+bin/openheinerss serve --stdio
+bin/openheinerss serve --port 4820
+bin/openheinerss run --harness opencode --mode cli --model ollama/qwen2.5-coder:32b "Escreva testes"
+bin/openheinerss limites --json
+bin/openheinerss harness list
+bin/openheinerss agentes ver <nome>
+bin/openheinerss mcp list
 ```
 
 `motores` lista perfis e papéis definidos em `.openheinerss/motores.yaml`, no formato `papel: motor/modelo` e opcionalmente `esforco=low|medium|high`. O arquivo é opcional: sem ele o comando lista só os perfis e informa `Nenhum papel`.

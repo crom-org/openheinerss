@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -77,13 +78,15 @@ func main() {
 	}
 }
 
-// carregarInstancias carrega as instâncias custom da raiz do REPOSITÓRIO (mesmo quando lançado de dentro de
-// uma worktree de agente, onde .openheinerss pode não existir) e depois as da pasta atual, que vencem.
+// carregarInstancias carrega as instâncias custom da raiz do REPOSITÓRIO. Isso
+// torna o catálogo e limites independentes da subpasta/worktree de onde o CLI
+// foi chamado; fora de um repositório, usa a pasta atual como configuração.
 func carregarInstancias(cwd string) error {
-	if root, err := orchestrator.RepoRoot(cwd); err == nil && root != cwd {
+	if root, err := orchestrator.RepoRoot(cwd); err == nil {
 		if err := harness.LoadCustom(root); err != nil {
 			return err
 		}
+		return nil
 	}
 	return harness.LoadCustom(cwd)
 }
@@ -746,9 +749,39 @@ func newVersionCmd() *cobra.Command {
 		Aliases: []string{"versao"},
 		Short:   "Exibe a versão do Openheinerss",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("openheinerss %s (commit %s, data %s)\n", Version, Commit, Date)
+			versao, commit, data := buildVersion()
+			fmt.Printf("openheinerss %s (commit %s, data %s)\n", versao, commit, data)
 		},
 	}
+}
+
+// buildVersion combina os valores de release (ldflags) com a informação que o
+// Go grava automaticamente em um build direto feito dentro de um checkout Git.
+func buildVersion() (string, string, string) {
+	versao, commit, data := Version, Commit, Date
+	commitDoBuild := false
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range info.Settings {
+			switch setting.Key {
+			case "vcs.revision":
+				if commit == "desconhecido" || commit == "" {
+					commit = setting.Value
+					commitDoBuild = true
+				}
+			case "vcs.time":
+				if data == "desconhecida" || data == "" {
+					data = setting.Value
+				}
+			}
+		}
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.modified" && setting.Value == "true" && commitDoBuild {
+				commit += "-modificado"
+				break
+			}
+		}
+	}
+	return versao, commit, data
 }
 
 func newHarnessCmd() *cobra.Command {
