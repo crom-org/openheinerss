@@ -2,7 +2,7 @@
 
 O transporte comum é JSON-RPC 2.0 em NDJSON via `openheinerss serve --stdio`. O servidor WebSocket (`ws://127.0.0.1:4820/ws`; `OPENHEINERSS_PORTA` muda a porta) também existe; só o SDK TypeScript o usa. Os SDKs Python e PHP usam STDIO.
 
-Os três SDKs (versão 0.2.0) expõem a mesma orquestração: `registerHarness`, `listHarnesses`, `run` (`rodar.iniciar`), `listRuns`, `stopRun`, `decideRun`, `getLimits` e `subscribeEvents`. A assinatura aceita `projeto`, `agente`, `cwd` e `pasta`; os callbacks recebem `orq.inicio`, `orq.progresso`, `orq.fim`, `orq.erro` e `orq.precisa_decisao`. Em `run`, `texto` é o prompt em texto e `prompt` é o caminho de um arquivo de prompt.
+Os três SDKs (versão 1.1.0) expõem a mesma orquestração: `registerHarness`, `listHarnesses`, `run` (`rodar.iniciar`), `listRuns`, `stopRun`, `decideRun`, `getLimits` e `subscribeEvents`. A assinatura aceita `projeto`, `agente`, `cwd` e `pasta`; os callbacks recebem `orq.inicio`, `orq.progresso`, `orq.fim`, `orq.erro` e `orq.precisa_decisao`. Em `run`, `texto` é o prompt em texto e `prompt` é o caminho de um arquivo de prompt.
 
 ## TypeScript
 
@@ -29,11 +29,11 @@ for event in agent.stream("responda OK"):
         print(event["data"]["delta"], end="")
 ```
 
-Não há módulo `openheinerss.aio` nem transporte WebSocket neste SDK.
+O transporte mantém um leitor em thread: depois de `subscribe_events()` os callbacks de `orq.*` são chamados continuamente, inclusive enquanto o programa faz outra coisa, sem precisar chamar `list_runs()` para liberar eventos. `close()` encerra somente o processo filho criado pelo SDK.
 
 ## PHP
 
-`sdk/php/` oferece `Agent::session()`, `prompt()` (devolve uma string e aceita callback opcional de eventos) e `respondPermission()`, além dos métodos de orquestração. Não existe método `stream()` separado nem transporte WebSocket.
+`sdk/php/` oferece `Agent::session()`, `prompt()` (devolve uma string e aceita callback opcional de eventos), `respondPermission()` e `listen()`, além dos métodos de orquestração. Como PHP não tem uma thread portátil para esse caso, `listen($segundos)` mantém um loop de leitura com `stream_select`; use-o no processo que precisa observar eventos continuamente. Os métodos que aguardam respostas também bombeiam eventos durante a espera.
 
 ## RPC mínimo em qualquer linguagem
 
@@ -65,3 +65,5 @@ run({nome: "demo", motor: "mock", texto: "responda OK"})
 
 O changelog 1.1.0 registra a correção da porta que era 4799 na versão 0.1.0 e a
 referência antiga ao `codex run`; o adaptador atual usa `codex exec`.
+
+Em TypeScript, a primeira chamada que precisa de transporte o inicializa automaticamente; `start()` continua disponível para criar uma sessão explicitamente. Assim, `subscribeEvents`, `run`, `listRuns` e `getLimits` podem ser chamados diretamente. O evento `agent.thinking` é entregue como `thinking` (e não como `error`).

@@ -24,6 +24,7 @@ class Agent:
         self.transport = StdioTransport(bin_path)
         self.req_id = 1
         self.callbacks: Dict[str, Callable[[Dict[str, Any]], None]] = {}
+        self.transport.on_event = self._event
         self.session_id = self._create_session(
             harness=harness,
             mode=mode,
@@ -36,7 +37,7 @@ class Agent:
         req_id = self.req_id
         self.req_id += 1
 
-        self.transport.send({
+        response = self.transport.request({
             "jsonrpc": "2.0",
             "id": req_id,
             "method": "session.create",
@@ -49,15 +50,9 @@ class Agent:
             }
         })
 
-        while True:
-            line = self.transport.read_line()
-            if not line:
-                raise RuntimeError("Falha ao receber resposta de session.create")
-            msg = json.loads(line)
-            if msg.get("id") == req_id:
-                if "error" in msg:
-                    raise RuntimeError(msg["error"]["message"])
-                return msg["result"]["sessionId"]
+        if "error" in response:
+            raise RuntimeError(response["error"]["message"])
+        return response["result"]["sessionId"]
 
     def stream(self, text: str) -> Generator[Dict[str, Any], None, None]:
         req_id = self.req_id
@@ -74,16 +69,13 @@ class Agent:
         })
 
         while True:
-            line = self.transport.read_line()
-            if not line:
+            msg = self.transport.next_event()
+            if not msg:
                 break
-            msg = json.loads(line)
-
             if "method" in msg:
                 method = msg["method"]
                 params = msg.get("params", {})
 
-                self._event(msg)
                 yield {"type": method, "data": params}
 
                 if method == "agent.permission_request":
@@ -104,16 +96,9 @@ class Agent:
         """Registra um harness custom em tempo de execução."""
         req_id = self.req_id
         self.req_id += 1
-        self.transport.send({"jsonrpc": "2.0", "id": req_id, "method": "harness.register", "params": spec})
-        while True:
-            line = self.transport.read_line()
-            if not line:
-                raise RuntimeError("Falha ao registrar harness")
-            msg = json.loads(line)
-            if msg.get("id") == req_id:
-                if "error" in msg:
-                    raise RuntimeError(msg["error"]["message"])
-                return
+        response = self.transport.request({"jsonrpc": "2.0", "id": req_id, "method": "harness.register", "params": spec})
+        if "error" in response:
+            raise RuntimeError(response["error"]["message"])
 
     # Alias alinhado ao nome usado pelos SDKs TypeScript e pelo protocolo.
     def registerHarness(self, spec: Dict[str, Any]) -> None:
@@ -127,18 +112,10 @@ class Agent:
     def _request(self, method: str, params: Dict[str, Any]) -> Any:
         req_id = self.req_id
         self.req_id += 1
-        self.transport.send({"jsonrpc": "2.0", "id": req_id, "method": method, "params": params})
-        while True:
-            line = self.transport.read_line()
-            if not line:
-                raise RuntimeError(f"Falha ao receber resposta de {method}")
-            msg = json.loads(line)
-            if msg.get("method"):
-                self._event(msg)
-            if msg.get("id") == req_id:
-                if "error" in msg:
-                    raise RuntimeError(msg["error"]["message"])
-                return msg.get("result")
+        msg = self.transport.request({"jsonrpc": "2.0", "id": req_id, "method": method, "params": params})
+        if "error" in msg:
+            raise RuntimeError(msg["error"]["message"])
+        return msg.get("result")
 
     def list_harnesses(self) -> list[dict[str, Any]]:
         return self._request("harness.listar", {}).get("harnesses", [])
