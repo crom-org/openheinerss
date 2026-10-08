@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/crom-org/openheinerss/pkg/harness/process"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 	"gopkg.in/yaml.v3"
 )
@@ -346,6 +347,7 @@ func (c *customHarness) SendPrompt(ctx context.Context, text string, _ []protoco
 		}
 	}
 	cmd := exec.CommandContext(base, spec.Command, args...)
+	process.Configure(cmd)
 	cmd.Dir = cfg.CWD
 	cmd.Env = mergedCustomEnv(spec.Env, cfg.Env)
 	in, err := cmd.StdinPipe()
@@ -381,7 +383,7 @@ func (c *customHarness) read(r io.Reader) {
 func (c *customHarness) parseLine(line string) {
 	if c.spec.QuotaRegex != "" {
 		if regexp.MustCompile(c.spec.QuotaRegex).MatchString(line) {
-			c.emit(Event{Type: EventError, Payload: protocol.ErrorParams{SessionID: c.cfg.SessionID, Message: "limite de cota detectado"}})
+			c.emit(Event{Type: EventError, Payload: protocol.ErrorParams{SessionID: c.cfg.SessionID, Message: "limite de cota detectado: " + line}})
 			return
 		}
 	}
@@ -441,6 +443,9 @@ func (c *customHarness) Stop() error {
 	c.stopped = true
 	if c.cancel != nil {
 		c.cancel()
+	}
+	if c.cmd != nil && c.cmd.Process != nil {
+		_ = process.Interrupt(c.cmd)
 	}
 	return nil
 }

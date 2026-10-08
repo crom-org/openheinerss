@@ -306,6 +306,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			quota = regexp.MustCompile(s.QuotaRegex)
 		}
 		failed, quotaHit := false, false
+		quotaNotice := ""
 		for {
 			select {
 			case ev := <-h.Events():
@@ -316,10 +317,16 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				// Cota: só em erros e texto do agente; saídas de ferramentas (arquivos lidos) não contam.
 				if (ev.Type == harness.EventError || ev.Type == harness.EventText) && quota != nil && quota.MatchString(line) {
 					quotaHit = true
+					if quotaNotice == "" {
+						quotaNotice = quotaResetNotice(line)
+					}
 				}
 				// Harness custom já detecta a cota pelo próprio regex e avisa com este erro.
-				if e, ok := ev.Payload.(protocol.ErrorParams); ok && e.Message == "limite de cota detectado" {
+				if e, ok := ev.Payload.(protocol.ErrorParams); ok && strings.HasPrefix(e.Message, "limite de cota detectado") {
 					quotaHit = true
+					if quotaNotice == "" {
+						quotaNotice = quotaResetNotice(e.Message)
+					}
 				}
 				if resumo := resumoEvento(ev, &textBuf); resumo != "" {
 					o.emit(Evento{Tipo: EvProgresso, Motor: candidate, Resumo: resumo})
@@ -373,20 +380,56 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			o.emit(Evento{Tipo: EvFim, Motor: candidate, Codigo: finalCode, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: relatorio(work)})
 			return Result{o.Name, work, logPath, metaPath, attempts, finalCode}, nil
 		}
+		if quotaHit && !hasReserva(candidate) {
+			finalCode = 2
+			if quotaNotice != "" {
+				write("Falta de cota: " + quotaNotice + "\n")
+			}
+			break
+		}
 		lastErr = fmt.Errorf("execução interrompida%s", map[bool]string{true: " por falta de cota", false: ""}[quotaHit])
 		write("saiu com erro; tentando continuar...\n")
 		o.emit(Evento{Tipo: EvErro, Motor: candidate, Mensagem: lastErr.Error(), Cota: quotaHit})
 	}
 	if lastErr == nil {
-		lastErr = fmt.Errorf("nenhuma tentativa executada")
+		if finalCode != 2 {
+			lastErr = fmt.Errorf("nenhuma tentativa executada")
+		}
 	}
 	m := meta{Projeto: filepath.Base(repo), Motor: o.Motor, Conta: o.Motor, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid()}
 	code := finalCode
+	if quotaHitAtEnd(lastErr) {
+		code = 2
+	}
 	m.Fim, m.Codigo = o.Now().Format(time.RFC3339), &code
 	_ = writeMeta(filepath.Join(agents, "logs", o.Name+".meta.json"), m)
 	write(fmt.Sprintf("FIM %s código %d\n", o.Now().Format("15:04"), code))
 	o.emit(Evento{Tipo: EvFim, Motor: o.Motor, Codigo: code, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: relatorio(work)})
-	return Result{o.Name, work, logPath, filepath.Join(agents, "logs", o.Name+".meta.json"), attempts, code}, lastErr
+	result := Result{o.Name, work, logPath, filepath.Join(agents, "logs", o.Name+".meta.json"), attempts, code}
+	if code == 2 {
+		return result, nil
+	}
+	return result, lastErr
+}
+
+func hasReserva(name string) bool {
+	s, ok := harness.CustomSpecFor(name)
+	return ok && len(s.Reserva) > 0
+}
+
+func quotaResetNotice(line string) string {
+	line = strings.TrimSpace(line)
+	if i := strings.Index(strings.ToLower(line), "resets"); i >= 0 {
+		return strings.TrimSpace(line[i:])
+	}
+	if i := strings.Index(strings.ToLower(line), "reinicia"); i >= 0 {
+		return strings.TrimSpace(line[i:])
+	}
+	return ""
+}
+
+func quotaHitAtEnd(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "falta de cota")
 }
 
 func relatorio(work string) string {
@@ -544,8 +587,11 @@ func activeAgents(agents string) (int, error) {
 		if json.Unmarshal(b, &m) != nil || m.Fim != "" || m.PID <= 0 {
 			continue
 		}
-		if p, er := os.FindProcess(m.PID); er == nil && p.Signal(syscall.Signal(0)) == nil {
-			n++
+		logName := strings.TrimSuffix(e.Name(), ".meta.json") + ".log"
+		if !staleLog(filepath.Join(agents, "logs", logName), time.Now()) {
+			if p, er := os.FindProcess(m.PID); er == nil && p.Signal(syscall.Signal(0)) == nil {
+				n++
+			}
 		}
 	}
 	return n, nil

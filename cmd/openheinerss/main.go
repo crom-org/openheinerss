@@ -75,7 +75,64 @@ Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC d
 	rootCmd.AddCommand(newLimitesCmd())
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newDocsCmd())
+	rootCmd.AddCommand(newAgentesCmd())
 	return rootCmd
+}
+
+func newAgentesCmd() *cobra.Command {
+	var agentsDir string
+	var jsonOutput bool
+	listar := func() error {
+		dir, err := filepath.Abs(agentsDir)
+		if err != nil {
+			return err
+		}
+		items, err := orchestrator.ListAgents(dir, time.Now())
+		if err != nil {
+			return err
+		}
+		if jsonOutput {
+			b, err := json.MarshalIndent(items, "", "  ")
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(b))
+			return nil
+		}
+		for _, a := range items {
+			fmt.Printf("%-20s %-18s motor=%-16s tentativa=%d início=%s duração=%s última=%s\n", a.Nome, a.Estado, a.Motor, a.Tentativa, a.Inicio, a.Duracao, a.UltimaLinha)
+		}
+		return nil
+	}
+	root := &cobra.Command{Use: "agentes", Aliases: []string{"agents"}, Short: "Lista e controla agentes em execução", RunE: func(cmd *cobra.Command, args []string) error { return listar() }}
+	root.PersistentFlags().StringVar(&agentsDir, "pasta-agentes", ".claude/agentes", "Pasta dos agentes")
+	root.PersistentFlags().StringVar(&agentsDir, "agents-dir", ".claude/agentes", "Alias em inglês de --pasta-agentes")
+	root.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Emite JSON")
+	root.AddCommand(&cobra.Command{Use: "listar", Aliases: []string{"list"}, Short: "Lista os agentes e seus estados", RunE: func(cmd *cobra.Command, args []string) error { return listar() }})
+	root.AddCommand(&cobra.Command{Use: "ver <nome>", Aliases: []string{"show"}, Short: "Mostra o fim do log de um agente", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		dir, err := filepath.Abs(agentsDir)
+		if err != nil {
+			return err
+		}
+		log, err := orchestrator.ShowAgentLog(dir, args[0], 80)
+		if err != nil {
+			return err
+		}
+		fmt.Println(log)
+		return nil
+	}})
+	root.AddCommand(&cobra.Command{Use: "parar <nome>", Aliases: []string{"stop"}, Short: "Para somente o agente informado", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		dir, err := filepath.Abs(agentsDir)
+		if err != nil {
+			return err
+		}
+		if err := orchestrator.StopAgent(dir, args[0], time.Now()); err != nil {
+			return err
+		}
+		fmt.Printf("Agente %s parado (código 130)\n", args[0])
+		return nil
+	}})
+	return root
 }
 
 func newDocsCmd() *cobra.Command {
@@ -403,7 +460,7 @@ func newRunCmd() *cobra.Command {
 func newRodarCmd() *cobra.Command {
 	var modelo, esforco, prompt, pasta, branchBase string
 	var retomar bool
-	var carga float64
+	var carga, cargaAbaixo float64
 	var maxAgentes, tentativas int
 	var cotaMax float64
 	cmd := &cobra.Command{
@@ -418,6 +475,9 @@ func newRodarCmd() *cobra.Command {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return err
+			}
+			if cargaAbaixo > 0 {
+				carga = cargaAbaixo
 			}
 			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, PromptFile: prompt, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax})
 			if err != nil {
@@ -441,6 +501,8 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().StringVar(&branchBase, "base-branch", "", "Alias em inglês de --branch-base")
 	cmd.Flags().Float64Var(&carga, "carga-maxima", 0, "Carga máxima de 1 minuto; 0 desativa")
 	cmd.Flags().Float64Var(&carga, "max-load", 0, "Alias em inglês de --carga-maxima")
+	cmd.Flags().Float64Var(&cargaAbaixo, "quando-carga-abaixo", 0, "Só começa quando a carga numérica ficar abaixo deste valor")
+	cmd.Flags().Float64Var(&cargaAbaixo, "when-load-below", 0, "Alias em inglês de --quando-carga-abaixo")
 	cmd.Flags().IntVar(&maxAgentes, "max-agentes", 0, "Máximo de agentes simultâneos")
 	cmd.Flags().IntVar(&maxAgentes, "max-agents", 0, "Alias em inglês de --max-agentes")
 	cmd.Flags().IntVar(&tentativas, "tentativas", 0, "Máximo de tentativas")

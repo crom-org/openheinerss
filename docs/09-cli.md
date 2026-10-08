@@ -13,6 +13,7 @@ Usage:
   openheinerss [command]
 
 Available Commands:
+  agentes     Lista e controla agentes em execução
   docs        Gera ou verifica o manual do CLI em docs/09-cli.md
   doctor      Verifica ferramentas, dependências e pré-requisitos do sistema
   harness     Lista, instala e testa harnesses
@@ -26,6 +27,32 @@ Available Commands:
   version     Exibe a versão do Openheinerss
 
 Use "openheinerss [command] --help" for more information about a command.
+
+```
+
+## `openheinerss agentes --help`
+
+```text
+Lista e controla agentes em execução
+
+Usage:
+  openheinerss agentes [flags]
+  openheinerss agentes [command]
+
+Aliases:
+  agentes, agents
+
+Available Commands:
+  listar      Lista os agentes e seus estados
+  parar       Para somente o agente informado
+  ver         Mostra o fim do log de um agente
+
+Flags:
+      --agents-dir string      Alias em inglês de --pasta-agentes (default ".claude/agentes")
+      --json                   Emite JSON
+      --pasta-agentes string   Pasta dos agentes (default ".claude/agentes")
+
+Use "openheinerss agentes [command] --help" for more information about a command.
 
 ```
 
@@ -148,26 +175,28 @@ Aliases:
   rodar, launch, dispatch
 
 Flags:
-      --agentes string         Alias de --pasta-agentes
-      --agents-dir string      Alias em inglês de --pasta-agentes
-      --base-branch string     Alias em inglês de --branch-base
-      --branch-base string     Branch base da worktree (padrão main)
-      --carga-maxima float     Carga máxima de 1 minuto; 0 desativa
-      --cota-max float         Pula instâncias com uso de cota igual ou acima deste percentual (0 desativa)
-      --effort string          Alias em inglês de --esforco
-      --esforco string         Esforço de raciocínio
-      --max-agentes int        Máximo de agentes simultâneos
-      --max-agents int         Alias em inglês de --max-agentes
-      --max-load float         Alias em inglês de --carga-maxima
-      --model string           Alias em inglês de --modelo
-      --modelo string          Modelo a usar
-      --pasta-agentes string   Pasta dos agentes (padrão .claude/agentes)
-      --prompt string          Arquivo de prompt alternativo
-      --quota-max float        Alias em inglês de --cota-max
-      --resume                 Alias em inglês de --retomar
-      --retomar                Acrescenta o texto de continuação e preserva o log
-      --retries int            Alias em inglês de --tentativas
-      --tentativas int         Máximo de tentativas
+      --agentes string              Alias de --pasta-agentes
+      --agents-dir string           Alias em inglês de --pasta-agentes
+      --base-branch string          Alias em inglês de --branch-base
+      --branch-base string          Branch base da worktree (padrão main)
+      --carga-maxima float          Carga máxima de 1 minuto; 0 desativa
+      --cota-max float              Pula instâncias com uso de cota igual ou acima deste percentual (0 desativa)
+      --effort string               Alias em inglês de --esforco
+      --esforco string              Esforço de raciocínio
+      --max-agentes int             Máximo de agentes simultâneos
+      --max-agents int              Alias em inglês de --max-agentes
+      --max-load float              Alias em inglês de --carga-maxima
+      --model string                Alias em inglês de --modelo
+      --modelo string               Modelo a usar
+      --pasta-agentes string        Pasta dos agentes (padrão .claude/agentes)
+      --prompt string               Arquivo de prompt alternativo
+      --quando-carga-abaixo float   Só começa quando a carga numérica ficar abaixo deste valor
+      --quota-max float             Alias em inglês de --cota-max
+      --resume                      Alias em inglês de --retomar
+      --retomar                     Acrescenta o texto de continuação e preserva o log
+      --retries int                 Alias em inglês de --tentativas
+      --tentativas int              Máximo de tentativas
+      --when-load-below float       Alias em inglês de --quando-carga-abaixo
 
 ```
 
@@ -231,6 +260,60 @@ Usage:
 
 Aliases:
   version, versao
+
+```
+
+## `openheinerss agentes listar --help`
+
+```text
+Lista os agentes e seus estados
+
+Usage:
+  openheinerss agentes listar [flags]
+
+Aliases:
+  listar, list
+
+Global Flags:
+      --agents-dir string      Alias em inglês de --pasta-agentes (default ".claude/agentes")
+      --json                   Emite JSON
+      --pasta-agentes string   Pasta dos agentes (default ".claude/agentes")
+
+```
+
+## `openheinerss agentes parar --help`
+
+```text
+Para somente o agente informado
+
+Usage:
+  openheinerss agentes parar <nome> [flags]
+
+Aliases:
+  parar, stop
+
+Global Flags:
+      --agents-dir string      Alias em inglês de --pasta-agentes (default ".claude/agentes")
+      --json                   Emite JSON
+      --pasta-agentes string   Pasta dos agentes (default ".claude/agentes")
+
+```
+
+## `openheinerss agentes ver --help`
+
+```text
+Mostra o fim do log de um agente
+
+Usage:
+  openheinerss agentes ver <nome> [flags]
+
+Aliases:
+  ver, show
+
+Global Flags:
+      --agents-dir string      Alias em inglês de --pasta-agentes (default ".claude/agentes")
+      --json                   Emite JSON
+      --pasta-agentes string   Pasta dos agentes (default ".claude/agentes")
 
 ```
 
