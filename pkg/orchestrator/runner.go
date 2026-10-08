@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -29,11 +30,15 @@ import (
 )
 
 const continuation = "\n\n--- CONTINUAÇÃO ---\nUma execução anterior desta MESMA tarefa foi interrompida (erro ou cota). NÃO recomece do zero: rode `git status` e `git log --oneline -10`, leia RELATORIO-AGENTE.md e os arquivos já alterados nesta pasta (ou os relatórios em .claude/agentes/relatorios/ se for missão), confira o que já está pronto e termine SOMENTE o que falta, depois finalize como a tarefa pede."
+const missionRules = "\n\n--- MISSÃO SOMENTE LEITURA ---\nEsta é uma missão de inspeção. Não crie, altere, remova ou comite arquivos; não use worktree. Apenas leia e relate o que encontrar."
 
 type Options struct {
 	Name, Motor, Model, Effort, PromptFile string
 	// PromptText é o prompt em texto; quando preenchido, vale no lugar de PromptFile e de prompts/<nome>.md.
 	PromptText            string
+	Conta, Regras         string
+	SemRegras, Seco       bool
+	KeysFile              string
 	Retomar               bool
 	AgentsDir, BranchBase string
 	MaxLoad               float64
@@ -159,6 +164,18 @@ func (o Options) defaults() Options {
 	if o.Attempts <= 0 {
 		o.Attempts = envInt("TENTATIVAS", 4)
 	}
+	if o.Model == "" {
+		o.Model = os.Getenv("MODELO")
+	}
+	if o.Effort == "" {
+		o.Effort = os.Getenv("ESFORCO")
+	}
+	if o.Conta == "" {
+		o.Conta = os.Getenv("CONTA")
+	}
+	if !o.Seco {
+		o.Seco = os.Getenv("RODAR_SECO") == "1"
+	}
 	if o.MaxLoad <= 0 {
 		o.MaxLoad = envFloat("CARGA_MAXIMA", 0)
 	}
@@ -221,10 +238,19 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		return Result{}, err
 	}
 	// O prompt é lido antes: sem ele não vale criar worktree e branch que ninguém vai usar.
-	prompt, err := readPrompt(agents, o.Name, o.PromptFile, o.PromptText)
+	prompt, err := readPromptOptions(agents, o.Name, o.PromptFile, o.PromptText, o.Regras, o.SemRegras)
 	if err != nil {
 		return Result{}, err
 	}
+	if o.Seco {
+		fmt.Printf("SECO: %s\n", dryRunCommand(o))
+		return Result{Name: o.Name, Code: 0}, nil
+	}
+	restoreKeys, err := loadKeys(o.KeysFile)
+	if err != nil {
+		return Result{}, err
+	}
+	defer restoreKeys()
 	work, err := prepareWorktree(ctx, repo, agents, o.Name, o.BranchBase)
 	if err != nil {
 		return Result{}, err
@@ -297,9 +323,16 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		if modeloMeta == "" {
 			modeloMeta = "padrão"
 		}
-		m := meta{Projeto: filepath.Base(repo), Motor: candidate, Modelo: modeloMeta, Esforco: effort, Conta: candidate, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid(), Servidor: o.ViaServidor}
+		conta := o.Conta
+		if conta == "" {
+			conta = candidate
+		}
+		m := meta{Projeto: filepath.Base(repo), Motor: candidate, Modelo: modeloMeta, Esforco: effort, Conta: conta, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid(), Servidor: o.ViaServidor}
 		metaPath := filepath.Join(agents, "logs", o.Name+".meta.json")
 		if err := writeMeta(metaPath, m); err != nil {
+			return Result{}, err
+		}
+		if err := os.WriteFile(filepath.Join(agents, "logs", o.Name+".modelo"), []byte(modeloMeta+"\n"), 0644); err != nil {
 			return Result{}, err
 		}
 		ran = true
@@ -436,7 +469,11 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			lastErr = fmt.Errorf("nenhuma tentativa executada")
 		}
 	}
-	m := meta{Projeto: filepath.Base(repo), Motor: o.Motor, Conta: o.Motor, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid(), Servidor: o.ViaServidor}
+	conta := o.Conta
+	if conta == "" {
+		conta = o.Motor
+	}
+	m := meta{Projeto: filepath.Base(repo), Motor: o.Motor, Conta: conta, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid(), Servidor: o.ViaServidor}
 	code := finalCode
 	if quotaHitAtEnd(lastErr) {
 		code = 2
@@ -519,6 +556,10 @@ func gitRoot(cwd string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 func readPrompt(agents, name, explicit, text string) (string, error) {
+	return readPromptOptions(agents, name, explicit, text, "", false)
+}
+
+func readPromptOptions(agents, name, explicit, text, rulesPath string, noRules bool) (string, error) {
 	b := []byte(text)
 	if text == "" {
 		prompt := explicit
@@ -530,15 +571,26 @@ func readPrompt(agents, name, explicit, text string) (string, error) {
 			return "", fmt.Errorf("abrir prompt %s: %w", prompt, err)
 		}
 	}
-	rules := "_regras.md"
+	rules := rulesPath
+	if rules == "" {
+		rules = "_regras.md"
+	}
 	if strings.HasPrefix(name, "missao-") {
-		rules = "_regras-missao.md"
+		if rulesPath == "" {
+			rules = "_regras-missao.md"
+		}
 	}
-	rb, err := os.ReadFile(filepath.Join(agents, "prompts", rules))
-	if err == nil {
-		return string(rb) + "\n\n" + string(b), nil
+	result := string(b)
+	if !noRules {
+		rb, err := os.ReadFile(filepath.Join(agents, "prompts", rules))
+		if err == nil {
+			result = string(rb) + "\n\n" + result
+		}
 	}
-	return string(b), nil
+	if strings.HasPrefix(name, "missao-") {
+		result += missionRules
+	}
+	return result, nil
 }
 func eventText(e harness.Event) string {
 	b, _ := json.Marshal(e.Payload)
@@ -623,11 +675,95 @@ func writeMeta(path string, m meta) error {
 	if err != nil {
 		return err
 	}
-	tmp := path + ".tmp"
-	if err = os.WriteFile(tmp, append(b, '\n'), 0600); err != nil {
+	dir := filepath.Dir(path)
+	base := filepath.Base(path)
+	tmpFile, err := os.CreateTemp(dir, base+".tmp-")
+	if err != nil {
+		return err
+	}
+	tmp := tmpFile.Name()
+	defer os.Remove(tmp)
+	if err = tmpFile.Chmod(0600); err == nil {
+		_, err = tmpFile.Write(append(b, '\n'))
+	}
+	if closeErr := tmpFile.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+func dryRunCommand(o Options) string {
+	model := o.Model
+	if model == "" {
+		model = "<padrão>"
+	}
+	commands := map[string]string{
+		"codex":    "codex exec",
+		"codex2":   "CODEX_HOME=~/.codex-compartilhado codex exec",
+		"claude":   "claude -p",
+		"agy":      "agy -p",
+		"opencode": "opencode run",
+		"aider":    "aider --message",
+	}
+	command := commands[o.Motor]
+	if spec, ok := harness.CustomSpecFor(o.Motor); ok && spec.Command != "" {
+		command = spec.Command + " " + strings.Join(spec.Args, " ")
+	}
+	if command == "" {
+		command = o.Motor
+	}
+	return command + " --model " + model + " <prompt>"
+}
+
+var keysMu sync.Mutex
+
+func loadKeys(path string) (func(), error) {
+	if path == "" {
+		return func() {}, nil
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("abrir arquivo de chaves: %w", err)
+	}
+	values := make(map[string]string)
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "export ") && strings.TrimSpace(strings.TrimPrefix(line, "export ")) == "" {
+			continue
+		}
+		line = strings.TrimPrefix(line, "export ")
+		key, value, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(key) == "" {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		value = strings.Trim(strings.TrimSpace(value), "\"'")
+		values[key] = value
+	}
+	keysMu.Lock()
+	previous := make(map[string]*string, len(values))
+	for key, value := range values {
+		if old, ok := os.LookupEnv(key); ok {
+			copy := old
+			previous[key] = &copy
+		} else {
+			previous[key] = nil
+		}
+		_ = os.Setenv(key, value)
+	}
+	return func() {
+		for key, old := range previous {
+			if old == nil {
+				_ = os.Unsetenv(key)
+			} else {
+				_ = os.Setenv(key, *old)
+			}
+		}
+		keysMu.Unlock()
+	}, nil
 }
 func waitLimits(ctx context.Context, agents string, o Options) error {
 	for {

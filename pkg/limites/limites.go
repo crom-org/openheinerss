@@ -61,6 +61,7 @@ func Obter() Resultado {
 	instancias := make([]Instancia, 0)
 	seen := map[string]bool{}
 	add := func(i Instancia) {
+		i.Janelas = janelasVigentes(i.Janelas, agora)
 		if !seen[i.Nome] {
 			seen[i.Nome] = true
 			instancias = append(instancias, i)
@@ -127,6 +128,19 @@ func maiorPercentual(i Instancia, agora time.Time) (float64, bool) {
 		}
 	}
 	return maior, validas > 0
+}
+
+func janelasVigentes(janelas []Janela, agora time.Time) []Janela {
+	result := make([]Janela, 0, len(janelas))
+	for _, j := range janelas {
+		if j.ReiniciaEm != "" {
+			if t, err := time.Parse(time.RFC3339, j.ReiniciaEm); err == nil && t.Before(agora) {
+				continue
+			}
+		}
+		result = append(result, j)
+	}
+	return result
 }
 
 func nomesCustom() []string {

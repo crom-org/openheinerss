@@ -1,0 +1,8 @@
+name: goose-openrouter
+displayName: Goose via OpenRouter (exemplo)
+command: goose
+args: [run, -t]
+env:
+  GOOSE_PROVIDER: openrouter
+  GOOSE_MODEL: openrouter/free
+prompt: argument

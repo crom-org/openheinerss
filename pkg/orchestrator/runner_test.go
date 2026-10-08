@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -305,5 +306,39 @@ func TestRunComPromptEmTextoNaoPrecisaDeArquivo(t *testing.T) {
 	res, err := Run(context.Background(), root, Options{Name: "texto-inline", Motor: "mock", AgentsDir: agents, PromptText: "responda OK", Attempts: 1})
 	if err != nil || res.Code != 0 {
 		t.Fatalf("err=%v código=%d", err, res.Code)
+	}
+}
+
+func TestWriteMetaConcorrenteNaoUsaTemporarioCompartilhado(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agente.meta.json")
+	const n = 32
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			if err := writeMeta(path, meta{Motor: "teste", Tentativa: i + 1, PID: i + 1}); err != nil {
+				t.Errorf("escrita %d: %v", i, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	var got meta
+	if err := json.Unmarshal([]byte(mustRead(t, path)), &got); err != nil {
+		t.Fatalf("meta final inválido: %v", err)
+	}
+	if got.Motor != "teste" || got.Tentativa < 1 || got.Tentativa > n {
+		t.Fatalf("meta final inesperado: %+v", got)
+	}
+}
+
+func TestRunSecoNaoCriaWorktree(t *testing.T) {
+	root, agents := repoFixture(t)
+	res, err := Run(context.Background(), root, Options{Name: "seco", Motor: "codex", AgentsDir: agents, PromptText: "não executar", Seco: true})
+	if err != nil || res.Code != 0 {
+		t.Fatalf("seco: resultado=%+v erro=%v", res, err)
+	}
+	if _, err := os.Stat(filepath.Join(agents, "seco")); !os.IsNotExist(err) {
+		t.Fatalf("modo seco criou worktree: %v", err)
 	}
 }
