@@ -205,7 +205,7 @@ func TestRunErroProvedorNaoViraFimZero(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(agents, "prompts", "provedor-falha.md"), []byte("prompt"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	res, err := Run(context.Background(), root, Options{Name: "provedor-falha", Motor: "provedor-sem-reserva", AgentsDir: agents, Attempts: 3, MaxAgents: 99})
+	res, err := Run(context.Background(), root, Options{Name: "provedor-falha", Motor: "provedor-sem-reserva", AgentsDir: agents, Attempts: 3, MaxAgents: 99, Sleep: func(time.Duration) {}})
 	if err == nil || res.Code != 1 || strings.Contains(mustRead(t, res.LogFile), "código 0") {
 		t.Fatalf("erro de provedor aceito como sucesso: err=%v código=%d log=%s", err, res.Code, mustRead(t, res.LogFile))
 	}
@@ -275,31 +275,6 @@ func TestFimComAvisoNoStderrNaoEFalha(t *testing.T) {
 	res, err := Run(context.Background(), root, Options{Name: "aviso", Motor: "aviso-teste", AgentsDir: agents, MaxAgents: 99})
 	if err != nil || res.Code != 0 || res.Attempts != 1 {
 		t.Fatalf("aviso no stderr virou falha: err=%v código=%d tentativas=%d", err, res.Code, res.Attempts)
-	}
-}
-
-func TestMissaoExecutaNaRaizDoProjeto(t *testing.T) {
-	root, agents := repoFixture(t)
-	marker := filepath.Join(root, "cwd.txt")
-	script := filepath.Join(root, "cwd.sh")
-	if err := os.WriteFile(script, []byte("#!/bin/sh\npwd > \""+marker+"\"\nprintf '%s\\n' '{\"type\":\"text\",\"text\":\"ok\"}'\nprintf '%s\\n' '{\"type\":\"end\"}'\n"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := harness.RegisterCustom(harness.CustomSpec{Name: "cwd-missao-teste", Command: script}); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(agents, "prompts", "missao-lacunas.md"), []byte("prompt"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Run(context.Background(), root, Options{Name: "missao-lacunas", Motor: "cwd-missao-teste", AgentsDir: agents, MaxAgents: 99}); err != nil {
-		t.Fatal(err)
-	}
-	b, err := os.ReadFile(marker)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.TrimSpace(string(b)) != root {
-		t.Fatalf("CWD da missão: %q; esperado %q", strings.TrimSpace(string(b)), root)
 	}
 }
 

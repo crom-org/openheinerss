@@ -2,9 +2,24 @@
 
 `openheinerss rodar <nome> <instância|harness>` executa o prompt em
 `.claude/agentes/prompts/<nome>.md`, acrescentando `prompts/_regras.md`.
-Agentes comuns recebem uma worktree `agente/<nome>`; nomes `missao-*` usam
-uma pasta simples. O padrão da worktree é `.claude/agentes` e a branch base é
-`main`.
+Agentes comuns recebem uma worktree `agente/<nome>`. O padrão da pasta é
+`.claude/agentes` e a branch base é `main` (se o repositório não tiver `main`,
+vale a branch atual/HEAD; sem commits ou com `--branch-base` inexistente o
+`rodar` falha com a causa no log e no `FIM`, nunca em silêncio).
+
+**Raiz do repositório.** A pasta de agentes, os logs, os limites e o nome do
+projeto são sempre os do REPOSITÓRIO (`git rev-parse --git-common-dir`), mesmo
+quando o `rodar` (ou `agentes`) é chamado de dentro de uma worktree, inclusive
+a de outro agente: nada de worktree aninhada, logs divididos ou
+`projeto=nome-da-worktree`.
+
+**Missões somente leitura.** Nomes `missao-*` rodam numa pasta descartável
+(uma worktree solta do repositório, ou pasta vazia se isso falhar) apagada no
+fim; nada que o motor criar (`.aider*`, `.gitignore`…) chega ao repositório.
+
+**Limite de agentes.** `--max-agentes` conta as vagas e registra o `meta.json`
+sob uma trava (`logs/.vagas.lock`): com `--max-agentes 2` nunca rodam mais de 2
+ao mesmo tempo, mesmo quando uma vaga é liberada por `agentes parar`.
 
 ```bash
 openheinerss rodar revisor claude-conta2 --modelo claude-sonnet --esforco high
@@ -14,6 +29,12 @@ openheinerss rodar curta claude-conta2 --modo sdk --texto "crie SDK-OK.txt e fa�
 ```
 
 `--texto` (`--text`) dá o prompt direto na linha de comando, sem arquivo; `--prompt` aponta outro arquivo. O nome do agente só aceita letras, números, `.`, `_` e `-` (ele vira nome de pasta e de branch).
+
+`--seco` (`--dry-run`) não cria pasta, trava nem arquivo: imprime o comando
+completo (binário, modelo efetivo e argumentos; valores de variáveis com
+KEY/TOKEN/SECRET aparecem como `***`). Quando o `rodar` termina com código ≠ 0,
+a linha final do terminal traz a causa curta: `FIM nome código 1: <causa>`; o
+detalhe fica no log.
 
 Por padrão, o runner acrescenta regras curtas ao prompt: trabalhar somente dentro da pasta/worktree do agente e não fazer buscas fora dela (`find /`, `find ~`, `locate` ou varreduras de disco). Use `--sem-regras-padrao` (`--no-default-rules`) para desligá-las. Também é possível definir `regras_padroes: caminho/para/regras.txt` em `.openheinerss/config.yaml`; `sem_regras_padroes: true` desliga as regras pela configuração.
 
@@ -30,6 +51,22 @@ também aceita `--modo sdk` para forçar o modo. Erro de provedor (sobrecarga,
 indisponibilidade, HTTP 429/5xx ou o padrão `error_regex`/`erro_regex` da
 instância) é falha mesmo quando o motor termina com `completed`; com `reserva`,
 a próxima instância é tentada.
+
+**Cota e sobrecarga só no texto.** O padrão de cota (regex da instância ou o
+padrão) e o de erro de provedor valem para eventos de erro. Uma instância que
+apenas imprime a frase no stdout e sai com 0, sem regex, também é tratada como
+falha, mas só quando o turno não produziu resultado: nenhuma ferramenta usada,
+texto final curto (até 160 caracteres) e a frase do provedor logo no início
+(ex.: `You've hit your session limit · resets 3pm`, `Service temporarily
+overloaded`). **Limitação:** um agente que escreve sobre "cota" num resumo, usa
+ferramentas ou responde algo mais longo nunca é confundido (houve falsos
+positivos reais); em troca, uma mensagem do provedor embutida num texto maior
+não é reconhecida sem `quotaRegex`/`error_regex` na instância.
+
+**Erro transitório sem reserva.** Sem `reserva`, erro do provedor repete a
+MESMA instância até `--tentativas`, com espera curta crescente (2 s, 4 s, 6 s…
+até 10 s). Com `reserva`, troca de instância na hora. Cota sem reserva não é
+repetida (código 2).
 
 Um agente interrompido por Ctrl-C deixa a worktree e o log para o `--retomar`. Limites opcionais: `--carga-maxima`, `--max-agentes`, `--pasta-agentes` e
 `--branch-base`. O protocolo JSON-RPC oferece os mesmos recursos pelo método

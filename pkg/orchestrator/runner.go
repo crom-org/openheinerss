@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -96,6 +95,8 @@ type Result struct {
 	Name, WorkDir, LogFile, MetaFile string
 	Attempts                         int
 	Code                             int
+	// Causa é a razão curta de um Code ≠ 0 (vazia no sucesso); o detalhe fica no log.
+	Causa string
 }
 
 type meta struct {
@@ -149,17 +150,8 @@ func curto(s string, n int) string {
 }
 
 func (o Options) defaults() Options {
-	if o.AgentsDir == "" {
-		o.AgentsDir = os.Getenv("AGENTES")
-	}
-	if o.AgentsDir == "" {
-		o.AgentsDir = ".claude/agentes"
-	}
 	if o.BranchBase == "" {
 		o.BranchBase = os.Getenv("BRANCH_BASE")
-	}
-	if o.BranchBase == "" {
-		o.BranchBase = "main"
 	}
 	if o.MaxAgents <= 0 {
 		o.MaxAgents = envInt("MAX_AGENTES", 4)
@@ -211,6 +203,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	if o.QuotaMax <= 0 {
 		o.QuotaMax = envFloat("OPENHEINERSS_COTA_MAX", envFloat("COTA_MAX", 0))
 	}
+	// A raiz é a do REPOSITÓRIO (git-common-dir), mesmo quando chamado de dentro de uma worktree de agente.
 	repo, err := gitRoot(cwd)
 	if err != nil {
 		return Result{}, err
@@ -232,8 +225,24 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		o.RegrasPadrao = filepath.Join(repo, o.RegrasPadrao)
 	}
 	agents := o.AgentsDir
+	if agents == "" {
+		agents = os.Getenv("AGENTES")
+	}
+	if agents == "" {
+		agents = ".claude/agentes"
+	}
 	if !filepath.IsAbs(agents) {
 		agents = filepath.Join(repo, agents)
+	}
+	// O prompt é lido antes: sem ele não vale criar worktree e branch que ninguém vai usar.
+	prompt, err := readPromptOptions(agents, o.Name, o.PromptFile, o.PromptText, o.Regras, o.RegrasPadrao, o.SemRegras)
+	if err != nil {
+		return Result{}, err
+	}
+	// --seco não toca no disco: nada de pastas, travas ou meta.json.
+	if o.Seco {
+		fmt.Printf("SECO: %s\n", dryRunCommand(o))
+		return Result{Name: o.Name, Code: 0}, nil
 	}
 	if err := os.MkdirAll(filepath.Join(agents, "logs"), 0755); err != nil {
 		return Result{}, err
@@ -246,29 +255,26 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	if err := rejectLiveMeta(agents, o.Name); err != nil {
 		return Result{}, err
 	}
-	// Respeita os limites antes de criar uma worktree, que pode ser uma
-	// operação cara e não deve começar enquanto outro agente ocupa a vaga.
-	if err := waitLimits(ctx, agents, o); err != nil {
+	start := o.Now()
+	metaPath := filepath.Join(agents, "logs", o.Name+".meta.json")
+	conta := o.Conta
+	if conta == "" {
+		conta = o.Motor
+	}
+	cur := meta{Projeto: filepath.Base(repo), Motor: o.Motor, Modelo: "padrão", Conta: conta, Tentativa: 1, Inicio: start.Format(time.RFC3339), PID: os.Getpid(), Servidor: o.ViaServidor}
+	// Respeita os limites antes de criar uma worktree (operação cara). Contar as vagas e registrar o
+	// meta.json acontecem sob a mesma trava: assim o limite vale mesmo com agentes entrando juntos.
+	if err := reserveSlot(ctx, agents, o, cur); err != nil {
 		return Result{}, err
 	}
-	// O prompt é lido antes: sem ele não vale criar worktree e branch que ninguém vai usar.
-	prompt, err := readPromptOptions(agents, o.Name, o.PromptFile, o.PromptText, o.Regras, o.RegrasPadrao, o.SemRegras)
-	if err != nil {
-		return Result{}, err
-	}
-	if o.Seco {
-		fmt.Printf("SECO: %s\n", dryRunCommand(o))
-		return Result{Name: o.Name, Code: 0}, nil
-	}
-	restoreKeys, err := loadKeys(o.KeysFile)
-	if err != nil {
-		return Result{}, err
-	}
-	defer restoreKeys()
-	work, err := prepareWorktree(ctx, repo, agents, o.Name, o.BranchBase)
-	if err != nil {
-		return Result{}, err
-	}
+	finalized := false
+	defer func() {
+		if !finalized { // saída inesperada: nunca deixa uma vaga ocupada para sempre
+			code := 1
+			cur.Fim, cur.Codigo = o.Now().Format(time.RFC3339), &code
+			_ = writeMeta(metaPath, cur)
+		}
+	}()
 	logPath := filepath.Join(agents, "logs", o.Name+".log")
 	if !o.Retomar {
 		if err := os.WriteFile(logPath, nil, 0644); err != nil {
@@ -283,10 +289,41 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	// com o disco ocupado ele levava segundos por chamada e atrasava até o fim do processo.
 	defer lf.Close()
 	write := func(s string) { _, _ = lf.WriteString(s) }
-
+	work := ""
+	attempts := 0
+	// finish fecha meta, log, evento e resultado; é o único caminho de saída depois da reserva da vaga.
+	finish := func(code int, causa, motorName string, nl bool) Result {
+		cur.Fim, cur.Codigo = o.Now().Format(time.RFC3339), &code
+		_ = writeMeta(metaPath, cur)
+		prefix := ""
+		if nl {
+			prefix = "\n"
+		}
+		write(fmt.Sprintf("%sFIM %s código %d\n", prefix, o.Now().Format("15:04"), code))
+		appendEventLog(o, filepath.Base(repo), o.Name, code, motorName)
+		o.emit(Evento{Tipo: EvFim, Motor: motorName, Codigo: code, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: relatorio(work)})
+		finalized = true
+		return Result{Name: o.Name, WorkDir: work, LogFile: logPath, MetaFile: metaPath, Attempts: attempts, Code: code, Causa: causa}
+	}
+	// abort registra no log e no FIM um erro de preparação: nada de sair mudo.
+	abort := func(e error) (Result, error) {
+		write("ERRO: " + e.Error() + "\n")
+		o.emit(Evento{Tipo: EvErro, Motor: o.Motor, Mensagem: e.Error()})
+		return finish(1, curto(e.Error(), 200), o.Motor, false), e
+	}
+	restoreKeys, err := loadKeys(o.KeysFile)
+	if err != nil {
+		return abort(err)
+	}
+	defer restoreKeys()
+	work, cleanup, err := prepareWorktree(ctx, repo, agents, o.Name, o.BranchBase)
+	if err != nil {
+		return abort(err)
+	}
+	defer cleanup()
 	profile, err := motor.Resolve(o.Motor, o.Model, o.Effort)
 	if err != nil {
-		return Result{}, err
+		return abort(err)
 	}
 	candidates := []string{o.Motor}
 	if spec, ok := harness.CustomSpecFor(o.Motor); ok {
@@ -298,10 +335,8 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	for len(candidates) < o.Attempts {
 		candidates = append(candidates, candidates[len(candidates)-1])
 	}
-	start := o.Now()
 	var lastErr error
 	finalCode := 1
-	attempts := 0
 	quotaSkipped, ran := false, false
 	resumeID, resumeMotor := "", ""
 	for i, candidate := range candidates {
@@ -315,8 +350,8 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				continue
 			}
 		}
-		if err := waitLimits(ctx, agents, o); err != nil {
-			return Result{}, err
+		if err := waitLoad(ctx, o); err != nil {
+			return finish(1, err.Error(), o.Motor, false), err
 		}
 		p := profile
 		if candidate != o.Motor {
@@ -337,17 +372,15 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		if modeloMeta == "" {
 			modeloMeta = "padrão"
 		}
-		conta := o.Conta
-		if conta == "" {
-			conta = candidate
+		cur.Motor, cur.Modelo, cur.Esforco, cur.Tentativa = candidate, modeloMeta, effort, attempts
+		if o.Conta == "" {
+			cur.Conta = candidate
 		}
-		m := meta{Projeto: filepath.Base(repo), Motor: candidate, Modelo: modeloMeta, Esforco: effort, Conta: conta, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid(), Servidor: o.ViaServidor}
-		metaPath := filepath.Join(agents, "logs", o.Name+".meta.json")
-		if err := writeMeta(metaPath, m); err != nil {
-			return Result{}, err
+		if err := writeMeta(metaPath, cur); err != nil {
+			return finish(1, err.Error(), candidate, false), err
 		}
 		if err := os.WriteFile(filepath.Join(agents, "logs", o.Name+".modelo"), []byte(modeloMeta+"\n"), 0644); err != nil {
-			return Result{}, err
+			return finish(1, err.Error(), candidate, false), err
 		}
 		ran = true
 		write(fmt.Sprintf("### tentativa %d (%s) motor %s\n", attempts, o.Now().Format("15:04"), candidate))
@@ -390,19 +423,29 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		}
 		var textBuf string
 		quota := quotaPattern(candidate)
-		if s, ok := harness.CustomSpecFor(candidate); ok && s.QuotaRegex != "" {
-			quota = regexp.MustCompile(s.QuotaRegex)
-		}
 		failed, quotaHit, providerFailure := false, false, false
 		quotaNotice := ""
 		providerNotice := ""
 		providerRe := providerPattern(candidate)
+		// Turno sem resultado: o texto final só é checado contra cota/sobrecarga nesse caso.
+		tools, textLen, shortText, errMsg, endReason := 0, 0, "", "", ""
 		for {
 			select {
 			case ev := <-h.Events():
 				line := eventText(ev)
 				if line != "" {
 					write(line)
+				}
+				switch p := ev.Payload.(type) {
+				case protocol.TextParams:
+					textLen += len(strings.TrimSpace(p.Delta))
+					if len(shortText) < 2*textoCurtoMax {
+						shortText += p.Delta
+					}
+				case protocol.ToolCallParams:
+					tools++
+				case protocol.ErrorParams:
+					errMsg = p.Message
 				}
 				// Cota só em eventos de erro: o texto do agente pode falar de "cota" sem estar sem cota (achado real na etapa 6).
 				if ev.Type == harness.EventError && quota != nil && quota.MatchString(line) {
@@ -439,9 +482,20 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				// Avisos no stderr (rede, MCP) chegam como erro mas não derrubam a tarefa;
 				// quem decide é o motivo do fim.
 				if ev.Type == harness.EventComplete {
+					// Instância sem regex que só imprime a frase do provedor no stdout e sai 0: se o turno não
+					// fez nada útil (sem ferramentas, texto curto), o texto é a mensagem do provedor.
+					if !quotaHit && !providerFailure && textoSemResultado(tools, textLen) {
+						switch {
+						case eMensagemDoProvedor(shortText, quota):
+							quotaHit, quotaNotice = true, quotaResetNotice(shortText)
+						case eMensagemDoProvedor(shortText, providerStdoutPattern(candidate)):
+							providerFailure, providerNotice = true, strings.TrimSpace(shortText)
+						}
+					}
 					failed = quotaHit || providerFailure
 					if c, ok := ev.Payload.(protocol.CompleteParams); ok && falhaNoFim[c.Reason] {
 						failed = true
+						endReason = c.Reason
 					}
 					finalCode = 0
 					if failed {
@@ -453,13 +507,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				_ = h.Stop()
 				cancel()
 				// Interrompido (rodar.parar ou Ctrl-C): fecha meta e log para ninguém achar que ainda roda.
-				parado := 130
-				m.Fim, m.Codigo = o.Now().Format(time.RFC3339), &parado
-				_ = writeMeta(metaPath, m)
-				write(fmt.Sprintf("\nFIM %s código %d\n", o.Now().Format("15:04"), parado))
-				appendEventLog(o, filepath.Base(repo), o.Name, parado, candidate)
-				o.emit(Evento{Tipo: EvFim, Motor: candidate, Codigo: parado, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: relatorio(work)})
-				return Result{o.Name, work, logPath, metaPath, attempts, parado}, ctx.Err()
+				return finish(130, "interrompido", candidate, true), ctx.Err()
 			}
 		}
 	done:
@@ -471,12 +519,22 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		_ = h.Stop()
 		cancel()
 		if !failed {
-			m.Fim, m.Codigo = o.Now().Format(time.RFC3339), &finalCode
-			_ = writeMeta(metaPath, m)
-			write(fmt.Sprintf("FIM %s código %d\n", o.Now().Format("15:04"), finalCode))
-			appendEventLog(o, filepath.Base(repo), o.Name, finalCode, candidate)
-			o.emit(Evento{Tipo: EvFim, Motor: candidate, Codigo: finalCode, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: relatorio(work)})
-			return Result{o.Name, work, logPath, metaPath, attempts, finalCode}, nil
+			return finish(finalCode, "", candidate, false), nil
+		}
+		switch {
+		case quotaHit:
+			lastErr = fmt.Errorf("execução interrompida por falta de cota")
+			if quotaNotice != "" {
+				lastErr = fmt.Errorf("execução interrompida por falta de cota (%s)", quotaNotice)
+			}
+		case providerFailure:
+			lastErr = fmt.Errorf("erro do provedor: %s", curto(providerNotice, 160))
+		case errMsg != "":
+			lastErr = fmt.Errorf("execução interrompida: %s", curto(errMsg, 160))
+		case endReason != "":
+			lastErr = fmt.Errorf("execução interrompida (motivo %s)", endReason)
+		default:
+			lastErr = fmt.Errorf("execução interrompida")
 		}
 		if quotaHit && !hasReserva(candidate) {
 			finalCode = 2
@@ -485,16 +543,24 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			}
 			break
 		}
-		if providerFailure && !hasReserva(candidate) {
-			finalCode = 1
-			if providerNotice != "" {
-				write("Erro do provedor: " + providerNotice + "\n")
-			}
+		finalCode = 1
+		if providerFailure && providerNotice != "" && !hasReserva(candidate) {
+			write("Erro do provedor: " + providerNotice + "\n")
+		}
+		if i+1 >= len(candidates) {
+			write("saiu com erro; sem mais tentativas\n")
+			o.emit(Evento{Tipo: EvErro, Motor: candidate, Mensagem: lastErr.Error(), Cota: quotaHit})
 			break
 		}
-		lastErr = fmt.Errorf("execução interrompida%s", map[bool]string{true: " por falta de cota", false: ""}[quotaHit])
-		if providerFailure {
-			lastErr = fmt.Errorf("erro do provedor: %s", providerNotice)
+		if providerFailure && !quotaHit && !hasReserva(candidate) {
+			// Erro transitório sem reserva: repete a MESMA instância, com espera curta e crescente.
+			espera := backoff(attempts)
+			write(fmt.Sprintf("erro do provedor; repetindo %s em %s (tentativa %d de %d)\n", candidate, espera, attempts+1, len(candidates)))
+			o.emit(Evento{Tipo: EvErro, Motor: candidate, Mensagem: lastErr.Error()})
+			if err := esperar(ctx, o, espera); err != nil {
+				return finish(130, "interrompido", candidate, true), err
+			}
+			continue
 		}
 		write("saiu com erro; tentando continuar...\n")
 		o.emit(Evento{Tipo: EvErro, Motor: candidate, Mensagem: lastErr.Error(), Cota: quotaHit})
@@ -504,24 +570,18 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	}
 	if lastErr == nil {
 		if finalCode != 2 {
-			lastErr = fmt.Errorf("nenhuma tentativa executada")
+			lastErr = fmt.Errorf("nenhuma tentativa foi iniciada")
 		}
 	}
-	conta := o.Conta
-	if conta == "" {
-		conta = o.Motor
-	}
-	m := meta{Projeto: filepath.Base(repo), Motor: o.Motor, Conta: conta, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid(), Servidor: o.ViaServidor}
 	code := finalCode
 	if quotaHitAtEnd(lastErr) {
 		code = 2
 	}
-	m.Fim, m.Codigo = o.Now().Format(time.RFC3339), &code
-	_ = writeMeta(filepath.Join(agents, "logs", o.Name+".meta.json"), m)
-	write(fmt.Sprintf("FIM %s código %d\n", o.Now().Format("15:04"), code))
-	appendEventLog(o, filepath.Base(repo), o.Name, code, o.Motor)
-	o.emit(Evento{Tipo: EvFim, Motor: o.Motor, Codigo: code, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: relatorio(work)})
-	result := Result{o.Name, work, logPath, filepath.Join(agents, "logs", o.Name+".meta.json"), attempts, code}
+	causa := ""
+	if lastErr != nil {
+		causa = curto(lastErr.Error(), 200)
+	}
+	result := finish(code, causa, cur.Motor, false)
 	if code == 2 {
 		return result, nil
 	}
@@ -549,6 +609,9 @@ func quotaHitAtEnd(err error) bool {
 }
 
 func relatorio(work string) string {
+	if work == "" {
+		return ""
+	}
 	p := filepath.Join(work, "RELATORIO-AGENTE.md")
 	if _, err := os.Stat(p); err == nil {
 		return p
@@ -567,32 +630,6 @@ func perguntaDe(q protocol.PermissionRequestParams) string {
 	return s + "?"
 }
 
-func prepareWorktree(ctx context.Context, repo, agents, name, base string) (string, error) {
-	target := filepath.Join(agents, name)
-	if strings.HasPrefix(name, "missao-") {
-		// Missões são somente leitura e os prompts esperam enxergar o projeto inteiro.
-		return repo, nil
-	}
-	if _, err := os.Stat(target); err == nil {
-		return target, nil
-	}
-	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-		return "", err
-	}
-	cmd := exec.CommandContext(ctx, "git", "-C", repo, "worktree", "add", target, "-b", "agente/"+name, base)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("criar worktree: %w (%s)", err, strings.TrimSpace(string(out)))
-	}
-	return target, nil
-}
-func gitRoot(cwd string) (string, error) {
-	out, err := exec.Command("git", "-C", cwd, "rev-parse", "--show-toplevel").Output()
-	if err != nil {
-		return "", fmt.Errorf("descobrir raiz git: %w", err)
-	}
-	return strings.TrimSpace(string(out)), nil
-}
 func readPrompt(agents, name, explicit, text string) (string, error) {
 	return readPromptOptions(agents, name, explicit, text, "", "", false)
 }
@@ -757,29 +794,6 @@ func writeMeta(path string, m meta) error {
 	return os.Rename(tmp, path)
 }
 
-func dryRunCommand(o Options) string {
-	model := o.Model
-	if model == "" {
-		model = "<padrão>"
-	}
-	commands := map[string]string{
-		"codex":    "codex exec",
-		"codex2":   "CODEX_HOME=~/.codex-compartilhado codex exec",
-		"claude":   "claude -p",
-		"agy":      "agy -p",
-		"opencode": "opencode run",
-		"aider":    "aider --message",
-	}
-	command := commands[o.Motor]
-	if spec, ok := harness.CustomSpecFor(o.Motor); ok && spec.Command != "" {
-		command = spec.Command + " " + strings.Join(spec.Args, " ")
-	}
-	if command == "" {
-		command = o.Motor
-	}
-	return command + " --model " + model + " <prompt>"
-}
-
 var keysMu sync.Mutex
 
 func loadKeys(path string) (func(), error) {
@@ -826,35 +840,6 @@ func loadKeys(path string) (func(), error) {
 		}
 		keysMu.Unlock()
 	}, nil
-}
-func waitLimits(ctx context.Context, agents string, o Options) error {
-	for {
-		if o.MaxAgents > 0 {
-			n, err := activeAgents(agents)
-			if err != nil {
-				return err
-			}
-			if n >= o.MaxAgents {
-				if err := pause(ctx, o); err != nil {
-					return err
-				}
-				continue
-			}
-		}
-		if o.MaxLoad > 0 {
-			l, err := o.Load()
-			if err != nil {
-				return err
-			}
-			if l > o.MaxLoad {
-				if err := pause(ctx, o); err != nil {
-					return err
-				}
-				continue
-			}
-		}
-		return nil
-	}
 }
 func pause(ctx context.Context, o Options) error {
 	done := make(chan struct{})

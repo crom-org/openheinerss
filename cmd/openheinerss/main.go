@@ -99,11 +99,20 @@ Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC d
 	return rootCmd
 }
 
+// pastaAgentes resolve a pasta de agentes pela raiz do repositório (vale também dentro de worktrees).
+func pastaAgentes(dir string) (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	return orchestrator.ResolveAgentsDir(cwd, dir), nil
+}
+
 func newAgentesCmd() *cobra.Command {
 	var agentsDir string
 	var jsonOutput bool
 	listar := func() error {
-		dir, err := filepath.Abs(agentsDir)
+		dir, err := pastaAgentes(agentsDir)
 		if err != nil {
 			return err
 		}
@@ -125,12 +134,12 @@ func newAgentesCmd() *cobra.Command {
 		return nil
 	}
 	root := &cobra.Command{Use: "agentes", Aliases: []string{"agents"}, Short: "Lista e controla agentes em execução", RunE: func(cmd *cobra.Command, args []string) error { return listar() }}
-	root.PersistentFlags().StringVar(&agentsDir, "pasta-agentes", ".claude/agentes", "Pasta dos agentes")
+	root.PersistentFlags().StringVar(&agentsDir, "pasta-agentes", ".claude/agentes", "Pasta dos agentes (relativa à raiz do repositório)")
 	root.PersistentFlags().StringVar(&agentsDir, "agents-dir", ".claude/agentes", "Alias em inglês de --pasta-agentes")
 	root.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Emite JSON")
 	root.AddCommand(&cobra.Command{Use: "listar", Aliases: []string{"list"}, Short: "Lista os agentes e seus estados", RunE: func(cmd *cobra.Command, args []string) error { return listar() }})
 	root.AddCommand(&cobra.Command{Use: "ver <nome>", Aliases: []string{"show"}, Short: "Mostra o fim do log de um agente", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		dir, err := filepath.Abs(agentsDir)
+		dir, err := pastaAgentes(agentsDir)
 		if err != nil {
 			return err
 		}
@@ -142,7 +151,7 @@ func newAgentesCmd() *cobra.Command {
 		return nil
 	}})
 	root.AddCommand(&cobra.Command{Use: "parar <nome>", Aliases: []string{"stop"}, Short: "Para somente o agente informado", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		dir, err := filepath.Abs(agentsDir)
+		dir, err := pastaAgentes(agentsDir)
 		if err != nil {
 			return err
 		}
@@ -524,7 +533,14 @@ func newRodarCmd() *cobra.Command {
 			if err != nil && res.Name == "" {
 				return err
 			}
-			fmt.Printf("FIM %s código %d\nlog: %s\n", res.Name, res.Code, res.LogFile)
+			fim := fmt.Sprintf("FIM %s código %d", res.Name, res.Code)
+			if res.Code != 0 && res.Causa != "" {
+				fim += ": " + res.Causa
+			}
+			fmt.Println(fim)
+			if res.LogFile != "" {
+				fmt.Printf("log: %s\n", res.LogFile)
+			}
 			if err != nil {
 				return err // interrompido ou falha: o log já tem o FIM; o main escolhe o código de saída
 			}
@@ -550,7 +566,7 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().StringVar(&pasta, "pasta-agentes", "", "Pasta dos agentes (padrão .claude/agentes)")
 	cmd.Flags().StringVar(&pasta, "agentes", "", "Alias de --pasta-agentes")
 	cmd.Flags().StringVar(&pasta, "agents-dir", "", "Alias em inglês de --pasta-agentes")
-	cmd.Flags().StringVar(&branchBase, "branch-base", "", "Branch base da worktree (padrão main)")
+	cmd.Flags().StringVar(&branchBase, "branch-base", "", "Branch base da worktree (padrão: main, ou a branch atual se não houver main)")
 	cmd.Flags().StringVar(&branchBase, "base-branch", "", "Alias em inglês de --branch-base")
 	cmd.Flags().Float64Var(&carga, "carga-maxima", 0, "Carga máxima de 1 minuto; 0 desativa")
 	cmd.Flags().Float64Var(&carga, "max-load", 0, "Alias em inglês de --carga-maxima")
