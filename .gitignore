@@ -28,3 +28,4 @@ build/
 RELATORIO-AGENTE.md
 __pycache__/
 .aider*
+sdk/typescript/*.tgz

@@ -8,7 +8,7 @@ before:
 
 builds:
   - id: openheinerss
-    main: ./cmd/openheinerss/main.go
+    main: ./cmd/openheinerss
     binary: openheinerss
     env:
       - CGO_ENABLED=0

@@ -18,6 +18,8 @@ func TestAiderCLIFluxoCompleto(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	// Chave falsa: o teste não pode depender das chaves da máquina (no CI não há nenhuma).
+	t.Setenv("OPENROUTER_API_KEY", "teste")
 	a := NewAiderHarness(harness.ModeCLI)
 	if got := a.ValidatePrerequisites(context.Background()); !got.Satisfied {
 		t.Fatalf("pré-requisito: %+v", got)
@@ -69,6 +71,8 @@ func TestAiderLeitorEProcessoComErro(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	// Chave falsa: o teste não pode depender das chaves da máquina (no CI não há nenhuma).
+	t.Setenv("OPENROUTER_API_KEY", "teste")
 	t.Setenv("FAKE_FAIL", "1")
 	for len(a.events) > 0 {
 		<-a.events
