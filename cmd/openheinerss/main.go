@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -22,6 +23,7 @@ import (
 	_ "github.com/crom-org/openheinerss/pkg/harness/codex"
 	_ "github.com/crom-org/openheinerss/pkg/harness/mock"
 	_ "github.com/crom-org/openheinerss/pkg/harness/opencode"
+	"github.com/crom-org/openheinerss/pkg/limites"
 	"github.com/crom-org/openheinerss/pkg/mcp"
 	"github.com/crom-org/openheinerss/pkg/motor"
 	"github.com/crom-org/openheinerss/pkg/orchestrator"
@@ -56,6 +58,7 @@ Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC d
 	rootCmd.AddCommand(newMotorsCmd())
 	rootCmd.AddCommand(newMcpCmd())
 	rootCmd.AddCommand(newHarnessCmd())
+	rootCmd.AddCommand(newLimitesCmd())
 	rootCmd.AddCommand(newVersionCmd())
 
 	if err := rootCmd.Execute(); err != nil {
@@ -304,6 +307,7 @@ func newRodarCmd() *cobra.Command {
 	var retomar bool
 	var carga float64
 	var maxAgentes, tentativas int
+	var cotaMax float64
 	cmd := &cobra.Command{
 		Use: "rodar <nome> <instância|harness>", Short: "Executa uma missão com worktree, log e retomada",
 		Args: cobra.ExactArgs(2),
@@ -315,7 +319,7 @@ func newRodarCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, PromptFile: prompt, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas})
+			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, PromptFile: prompt, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax})
 			if err != nil {
 				return err
 			}
@@ -333,6 +337,43 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().Float64Var(&carga, "carga-maxima", 0, "Carga máxima de 1 minuto; 0 desativa")
 	cmd.Flags().IntVar(&maxAgentes, "max-agentes", 0, "Máximo de agentes simultâneos")
 	cmd.Flags().IntVar(&tentativas, "tentativas", 0, "Máximo de tentativas")
+	cmd.Flags().Float64Var(&cotaMax, "cota-max", 0, "Pula instâncias com uso de cota igual ou acima deste percentual (0 desativa)")
+	return cmd
+}
+
+func newLimitesCmd() *cobra.Command {
+	var jsonOutput bool
+	cmd := &cobra.Command{Use: "limites", Short: "Mostra as cotas locais das instâncias Codex e Claude", RunE: func(cmd *cobra.Command, args []string) error {
+		resultado := limites.Obter()
+		if jsonOutput {
+			b, err := json.MarshalIndent(resultado, "", "  ")
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(b))
+			return nil
+		}
+		fmt.Printf("Limites em %s\n", resultado.Agora)
+		for _, i := range resultado.Instancias {
+			fmt.Printf("%s (%s)", i.Nome, i.Base)
+			if i.DadoEm != "" {
+				fmt.Printf(" — dado %s, idade %ds", i.DadoEm, i.IdadeSegundos)
+			}
+			if i.Nota != "" {
+				fmt.Printf(" — %s", i.Nota)
+			}
+			fmt.Println()
+			for _, j := range i.Janelas {
+				fmt.Printf("  %s: %.1f%%", j.Nome, j.Percentual)
+				if j.ReiniciaEm != "" {
+					fmt.Printf("; reinicia %s", j.ReiniciaEm)
+				}
+				fmt.Println()
+			}
+		}
+		return nil
+	}}
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emite JSON")
 	return cmd
 }
 

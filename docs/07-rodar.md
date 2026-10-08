@@ -19,4 +19,15 @@ ao encontrar a regex de cota ou um erro, as reservas são tentadas até
 
 Limites opcionais: `--carga-maxima`, `--max-agentes`, `--pasta-agentes` e
 `--branch-base`. O protocolo JSON-RPC oferece os mesmos recursos pelo método
-`run`, com os campos `nome`, `motor`, `prompt`, `retomar` e os limites.
+`run`, com os campos `nome`, `motor`, `prompt`, `retomar` e os limites. Use
+`--cota-max 95` (ou `OPENHEINERSS_COTA_MAX`) para pular uma instância que já
+atingiu esse percentual e tentar sua `reserva`.
+
+## Consultar cotas
+
+`openheinerss limites` lê somente os eventos `rate_limits` recentes em cada
+`CODEX_HOME` e os arquivos `~/.config/crom-painel/statusline-<instância>.json`
+do Claude. `--json` entrega o mesmo resultado para a Central, incluindo
+percentual, horário de reinício e idade do dado. Instâncias são declaradas em
+`.openheinerss/harnesses` com `base: codex`/`base: claude-code` e seus envs;
+nenhuma conta é embutida no programa.

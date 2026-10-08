@@ -22,6 +22,7 @@ import (
 	_ "github.com/crom-org/openheinerss/pkg/harness/codex"
 	_ "github.com/crom-org/openheinerss/pkg/harness/mock"
 	_ "github.com/crom-org/openheinerss/pkg/harness/opencode"
+	"github.com/crom-org/openheinerss/pkg/limites"
 	"github.com/crom-org/openheinerss/pkg/motor"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 )
@@ -34,6 +35,7 @@ type Options struct {
 	AgentsDir, BranchBase                  string
 	MaxLoad                                float64
 	MaxAgents, Attempts                    int
+	QuotaMax                               float64
 	Load                                   func() (float64, error)
 	Sleep                                  func(time.Duration)
 	Now                                    func() time.Time
@@ -99,6 +101,9 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	if o.MaxLoad == 0 {
 		o.MaxLoad = envFloat("OPENHEINERSS_CARGA_MAXIMA", 0)
 	}
+	if o.QuotaMax <= 0 {
+		o.QuotaMax = envFloat("OPENHEINERSS_COTA_MAX", envFloat("COTA_MAX", 0))
+	}
 	repo, err := gitRoot(cwd)
 	if err != nil {
 		return Result{}, err
@@ -108,6 +113,11 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		agents = filepath.Join(repo, agents)
 	}
 	if err := os.MkdirAll(filepath.Join(agents, "logs"), 0755); err != nil {
+		return Result{}, err
+	}
+	// Respeita os limites antes de criar uma worktree, que pode ser uma
+	// operação cara e não deve começar enquanto outro agente ocupa a vaga.
+	if err := waitLimits(ctx, agents, o); err != nil {
 		return Result{}, err
 	}
 	work, err := prepareWorktree(ctx, repo, agents, o.Name, o.BranchBase)
@@ -152,6 +162,13 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	resumeID, resumeMotor := "", ""
 	for i, candidate := range candidates {
 		attempts = i + 1
+		if o.QuotaMax > 0 {
+			if percentual, ok := limites.Percentual(candidate); ok && percentual >= o.QuotaMax {
+				lastErr = fmt.Errorf("cota de %s em %.1f%% (limite %.1f%%)", candidate, percentual, o.QuotaMax)
+				write(fmt.Sprintf("pulando %s: %v\n", candidate, lastErr))
+				continue
+			}
+		}
 		if err := waitLimits(ctx, agents, o); err != nil {
 			return Result{}, err
 		}
