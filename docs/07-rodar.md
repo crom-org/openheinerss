@@ -118,6 +118,33 @@ Códigos de FIM do `rodar`: 0 ok, 1 erro, 2 sem cota, 3 negado (`--negar-encerra
 As regras padrão do prompt incluem: "Se lançar agentes filhos ou comandos em segundo plano, o openheinerss te
 acorda quando eles terminarem; não encerre dizendo que vai esperar sem ter lançado nada."
 
+### Limite de contexto por projeto e por harness
+
+O contexto grande é onde a conta mais gasta. A chave `contexto:` do `config.yaml` define um limite de tokens
+e o que fazer ao passar dele; vale no projeto (`<repo>/.openheinerss/config.yaml`) e no global
+(`--config`/`OPENHEINERSS_CONFIG`, ou `~/.config/openheinerss/config.yaml` e `~/.openheinerss/config.yaml`,
+este vence), e o projeto vence o global:
+
+```yaml
+contexto:
+  padrao: {limite_tokens: 150000, acao: aviso}   # acao: aviso | nova-sessao
+  harnesses:
+    claude-conta2: {acao: nova-sessao}            # nome de instância ou de harness base
+    codex: {limite_tokens: 200000}
+```
+
+Cada campo é resolvido separadamente, nesta ordem: projeto (instância, base, `padrao`), depois global
+(instância, base, `padrao`). Sem nada, fica desligado. `--limite-contexto N` (`0` desliga) e
+`--acao-contexto aviso|nova-sessao` vencem a configuração. `openheinerss config contexto [--harness X]` mostra
+o valor efetivo e de onde vem cada campo. Arquivo inválido é erro e a execução nem começa.
+
+O tamanho do contexto é o `input` do último evento de uso (o `total` se só ele vier). Ao chegar no limite:
+`aviso` escreve `[contexto] N tokens >= limite L (origem: projeto|global|flag)` no log, uma vez por sessão, e
+uma linha `orq.contexto` no log de eventos (`--eventos-log`). `nova-sessao` avisa, encerra o turno e recomeça o
+MESMO motor em sessão nova (sem a sessão nativa), com o prompt original mais o texto de continuação. Não conta
+como tentativa nem como falha de cota; no máximo 3 reinícios por execução (depois só avisa), registrados em
+`reinicios_contexto` no `meta.json`.
+
 ### Contas AGY como instâncias
 
 Contas não ficam no código. Os exemplos `examples/harnesses/agy-conta1.yaml` e

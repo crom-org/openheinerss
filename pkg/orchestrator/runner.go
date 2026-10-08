@@ -73,6 +73,10 @@ type Options struct {
 	// FilhosObrigatorios faz o pai terminar com CodigoFilhoFalhou quando algum filho terminou com
 	// código ≠ 0, morreu sem FIM ou ainda roda no fim do pai (--filhos-obrigatorios).
 	FilhosObrigatorios bool
+	// LimiteContexto e AcaoContexto (--limite-contexto/--acao-contexto) vencem o config.yaml;
+	// nil/vazio = não dados (LimiteContexto 0 desliga). Veja contexto.go.
+	LimiteContexto *int
+	AcaoContexto   string
 }
 
 // CodigoNegado é o código de fim quando uma negação de permissão encerra a execução.
@@ -157,6 +161,8 @@ type meta struct {
 	// FilhosFalhos e FilhosOrfaos são gravados no fim do pai.
 	FilhosFalhos []string `json:"filhos_falhos,omitempty"`
 	FilhosOrfaos []string `json:"filhos_orfaos,omitempty"`
+	// ReiniciosContexto conta os recomeços em sessão nova por passar do limite de contexto.
+	ReiniciosContexto int `json:"reinicios_contexto,omitempty"`
 }
 
 // nomeValido impede que o nome do agente saia da pasta de agentes (worktree, log e meta usam o nome em caminhos).
@@ -416,6 +422,10 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	if err != nil {
 		return abort(err)
 	}
+	cx, err := novoCtxRun(repo, o)
+	if err != nil {
+		return abort(err)
+	}
 	work, cleanup, err := prepareWorktree(ctx, repo, agents, o.Name, o.BranchBase)
 	if err != nil {
 		return abort(err)
@@ -454,7 +464,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	for i := 0; i < len(candidates); i++ {
 		candidate := candidates[i]
 		attempts = i + 1
-		if o.QuotaMax > 0 && turnoMsg == "" {
+		if o.QuotaMax > 0 && turnoMsg == "" && !cx.pendente {
 			if percentual, ok := limites.Percentual(candidate); ok && percentual >= o.QuotaMax {
 				quotaSkipped = true
 				lastErr = fmt.Errorf("cota de %s em %.1f%% (limite %.1f%%)", candidate, percentual, o.QuotaMax)
@@ -554,6 +564,8 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 					text = envio + "\n\n" + turnoMsg
 				}
 				turnoMsg = ""
+			} else if cx.pendente {
+				text += cx.textoContinuacao()
 			} else if attempts > 1 || o.Retomar {
 				text += continuation
 			}
@@ -573,7 +585,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		}
 		var textBuf string
 		quota := quotaPattern(candidate)
-		failed, quotaHit, providerFailure := false, false, false
+		failed, quotaHit, providerFailure, reiniciarCtx := false, false, false, false
 		quotaNotice := ""
 		providerNotice := ""
 		providerRe := providerPattern(candidate)
@@ -589,6 +601,10 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				}
 				if p, ok := ev.Payload.(protocol.ErrorParams); ok {
 					errMsg = p.Message
+				}
+				if cx.observar(ev) && cx.aoPassar(o, filepath.Base(repo), candidate, write) {
+					reiniciarCtx = true
+					goto done
 				}
 				// Cota só em eventos de erro: o texto do agente pode falar de "cota" sem estar sem cota (achado real na etapa 6).
 				if ev.Type == harness.EventError && quota != nil && quota.MatchString(line) {
@@ -670,6 +686,13 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		}
 		_ = h.Stop()
 		cancel()
+		if reiniciarCtx {
+			// Sessão nova do MESMO motor: sem sessão nativa e sem contar como tentativa.
+			resumeID, resumeMotor = "", ""
+			cur.ReiniciosContexto = cx.reinicios
+			i--
+			continue
+		}
 		if !failed {
 			msg, err := posTurno(ctx, o, logsDir, work, textBuf, filhos, write)
 			if err != nil {
