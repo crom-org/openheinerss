@@ -234,20 +234,27 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				line := eventText(ev)
 				if line != "" {
 					write(line)
-					if quota != nil && quota.MatchString(line) {
-						quotaHit = true
-						failed = true
-					}
+				}
+				// Cota: só em erros e texto do agente; saídas de ferramentas (arquivos lidos) não contam.
+				if (ev.Type == harness.EventError || ev.Type == harness.EventText) && quota != nil && quota.MatchString(line) {
+					quotaHit = true
+				}
+				// Harness custom já detecta a cota pelo próprio regex e avisa com este erro.
+				if e, ok := ev.Payload.(protocol.ErrorParams); ok && e.Message == "limite de cota detectado" {
+					quotaHit = true
 				}
 				if ev.Type == harness.EventPermission {
 					if q, ok := ev.Payload.(protocol.PermissionRequestParams); ok {
 						_ = h.RespondPermission(hctx, q.RequestID, true, "")
 					}
 				}
-				if ev.Type == harness.EventError {
-					failed = true
-				}
+				// Avisos no stderr (rede, MCP) chegam como erro mas não derrubam a tarefa;
+				// quem decide é o motivo do fim.
 				if ev.Type == harness.EventComplete {
+					failed = quotaHit
+					if c, ok := ev.Payload.(protocol.CompleteParams); ok && falhaNoFim[c.Reason] {
+						failed = true
+					}
 					finalCode = 0
 					if failed {
 						finalCode = 1
@@ -452,3 +459,6 @@ func envFloat(k string, d float64) float64 {
 	}
 	return d
 }
+
+// falhaNoFim lista os motivos de fim que contam como falha; os demais ("completed", "finished", "process_exit") são sucesso.
+var falhaNoFim = map[string]bool{"process_error": true, "permission_denied": true, "error": true, "cancelled": true}

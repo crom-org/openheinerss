@@ -144,3 +144,24 @@ func mustRead(t *testing.T, path string) string {
 	}
 	return string(b)
 }
+
+func TestFimComAvisoNoStderrNaoEFalha(t *testing.T) {
+	root := t.TempDir()
+	for _, a := range [][]string{{"init", "-q", "-b", "main"}, {"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"}} {
+		if out, err := exec.Command("git", append([]string{"-C", root}, a...)...).CombinedOutput(); err != nil {
+			t.Fatal(string(out))
+		}
+	}
+	agents := filepath.Join(root, ".claude", "agentes")
+	os.MkdirAll(filepath.Join(agents, "prompts"), 0755)
+	os.WriteFile(filepath.Join(agents, "prompts", "aviso.md"), []byte("x"), 0644)
+	script := filepath.Join(root, "aviso.sh")
+	os.WriteFile(script, []byte("#!/bin/sh\nread p\necho 'ERROR rede caiu, tentando de novo' >&2\nprintf '%s\\n' '{\"type\":\"text\",\"text\":\"pronto\"}'\nprintf '%s\\n' '{\"type\":\"end\"}'\n"), 0755)
+	if err := harness.RegisterCustom(harness.CustomSpec{Name: "aviso-teste", Command: script}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Run(context.Background(), root, Options{Name: "aviso", Motor: "aviso-teste", AgentsDir: agents, MaxAgents: 99})
+	if err != nil || res.Code != 0 || res.Attempts != 1 {
+		t.Fatalf("aviso no stderr virou falha: err=%v código=%d tentativas=%d", err, res.Code, res.Attempts)
+	}
+}
