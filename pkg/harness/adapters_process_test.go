@@ -54,3 +54,18 @@ func TestAdaptadoresCLIComBinariosFalsos(t *testing.T) {
 	}
 	_ = protocol.EventAgentText
 }
+
+func TestAdaptadoresDetectamPrerequisitoAusente(t *testing.T) {
+	old := os.Getenv("PATH")
+	t.Setenv("PATH", t.TempDir())
+	for _, nome := range []string{"agy", "aider", "claude-code", "opencode"} {
+		h, err := harness.Create(nome, harness.ModeCLI)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := h.ValidatePrerequisites(context.Background()); got.Satisfied || len(got.MissingItems) != 1 {
+			t.Errorf("%s: %+v", nome, got)
+		}
+	}
+	t.Setenv("PATH", old)
+}
