@@ -27,3 +27,7 @@ func stopAgentProcess(pid int) error {
 	}
 	return nil
 }
+
+// DesligarDoGrupo põe o processo numa sessão própria. Um `rodar` filho, lançado com `&` de dentro do
+// harness do pai, sairia junto quando o pai encerra o grupo de processos no fim do turno.
+func DesligarDoGrupo() { _, _ = syscall.Setsid() }

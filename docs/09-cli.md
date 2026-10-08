@@ -251,11 +251,13 @@ Flags:
       --base-branch string          Alias em inglês de --branch-base
       --branch-base string          Branch base da worktree (padrão: main, ou a branch atual se não houver main)
       --carga-maxima float          Carga máxima de 1 minuto; 0 desativa
+      --child-rounds int            Alias em inglês de --rodadas-filhos
       --conta string                Conta/provedor da instância
       --cota-max float              Pula instâncias com uso de cota igual ou acima deste percentual (0 desativa)
       --dry-run                     Alias em inglês de --seco
       --effort string               Alias em inglês de --esforco
       --esforco string              Esforço de raciocínio
+      --esperar-filhos string       Espera os agentes filhos e retoma a sessão: sim (padrão, até 2h), nao, ou a espera máxima (ex.: 30m)
       --eventos-log string          Acrescenta FIM ao arquivo de eventos (desligado por padrão)
       --events-log string           Alias em inglês de --eventos-log
       --harness-arg stringArray     Argumento nativo extra para o harness, intacto e na ordem (repetível) (default [])
@@ -277,6 +279,7 @@ Flags:
       --resume                      Alias em inglês de --retomar
       --retomar                     Acrescenta o texto de continuação e preserva o log
       --retries int                 Alias em inglês de --tentativas
+      --rodadas-filhos int          Máximo de retomadas automáticas depois dos filhos (padrão 5)
       --rules string                Alias em inglês de --regras
       --seco                        Mostra o comando sem executá-lo
       --sem-regras                  Não acrescenta regras padrão ao prompt
@@ -284,6 +287,7 @@ Flags:
       --tentativas int              Máximo de tentativas
       --text string                 Alias em inglês de --texto
       --texto string                Prompt em texto, no lugar do arquivo prompts/<nome>.md
+      --wait-children string        Alias em inglês de --esperar-filhos
       --when-load-below float       Alias em inglês de --quando-carga-abaixo
 
 Global Flags:

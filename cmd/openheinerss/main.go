@@ -209,7 +209,14 @@ func newAgentesCmd() *cobra.Command {
 			return nil
 		}
 		for _, a := range items {
-			fmt.Printf("%-20s %-18s motor=%-16s tentativa=%d início=%s duração=%s última=%s\n", a.Nome, a.Estado, a.Motor, a.Tentativa, a.Inicio, a.Duracao, a.UltimaLinha)
+			fmt.Printf("%-20s %-18s motor=%-16s tentativa=%d início=%s duração=%s", a.Nome, a.Estado, a.Motor, a.Tentativa, a.Inicio, a.Duracao)
+			if a.Pai != "" {
+				fmt.Printf(" pai=%s", a.Pai)
+			}
+			if len(a.Filhos) > 0 {
+				fmt.Printf(" filhos=%s", strings.Join(a.Filhos, ","))
+			}
+			fmt.Printf(" última=%s\n", a.UltimaLinha)
 		}
 		return nil
 	}
@@ -661,6 +668,8 @@ func newRodarCmd() *cobra.Command {
 	var cotaMax float64
 	var eventosLog string
 	var harnessArgs []string
+	var esperarFilhos string
+	var rodadasFilhos int
 	cmd := &cobra.Command{
 		Use:     "rodar <nome> <instância|harness>",
 		Aliases: []string{"launch", "dispatch"},
@@ -678,7 +687,15 @@ func newRodarCmd() *cobra.Command {
 			if cargaAbaixo > 0 {
 				carga = cargaAbaixo
 			}
-			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Mode: modo, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog, HarnessArgs: harnessArgs})
+			espera, err := orchestrator.ParseEsperarFilhos(esperarFilhos)
+			if err != nil {
+				return err
+			}
+			if os.Getenv(orchestrator.EnvPai) != "" && !seco {
+				// Agente filho: sessão própria, para não morrer junto com o grupo do harness do pai.
+				orchestrator.DesligarDoGrupo()
+			}
+			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Mode: modo, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog, HarnessArgs: harnessArgs, EsperarFilhos: espera, RodadasFilhos: rodadasFilhos, Pai: os.Getenv(orchestrator.EnvPai), PaiLogs: os.Getenv(orchestrator.EnvPaiLogs)})
 			if err != nil && res.Name == "" {
 				return err
 			}
@@ -742,6 +759,10 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&semRegras, "no-default-rules", false, "Alias em inglês de --sem-regras-padrao")
 	cmd.Flags().StringVar(&arquivoChaves, "arquivo-chaves", "", "Arquivo opcional de variáveis secretas (não imprime valores)")
 	cmd.Flags().StringVar(&arquivoChaves, "keys-file", "", "Alias em inglês de --arquivo-chaves")
+	cmd.Flags().StringVar(&esperarFilhos, "esperar-filhos", "", "Espera os agentes filhos e retoma a sessão: sim (padrão, até 2h), nao, ou a espera máxima (ex.: 30m)")
+	cmd.Flags().StringVar(&esperarFilhos, "wait-children", "", "Alias em inglês de --esperar-filhos")
+	cmd.Flags().IntVar(&rodadasFilhos, "rodadas-filhos", 0, "Máximo de retomadas automáticas depois dos filhos (padrão 5)")
+	cmd.Flags().IntVar(&rodadasFilhos, "child-rounds", 0, "Alias em inglês de --rodadas-filhos")
 	addHarnessArgFlags(cmd, &harnessArgs)
 	return cmd
 }
@@ -1086,16 +1107,8 @@ Anotações ficam em ~/.config/openheinerss/comandos.yaml; com --config/` + conf
 				return mostrar(l)
 			}
 			fmt.Printf("Harness %s (base %s); /x fora da lista: %s; anotações em %s\n", l.Harness, l.Base, l.Desconhecido, l.Arquivo)
-			for _, c := range l.Comandos {
-				marca := " "
-				if c.Confirmado {
-					marca = "✓"
-				}
-				fmt.Printf("%s %-22s %-16s %s", marca, c.Nome, c.Repasse, c.Descricao)
-				if c.Anotacao != "" {
-					fmt.Printf(" — nota: %s", c.Anotacao)
-				}
-				fmt.Println()
+			for _, linha := range comandos.Linhas(l.Comandos) {
+				fmt.Println(linha)
 			}
 			return nil
 		},

@@ -28,7 +28,7 @@ import (
 
 const continuation = "\n\n--- CONTINUAÇÃO ---\nUma execução anterior desta MESMA tarefa foi interrompida (erro ou cota). NÃO recomece do zero: rode `git status` e `git log --oneline -10`, leia RELATORIO-AGENTE.md e os arquivos já alterados nesta pasta (ou os relatórios em .claude/agentes/relatorios/ se for missão), confira o que já está pronto e termine SOMENTE o que falta, depois finalize como a tarefa pede."
 const missionRules = "\n\n--- MISSÃO SOMENTE LEITURA ---\nEsta é uma missão de inspeção. Não crie, altere, remova ou comite arquivos; não use worktree. Apenas leia e relate o que encontrar."
-const defaultPromptRules = "--- REGRAS PADRÃO DO AGENTE ---\nTrabalhe somente dentro da pasta do agente e da worktree desta missão.\nÉ proibido buscar fora da worktree: não use `find /`, `find ~`, `locate`, varreduras de disco ou buscas equivalentes fora dela."
+const defaultPromptRules = "--- REGRAS PADRÃO DO AGENTE ---\nTrabalhe somente dentro da pasta do agente e da worktree desta missão.\nÉ proibido buscar fora da worktree: não use `find /`, `find ~`, `locate`, varreduras de disco ou buscas equivalentes fora dela.\nSe lançar agentes filhos ou comandos em segundo plano, o openheinerss te acorda quando eles terminarem; não encerre dizendo que vai esperar sem ter lançado nada."
 
 type Options struct {
 	Name, Motor, Model, Effort, Mode, PromptFile string
@@ -59,6 +59,16 @@ type Options struct {
 	// DecidirFim é como Decidir, mas uma negação com encerra=true termina a execução
 	// (código CodigoNegado, motivo "negado") sem nova tentativa. Se definido, vence Decidir.
 	DecidirFim func(ctx context.Context, q Pergunta) (allow bool, msg string, encerra bool)
+	// Pai é o agente que lançou este; PaiLogs é a pasta de logs dele, onde este run se registra como
+	// filho. O CLI preenche com OPENHEINERSS_PAI/OPENHEINERSS_PAI_LOGS (a biblioteca não lê o ambiente).
+	Pai, PaiLogs string
+	// EsperarFilhos limita a espera pelos agentes filhos antes de retomar o pai: 0 = padrão (2 h),
+	// negativo = não espera nem retoma (comportamento antigo).
+	EsperarFilhos time.Duration
+	// RodadasFilhos é o máximo de retomadas automáticas do pai (padrão 5).
+	RodadasFilhos int
+	// IntervaloFilhos é o intervalo entre as leituras do meta.json dos filhos (padrão 2 s).
+	IntervaloFilhos time.Duration
 }
 
 // CodigoNegado é o código de fim quando uma negação de permissão encerra a execução.
@@ -122,6 +132,9 @@ type meta struct {
 	Fim       string `json:"fim,omitempty"`
 	Codigo    *int   `json:"codigo,omitempty"`
 	Motivo    string `json:"motivo,omitempty"`
+	Pai       string `json:"pai,omitempty"`
+	Branch    string `json:"branch,omitempty"`
+	Worktree  string `json:"worktree,omitempty"`
 }
 
 // nomeValido impede que o nome do agente saia da pasta de agentes (worktree, log e meta usam o nome em caminhos).
@@ -198,6 +211,23 @@ func (o Options) defaults() Options {
 	}
 	if o.EventLog == "" {
 		o.EventLog = os.Getenv("OPENHEINERSS_EVENTOS_LOG")
+	}
+	if o.Pai == o.Name {
+		o.Pai = "" // nunca é filho de si mesmo (ex.: retomada manual de dentro da própria sessão)
+	}
+	if o.EsperarFilhos == 0 {
+		if d, ok := esperaFilhosEnv(os.Getenv("OPENHEINERSS_ESPERAR_FILHOS")); ok {
+			o.EsperarFilhos = d
+		}
+	}
+	if o.EsperarFilhos == 0 {
+		o.EsperarFilhos = esperaFilhosPadrao
+	}
+	if o.RodadasFilhos <= 0 {
+		o.RodadasFilhos = envInt("OPENHEINERSS_RODADAS_FILHOS", rodadasFilhosPadrao)
+	}
+	if o.IntervaloFilhos <= 0 {
+		o.IntervaloFilhos = intervaloFilhosPadrao
 	}
 	return o
 }
@@ -283,12 +313,21 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	if conta == "" {
 		conta = o.Motor
 	}
-	cur := meta{Projeto: filepath.Base(repo), Motor: o.Motor, Modelo: "padrão", Conta: conta, Tentativa: 1, Inicio: start.Format(time.RFC3339), PID: os.Getpid(), Servidor: o.ViaServidor}
+	cur := meta{Projeto: filepath.Base(repo), Motor: o.Motor, Modelo: "padrão", Conta: conta, Tentativa: 1, Inicio: start.Format(time.RFC3339), PID: os.Getpid(), Servidor: o.ViaServidor, Pai: o.Pai}
 	// Respeita os limites antes de criar uma worktree (operação cara). Contar as vagas e registrar o
 	// meta.json acontecem sob a mesma trava: assim o limite vale mesmo com agentes entrando juntos.
 	if err := reserveSlot(ctx, agents, o, cur); err != nil {
 		_ = os.Remove(cancelMarker)
 		return Result{}, err
+	}
+	if o.Pai != "" && o.PaiLogs != "" {
+		if err := registrarFilho(o.PaiLogs, o.Pai, o.Name, metaPath); err != nil {
+			fmt.Fprintln(os.Stderr, "AVISO: não registrei o agente no pai "+o.Pai+": "+err.Error())
+		}
+	}
+	logsDir := filepath.Join(agents, "logs")
+	if !o.Retomar {
+		_ = os.RemoveAll(filhosDir(logsDir, o.Name)) // filhos de uma execução antiga não contam
 	}
 	finalized := false
 	defer func() {
@@ -353,6 +392,16 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		return abort(err)
 	}
 	defer cleanup()
+	cur.Worktree, cur.Branch = work, branchAtual(work)
+	// Quem for lançado de dentro do harness (`openheinerss rodar` filho) sabe quem é o pai e onde se registrar.
+	if absLogs, err := filepath.Abs(logsDir); err == nil {
+		env := make(map[string]string, len(keys)+2)
+		for k, v := range keys {
+			env[k] = v
+		}
+		env[EnvPai], env[EnvPaiLogs] = o.Name, absLogs
+		keys = env
+	}
 	profile, err := motor.Resolve(o.Motor, o.Model, o.Effort)
 	if err != nil {
 		return abort(err)
@@ -371,9 +420,12 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	finalCode := 1
 	quotaSkipped, ran := false, false
 	resumeID, resumeMotor := "", ""
-	for i, candidate := range candidates {
+	filhos := &rodadasFilhos{reportados: map[string]bool{}}
+	turnoMsg := "" // mensagem de retomada depois que os agentes filhos terminam
+	for i := 0; i < len(candidates); i++ {
+		candidate := candidates[i]
 		attempts = i + 1
-		if o.QuotaMax > 0 {
+		if o.QuotaMax > 0 && turnoMsg == "" {
 			if percentual, ok := limites.Percentual(candidate); ok && percentual >= o.QuotaMax {
 				quotaSkipped = true
 				lastErr = fmt.Errorf("cota de %s em %.1f%% (limite %.1f%%)", candidate, percentual, o.QuotaMax)
@@ -426,7 +478,11 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			return finish(1, err.Error(), candidate, false), err
 		}
 		ran = true
-		write(fmt.Sprintf("### tentativa %d (%s) motor %s\n", attempts, o.Now().Format("15:04"), candidate))
+		if turnoMsg != "" {
+			write(fmt.Sprintf("\n### retomada %d de %d (%s) motor %s: agentes filhos\n", filhos.feitas, o.RodadasFilhos, o.Now().Format("15:04"), candidate))
+		} else {
+			write(fmt.Sprintf("### tentativa %d (%s) motor %s\n", attempts, o.Now().Format("15:04"), candidate))
+		}
 		o.emit(Evento{Tipo: EvInicio, Motor: candidate, Modelo: modeloMeta, Tentativa: attempts, Worktree: work})
 		mode := harness.ModeCLI
 		if o.Mode != "" {
@@ -454,7 +510,15 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		cfg := harness.SessionConfig{SessionID: fmt.Sprintf("rodar-%s-%d", o.Name, attempts), CWD: work, Model: modelName, Options: options, Env: keys}
 		if e = h.Start(hctx, cfg); e == nil {
 			text := prompt
-			if attempts > 1 || o.Retomar {
+			if turnoMsg != "" {
+				// Com sessão nativa a conversa continua e basta a mensagem; sem ela o motor precisa do prompt.
+				if options["claude_session_id"] != nil {
+					text = turnoMsg
+				} else {
+					text = prompt + "\n\n" + turnoMsg
+				}
+				turnoMsg = ""
+			} else if attempts > 1 || o.Retomar {
 				text += continuation
 			}
 			if strings.TrimSpace(prompt) == "" {
@@ -557,6 +621,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			case <-ctx.Done():
 				_ = h.Stop()
 				cancel()
+				pararFilhos(logsDir, o.Name, o.Now())
 				// Interrompido (rodar.parar ou Ctrl-C): fecha meta e log para ninguém achar que ainda roda.
 				return finish(130, "interrompido", candidate, true), ctx.Err()
 			}
@@ -570,6 +635,16 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		_ = h.Stop()
 		cancel()
 		if !failed {
+			msg, err := posTurno(ctx, o, logsDir, work, textBuf, filhos, write)
+			if err != nil {
+				pararFilhos(logsDir, o.Name, o.Now())
+				return finish(130, "interrompido", candidate, true), err
+			}
+			if msg != "" {
+				turnoMsg = msg
+				i-- // mesma instância, mesma tentativa: retoma a sessão
+				continue
+			}
 			return finish(finalCode, "", candidate, false), nil
 		}
 		switch {
