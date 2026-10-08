@@ -118,6 +118,11 @@ func (c *ClaudeCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig
 
 	c.cfg = cfg
 	c.resumeID = cfg.SessionID
+	if c.mode == harness.ModeCLI && optionString(cfg.Options, "claude_session_id", "resume_session", "session_id") == "" {
+		// A sessão criada pelo CLI só pode ser retomada depois que o primeiro
+		// stream informar o session_id real do Claude.
+		c.resumeID = ""
+	}
 	c.ctx, c.cancel = context.WithCancel(ctx)
 	c.stopped = false
 
@@ -146,6 +151,7 @@ func (c *ClaudeCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig
 
 	if c.mode == harness.ModeSDK {
 		cmd := exec.CommandContext(c.ctx, "node", "-e", NodeWorkerScript)
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		cmd.Dir = cfg.CWD
 		cmd.Env = env
 
@@ -236,6 +242,7 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 			args = append(args, "--permission-mode", permission)
 		}
 		cmd := exec.CommandContext(c.ctx, "claude", args...)
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		cmd.Dir = c.cfg.CWD
 		cmd.Env = c.env
 
@@ -304,6 +311,15 @@ func (c *ClaudeCodeHarness) resumeOption() string {
 	for _, key := range []string{"claude_session_id", "resume_session", "session_id"} {
 		if value, ok := c.cfg.Options[key].(string); ok && value != "" {
 			return value
+		}
+	}
+	return c.resumeID
+}
+
+func optionString(options map[string]interface{}, names ...string) string {
+	for _, name := range names {
+		if value, ok := options[name]; ok {
+			return fmt.Sprint(value)
 		}
 	}
 	return ""
@@ -482,7 +498,9 @@ func (c *ClaudeCodeHarness) Stop() error {
 
 	if c.cmd != nil && c.cmd.Process != nil {
 		// Envia sinal SIGINT limpo antes de encerrar
-		_ = c.cmd.Process.Signal(syscall.SIGINT)
+		if syscall.Kill(-c.cmd.Process.Pid, syscall.SIGINT) != nil {
+			_ = c.cmd.Process.Signal(syscall.SIGINT)
+		}
 	}
 
 	return nil

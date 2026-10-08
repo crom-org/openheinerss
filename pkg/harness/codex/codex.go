@@ -92,6 +92,9 @@ func (c *CodexHarness) SendPrompt(ctx context.Context, text string, attachments 
 		cmdCtx = context.Background()
 	}
 	cmd := exec.CommandContext(cmdCtx, "codex", buildExecArgs(c.cfg, c.threadID, text)...)
+	// O CLI pode criar processos auxiliares. O grupo próprio garante que timeout
+	// e Stop não deixem filhos segurando os pipes de streaming abertos.
+	configureProcessGroup(cmd)
 	cmd.Dir, cmd.Env = c.cfg.CWD, mergedEnv(c.cfg.Env)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -133,6 +136,10 @@ func (c *CodexHarness) SendPrompt(ctx context.Context, text string, attachments 
 	return nil
 }
 
+func configureProcessGroup(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+}
+
 func (c *CodexHarness) RespondPermission(ctx context.Context, reqID string, allow bool, message string) error {
 	return nil
 }
@@ -156,6 +163,10 @@ func (c *CodexHarness) Stop() error {
 		c.cancel()
 	}
 	if c.cmd != nil && c.cmd.Process != nil {
+		pid := c.cmd.Process.Pid
+		if err := syscall.Kill(-pid, syscall.SIGINT); err == nil {
+			return nil
+		}
 		return c.cmd.Process.Signal(syscall.SIGINT)
 	}
 	return nil

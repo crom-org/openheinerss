@@ -506,12 +506,35 @@ func newHarnessCmd() *cobra.Command {
 		return nil
 	}})
 	var prompt string
-	test := &cobra.Command{Use: "test <nome>", Short: "Executa um prompt curto e mostra eventos", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		h, err := harness.Create(args[0], harness.ModeCLI)
+	var todos, jsonOutput, incluirPrincipal bool
+	var retomar bool
+	var modo string
+	var pular string
+	var timeout time.Duration
+	test := &cobra.Command{Use: "test [nome]", Short: "Executa um prompt curto e mostra eventos", Args: func(cmd *cobra.Command, args []string) error {
+		if todos && len(args) != 0 {
+			return fmt.Errorf("--todos não aceita nome")
+		}
+		if !todos && len(args) != 1 {
+			return fmt.Errorf("informe <nome> ou use --todos")
+		}
+		return nil
+	}, RunE: func(cmd *cobra.Command, args []string) error {
+		if todos {
+			return runHarnessTodos(cmd, prompt, jsonOutput, pular, timeout, incluirPrincipal)
+		}
+		if retomar {
+			return runHarnessResume(cmd.Context(), args[0], prompt, timeout)
+		}
+		testMode := harness.Mode(modo)
+		if testMode == "" {
+			testMode = harness.ModeCLI
+		}
+		h, err := harness.Create(args[0], testMode)
 		if err != nil {
 			return err
 		}
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		if r := h.ValidatePrerequisites(ctx); !r.Satisfied {
 			return fmt.Errorf("pré-requisito ausente: %s", strings.Join(r.MissingItems, ", "))
@@ -520,7 +543,7 @@ func newHarnessCmd() *cobra.Command {
 		if err := h.Start(ctx, harness.SessionConfig{SessionID: "harness-test", CWD: cwd}); err != nil {
 			return err
 		}
-		defer h.Stop()
+		defer stopHarnessWithLimit(h)
 		if prompt == "" {
 			prompt = "responda apenas OK"
 		}
@@ -534,12 +557,19 @@ func newHarnessCmd() *cobra.Command {
 				if e.Type == harness.EventComplete || e.Type == harness.EventError {
 					return nil
 				}
-			case <-time.After(30 * time.Second):
+			case <-ctx.Done():
 				return fmt.Errorf("tempo esgotado testando harness '%s'", args[0])
 			}
 		}
 	}}
 	test.Flags().StringVar(&prompt, "prompt", "", "Prompt curto para o teste")
+	test.Flags().BoolVar(&todos, "todos", false, "Testa todos os harnesses e instâncias em sequência")
+	test.Flags().BoolVar(&jsonOutput, "json", false, "Emite a matriz em JSON (com --todos)")
+	test.Flags().StringVar(&pular, "pular", "", "Nomes a pular, separados por vírgula")
+	test.Flags().DurationVar(&timeout, "timeout", 120*time.Second, "Tempo máximo de cada teste")
+	test.Flags().BoolVar(&incluirPrincipal, "incluir-principal", false, "Inclui claude-code (conta principal)")
+	test.Flags().BoolVar(&retomar, "retomar", false, "Envia um segundo prompt na mesma sessão")
+	test.Flags().StringVar(&modo, "modo", "cli", "Modo do teste individual (cli ou sdk)")
 	root.AddCommand(test)
 	return root
 }

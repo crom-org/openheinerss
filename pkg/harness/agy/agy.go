@@ -122,6 +122,7 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 		}
 
 		cmd := exec.CommandContext(a.ctx, "agy", args...)
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		cmd.Dir = a.cfg.CWD
 		cmd.Env = a.env
 
@@ -232,7 +233,9 @@ func (a *AGYHarness) Stop() error {
 		_ = a.stdin.Close()
 	}
 	if a.cmd != nil && a.cmd.Process != nil {
-		_ = a.cmd.Process.Signal(syscall.SIGINT)
+		if syscall.Kill(-a.cmd.Process.Pid, syscall.SIGINT) != nil {
+			_ = a.cmd.Process.Signal(syscall.SIGINT)
+		}
 	}
 
 	return nil
