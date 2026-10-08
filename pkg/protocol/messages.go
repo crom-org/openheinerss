@@ -208,7 +208,9 @@ type RunParams struct {
 	CotaMax    float64 `json:"cotaMax,omitempty"`
 	// HarnessArgs vai intacto, na ordem, para o processo do harness.
 	HarnessArgs []string `json:"harnessArgs,omitempty"`
-	CWD         string   `json:"cwd,omitempty"`
+	// FilhosObrigatorios: o pai termina com código 4 ("filho falhou") se um filho falhar.
+	FilhosObrigatorios bool   `json:"filhosObrigatorios,omitempty"`
+	CWD                string `json:"cwd,omitempty"`
 }
 
 type LimitsParams struct{}

@@ -309,3 +309,59 @@ func ParseEsperarFilhos(v string) (time.Duration, error) {
 	}
 	return 0, fmt.Errorf("valor inválido para --esperar-filhos %q: use sim, nao ou uma duração (ex.: 30m, 2h)", v)
 }
+
+// MensagemOrfaos é o aviso padrão de filhos que continuam rodando depois do fim do pai.
+func MensagemOrfaos(nomes []string) string {
+	return fmt.Sprintf("o pai terminou com %d agente(s) filho(s) ainda rodando (órfãos): %s; acompanhe com `openheinerss agentes`", len(nomes), strings.Join(nomes, ", "))
+}
+
+// balancoFilhos confere os filhos no fim do pai. Filho vivo vira órfão: aviso no log e no stderr,
+// evento EvFilhosOrfaos, lista e motivo no meta.json. Com FilhosObrigatorios, um pai que terminaria
+// com 0 termina com CodigoFilhoFalhou se algum filho falhou (código ≠ 0, morreu sem FIM) ou ficou órfão.
+func balancoFilhos(o Options, logs string, cur *meta, code int, causa string, write func(string)) (int, string) {
+	var orfaos, falhos []string
+	var detalhes []string
+	for _, f := range listarFilhos(logs, o.Name) {
+		e := lerFilho(f)
+		switch {
+		case e.Vivo:
+			orfaos = append(orfaos, e.Nome)
+			detalhes = append(detalhes, fmt.Sprintf("%s (ainda rodando, PID %d)", e.Nome, e.PID))
+		case e.Fim == "":
+			falhos = append(falhos, e.Nome)
+			detalhes = append(detalhes, fmt.Sprintf("%s (%s)", e.Nome, e.Motivo))
+		case valueOr(e.Codigo, 0) != 0:
+			falhos = append(falhos, e.Nome)
+			detalhes = append(detalhes, fmt.Sprintf("%s (código %d)", e.Nome, valueOr(e.Codigo, 0)))
+		}
+	}
+	if len(orfaos) > 0 {
+		msg := MensagemOrfaos(orfaos)
+		write("AVISO: " + msg + "\n")
+		fmt.Fprintln(os.Stderr, "AVISO: "+msg)
+		cur.FilhosOrfaos = orfaos
+		if cur.Motivo == "" {
+			cur.Motivo = MotivoFilhosOrfaos
+		}
+		o.emit(Evento{Tipo: EvFilhosOrfaos, Filhos: orfaos, Mensagem: msg})
+	}
+	if !o.FilhosObrigatorios || code != 0 || len(detalhes) == 0 {
+		return code, causa
+	}
+	cur.Motivo = MotivoFilhoFalhou
+	cur.FilhosFalhos = append(append([]string{}, falhos...), orfaos...)
+	lista := strings.Join(detalhes, "; ")
+	write(fmt.Sprintf("filho falhou (--filhos-obrigatorios): %s\n", lista))
+	return CodigoFilhoFalhou, curto("filho falhou: "+lista, 200)
+}
+
+// filhosDoMotivo devolve os filhos que explicam o motivo do fim (para o orq.fim).
+func filhosDoMotivo(m meta) []string {
+	switch m.Motivo {
+	case MotivoFilhoFalhou:
+		return m.FilhosFalhos
+	case MotivoFilhosOrfaos:
+		return m.FilhosOrfaos
+	}
+	return nil
+}

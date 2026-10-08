@@ -361,9 +361,10 @@ Notificações sem `id`. Os eventos de execuções lançadas por `rodar.iniciar`
 | `orq.progresso` | texto ou ferramenta nova; **no máximo 1 a cada 2 s por agente** (o excedente sai no fim da janela, só o mais recente) | `geracao`, `agente`, `projeto`, `resumo` (até ~160 caracteres) |
 | `orq.precisa_decisao` | `agent.permission_request` do agente | `geracao`, `run`, `id`, `agente`, `projeto`, `pergunta`, `opcoes` |
 | `orq.erro` | falha de uma tentativa, cota ou erro antes de começar | `geracao`, `agente`, `projeto`, `mensagem`, `cota` (bool) |
-| `orq.fim` | missão terminou (também após erro ou parada) | `geracao`, `agente`, `projeto`, `codigo`, `tentativas`, `duracao` (segundos), `relatorio` (caminho do `RELATORIO-AGENTE.md`, se existir), `motivo` (`"negado"` quando uma negação encerrou; ausente nos demais) |
+| `orq.fim` | missão terminou (também após erro ou parada) | `geracao`, `agente`, `projeto`, `codigo`, `tentativas`, `duracao` (segundos), `relatorio` (caminho do `RELATORIO-AGENTE.md`, se existir), `motivo` (`"negado"` quando uma negação encerrou; `"filho falhou"` com `filhosObrigatorios`; `"filhos órfãos"` quando o pai terminou com filhos vivos; ausente nos demais), `filhos` (lista dos filhos que explicam o motivo) |
+| `orq.filhos_orfaos` | o pai terminou (FIM) com agentes filhos ainda rodando; vem antes do `orq.fim` | `geracao`, `agente`, `projeto`, `filhos` (nomes), `mensagem` |
 
-Ordem garantida por agente: `orq.inicio` → (`orq.progresso` | `orq.precisa_decisao` | `orq.erro`)* → `orq.fim`; nenhum progresso depois do fim. Com reservas ou novas tentativas há um `orq.inicio` por tentativa e um só `orq.fim`.
+Ordem garantida por agente: `orq.inicio` → (`orq.progresso` | `orq.precisa_decisao` | `orq.erro`)* → `orq.filhos_orfaos`? → `orq.fim`; nenhum progresso depois do fim. Com reservas ou novas tentativas há um `orq.inicio` por tentativa e um só `orq.fim`.
 
 ```json
 {"jsonrpc":"2.0","method":"orq.inicio","params":{"id":"rodar-1","agente":"etapa-1","projeto":"crom-tv","motor":"codex2","modelo":"padrão","tentativa":1,"worktree":"/home/j/projetos/crom-tv/.claude/agentes/etapa-1"}}

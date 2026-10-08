@@ -109,3 +109,45 @@ func TestFimDescartaProgressoPendente(t *testing.T) {
 		t.Fatalf("esperava progresso e fim, veio %v", metodos)
 	}
 }
+
+func TestObservadorEmiteFilhosOrfaos(t *testing.T) {
+	dir := t.TempDir()
+	logs := filepath.Join(dir, "logs")
+	if err := os.MkdirAll(logs, 0755); err != nil {
+		t.Fatal(err)
+	}
+	agora := time.Now().Format(time.RFC3339)
+	b, _ := json.Marshal(map[string]interface{}{"motor": "mock", "tentativa": 1, "inicio": agora, "fim": agora, "codigo": 0, "motivo": "filhos órfãos", "filhos_orfaos": []string{"filho-a"}})
+	if err := os.WriteFile(filepath.Join(logs, "pai.meta.json"), b, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(logs, "pai.log"), []byte("FIM\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	o := newOrq()
+	defer o.Close()
+	var mu sync.Mutex
+	var orfaos protocol.OrqFilhosOrfaosParams
+	var fim protocol.OrqFimParams
+	o.subs[&conexao{send: func(v interface{}) {
+		n := v.(protocol.Notification)
+		mu.Lock()
+		defer mu.Unlock()
+		switch n.Method {
+		case protocol.EventOrqFilhosOrfaos:
+			orfaos = n.Params.(protocol.OrqFilhosOrfaosParams)
+		case protocol.EventOrqFim:
+			fim = n.Params.(protocol.OrqFimParams)
+		}
+	}}] = assinatura{}
+	o.pastas[dir] = &pasta{dir: dir, projeto: "teste", baseline: true, estados: map[string]*estadoMeta{}} // pasta já conhecida: o fim é novo
+	o.varrer(dir)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(orfaos.Filhos) != 1 || orfaos.Filhos[0] != "filho-a" || orfaos.Geracao == "" || !strings.Contains(orfaos.Mensagem, "órfãos") {
+		t.Fatalf("orq.filhos_orfaos: %+v", orfaos)
+	}
+	if fim.Motivo != "filhos órfãos" || len(fim.Filhos) != 1 {
+		t.Fatalf("orq.fim: %+v", fim)
+	}
+}

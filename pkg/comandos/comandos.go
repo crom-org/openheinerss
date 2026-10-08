@@ -313,12 +313,9 @@ func editarYAML(path string, chaves []string, valor, tag string) error {
 	return gravarAtomico(path, buf.Bytes())
 }
 
-// criarPasta cria a pasta do comandos.yaml com 0700 (só quando ela ainda não existe).
+// criarPasta deixa a pasta do comandos.yaml com 0700 (e os arquivos dela com 0600), mesmo se já existia.
 func criarPasta(dir string) error {
-	if _, err := os.Stat(dir); err == nil {
-		return nil
-	}
-	return os.MkdirAll(dir, 0o700)
+	return config.PastaPrivada(dir)
 }
 
 // gravarAtomico grava num temporário único da mesma pasta (0600) e troca pelo arquivo final.

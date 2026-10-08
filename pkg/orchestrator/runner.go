@@ -70,10 +70,23 @@ type Options struct {
 	RodadasFilhos int
 	// IntervaloFilhos é o intervalo entre as leituras do meta.json dos filhos (padrão 2 s).
 	IntervaloFilhos time.Duration
+	// FilhosObrigatorios faz o pai terminar com CodigoFilhoFalhou quando algum filho terminou com
+	// código ≠ 0, morreu sem FIM ou ainda roda no fim do pai (--filhos-obrigatorios).
+	FilhosObrigatorios bool
 }
 
 // CodigoNegado é o código de fim quando uma negação de permissão encerra a execução.
 const CodigoNegado = 3
+
+// CodigoFilhoFalhou é o código de fim do pai com --filhos-obrigatorios quando um filho falhou.
+const CodigoFilhoFalhou = 4
+
+// Motivos gravados no meta.json e no orq.fim.
+const (
+	MotivoNegado       = "negado"
+	MotivoFilhoFalhou  = "filho falhou"
+	MotivoFilhosOrfaos = "filhos órfãos"
+)
 
 // Tipos de Evento.
 const (
@@ -81,6 +94,8 @@ const (
 	EvProgresso = "progresso"
 	EvFim       = "fim"
 	EvErro      = "erro"
+	// EvFilhosOrfaos: o pai terminou com filhos ainda rodando (Filhos, Mensagem).
+	EvFilhosOrfaos = "filhos_orfaos"
 )
 
 // Evento é um fato da execução do rodar, no vocabulário do protocolo orq.*.
@@ -98,7 +113,8 @@ type Evento struct {
 	Tentativas int
 	Duracao    time.Duration
 	Relatorio  string
-	Motivo     string // no EvFim: "negado" quando uma negação encerrou a execução
+	Motivo     string // no EvFim: MotivoNegado, MotivoFilhoFalhou ou MotivoFilhosOrfaos
+	Filhos     []string
 }
 
 // Pergunta é um permission_request que precisa de decisão.
@@ -136,6 +152,11 @@ type meta struct {
 	Pai       string `json:"pai,omitempty"`
 	Branch    string `json:"branch,omitempty"`
 	Worktree  string `json:"worktree,omitempty"`
+	// PaiLogs é a pasta de logs do pai (para saber se o pai já terminou).
+	PaiLogs string `json:"pai_logs,omitempty"`
+	// FilhosFalhos e FilhosOrfaos são gravados no fim do pai.
+	FilhosFalhos []string `json:"filhos_falhos,omitempty"`
+	FilhosOrfaos []string `json:"filhos_orfaos,omitempty"`
 }
 
 // nomeValido impede que o nome do agente saia da pasta de agentes (worktree, log e meta usam o nome em caminhos).
@@ -315,6 +336,9 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		conta = o.Motor
 	}
 	cur := meta{Projeto: filepath.Base(repo), Motor: o.Motor, Modelo: "padrão", Conta: conta, Tentativa: 1, Inicio: start.Format(time.RFC3339), PID: os.Getpid(), Servidor: o.ViaServidor, Pai: o.Pai}
+	if o.Pai != "" && o.PaiLogs != "" {
+		cur.PaiLogs = o.PaiLogs
+	}
 	// Respeita os limites antes de criar uma worktree (operação cara). Contar as vagas e registrar o
 	// meta.json acontecem sob a mesma trava: assim o limite vale mesmo com agentes entrando juntos.
 	if err := reserveSlot(ctx, agents, o, cur); err != nil {
@@ -357,6 +381,10 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	attempts := 0
 	// finish fecha meta, log, evento e resultado; é o único caminho de saída depois da reserva da vaga.
 	finish := func(code int, causa, motorName string, nl bool) Result {
+		if code != 130 {
+			// Interrompido já parou os filhos; nos demais fins, nada de FIM em silêncio com filho vivo ou falho.
+			code, causa = balancoFilhos(o, logsDir, &cur, code, causa, write)
+		}
 		cur.Fim, cur.Codigo = o.Now().Format(time.RFC3339), &code
 		_ = writeMeta(metaPath, cur)
 		prefix := ""
@@ -374,7 +402,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			// A pasta da missão é descartável: o relatório precisa sair dela antes de ser apagada.
 			rel = salvarRelatorio(work, agents, o.Name)
 		}
-		o.emit(Evento{Tipo: EvFim, Motor: motorName, Codigo: code, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: rel, Motivo: cur.Motivo})
+		o.emit(Evento{Tipo: EvFim, Motor: motorName, Codigo: code, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: rel, Motivo: cur.Motivo, Filhos: filhosDoMotivo(cur)})
 		finalized = true
 		return Result{Name: o.Name, WorkDir: work, LogFile: logPath, MetaFile: metaPath, Attempts: attempts, Code: code, Causa: causa, Resumo: curto(ultimoResumo, 240), Relatorio: rel}
 	}
@@ -607,7 +635,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 							_ = h.Stop()
 							cancel()
 							write("permissão negada; execução encerrada\n")
-							cur.Motivo = "negado"
+							cur.Motivo = MotivoNegado
 							return finish(CodigoNegado, "negado: "+curto(pq.Pergunta, 160), candidate, true), nil
 						}
 					}
@@ -967,6 +995,7 @@ func loadKeys(path string) (map[string]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("abrir arquivo de chaves: %w", err)
 	}
+	config.ArquivoPrivado(path)
 	values := make(map[string]string)
 	for numero, line := range strings.Split(string(b), "\n") {
 		line = strings.TrimSpace(line)

@@ -27,6 +27,10 @@ type Agente struct {
 	MetaFile    string   `json:"meta,omitempty"`
 	Pai         string   `json:"pai,omitempty"`
 	Filhos      []string `json:"filhos,omitempty"`
+	// Orfaos são os filhos ainda vivos de um pai que já terminou.
+	Orfaos []string `json:"orfaos,omitempty"`
+	// Orfao marca um filho vivo cujo pai já terminou.
+	Orfao bool `json:"orfao,omitempty"`
 }
 
 // ListAgents lista os agentes da pasta, inclusive execuções terminadas.
@@ -59,6 +63,9 @@ func ListAgents(agentsDir string, now time.Time) ([]Agente, error) {
 		a.Pai = m.Pai
 		for _, f := range listarFilhos(logs, name) {
 			a.Filhos = append(a.Filhos, f.Nome)
+			if m.Fim != "" && lerFilho(f).Vivo {
+				a.Orfaos = append(a.Orfaos, f.Nome)
+			}
 		}
 		if m.Fim != "" {
 			a.Estado = fmt.Sprintf("terminou código %d", valueOr(m.Codigo, 0))
@@ -70,6 +77,7 @@ func ListAgents(agentsDir string, now time.Time) ([]Agente, error) {
 			} else {
 				a.Estado = "rodando"
 			}
+			a.Orfao = paiTerminou(logs, m)
 			a.Duracao = durationSince(m.Inicio, now.Format(time.RFC3339))
 		} else {
 			a.Estado = "parado"
@@ -78,6 +86,24 @@ func ListAgents(agentsDir string, now time.Time) ([]Agente, error) {
 		result = append(result, a)
 	}
 	return result, nil
+}
+
+// paiTerminou diz se o pai de um filho já tem FIM no meta.json (na pasta de logs do pai, gravada no
+// meta do filho, ou na mesma pasta de logs).
+func paiTerminou(logs string, m meta) bool {
+	if m.Pai == "" {
+		return false
+	}
+	dir := m.PaiLogs
+	if dir == "" {
+		dir = logs
+	}
+	b, err := os.ReadFile(filepath.Join(dir, m.Pai+".meta.json"))
+	if err != nil {
+		return false
+	}
+	var pai meta
+	return json.Unmarshal(b, &pai) == nil && pai.Fim != ""
 }
 
 func valueOr(n *int, fallback int) int {

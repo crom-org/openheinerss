@@ -97,12 +97,13 @@ func GetGlobalDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// ~/.openheinerss guarda perfis com credenciais: pasta privada, mesmo se já existia aberta.
 	dir := filepath.Join(home, WorkspaceDirName)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := PastaPrivada(dir); err != nil {
 		return "", err
 	}
 	profilesDir := filepath.Join(dir, "profiles")
-	if err := os.MkdirAll(profilesDir, 0755); err != nil {
+	if err := PastaPrivada(profilesDir); err != nil {
 		return "", err
 	}
 	return dir, nil

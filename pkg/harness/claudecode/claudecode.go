@@ -154,7 +154,7 @@ func (c *ClaudeCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig
 	globalDir, _ := config.GetGlobalDir()
 	if cfg.Provider != "" && cfg.Provider != "default" {
 		profileDir := filepath.Join(globalDir, "profiles", fmt.Sprintf("claude-%s", cfg.Provider))
-		_ = os.MkdirAll(profileDir, 0755)
+		_ = config.PastaPrivada(profileDir) // CLAUDE_CONFIG_DIR guarda o login
 		env = append(env, fmt.Sprintf("CLAUDE_CONFIG_DIR=%s", profileDir))
 	}
 

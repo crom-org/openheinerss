@@ -156,6 +156,9 @@ func (o *Orq) emitir(method, projeto, agente string, params interface{}) {
 	case protocol.OrqDecisaoParams:
 		p.Geracao = o.geracao
 		params = p
+	case protocol.OrqFilhosOrfaosParams:
+		p.Geracao = o.geracao
+		params = p
 	}
 	o.emitMu.Lock()
 	defer o.emitMu.Unlock()
@@ -331,6 +334,9 @@ type metaArq struct {
 	Fim       string `json:"fim"`
 	Codigo    *int   `json:"codigo"`
 	Motivo    string `json:"motivo"`
+	// Filhos que falharam ou ficaram órfãos no fim do pai (ver orchestrator.meta).
+	FilhosFalhos []string `json:"filhos_falhos"`
+	FilhosOrfaos []string `json:"filhos_orfaos"`
 }
 
 func lerMeta(path string) (metaArq, bool) {
@@ -457,7 +463,10 @@ func (o *Orq) varrerAgente(p *pasta, conhecida bool, nome, prefixo string) {
 		if _, err := os.Stat(rel); err != nil {
 			rel = ""
 		}
-		o.fim(protocol.OrqFimParams{Agente: nome, Projeto: p.projeto, Codigo: cod, Tentativas: m.Tentativa, Duracao: dur, Relatorio: rel, Motivo: m.Motivo})
+		if len(m.FilhosOrfaos) > 0 {
+			o.emitir(protocol.EventOrqFilhosOrfaos, p.projeto, nome, protocol.OrqFilhosOrfaosParams{Agente: nome, Projeto: p.projeto, Filhos: m.FilhosOrfaos, Mensagem: orchestrator.MensagemOrfaos(m.FilhosOrfaos)})
+		}
+		o.fim(protocol.OrqFimParams{Agente: nome, Projeto: p.projeto, Codigo: cod, Tentativas: m.Tentativa, Duracao: dur, Relatorio: rel, Motivo: m.Motivo, Filhos: filhosDoFim(m)})
 		return
 	}
 	if !st.travou && orchestrator.LogParado(logPath, o.agora()) {
@@ -537,7 +546,7 @@ func (o *Orq) iniciar(p protocol.RodarIniciarParams) (protocol.RodarIniciarResul
 	o.mu.Unlock()
 	o.observarSemVarrer(dir, projeto)
 
-	opts := orchestrator.Options{Name: p.Nome, Motor: p.Motor, Model: p.Modelo, Effort: p.Esforco, PromptFile: p.Prompt, PromptText: p.Texto, Retomar: p.Retomar, AgentsDir: p.Pasta, BranchBase: p.BranchBase, MaxLoad: p.CargaMax, MaxAgents: p.MaxAgentes, Attempts: p.Tentativas, QuotaMax: p.CotaMax, ViaServidor: true}
+	opts := orchestrator.Options{Name: p.Nome, Motor: p.Motor, Model: p.Modelo, Effort: p.Esforco, PromptFile: p.Prompt, PromptText: p.Texto, Retomar: p.Retomar, AgentsDir: p.Pasta, BranchBase: p.BranchBase, MaxLoad: p.CargaMax, MaxAgents: p.MaxAgentes, Attempts: p.Tentativas, QuotaMax: p.CotaMax, FilhosObrigatorios: p.FilhosObrigatorios, ViaServidor: true}
 	opts.OnEvent = func(e orchestrator.Evento) { o.deJob(j, e) }
 	opts.DecidirFim = func(ctx context.Context, q orchestrator.Pergunta) (bool, string, bool) { return o.perguntar(ctx, j, q) }
 	go func() {
@@ -601,12 +610,22 @@ func (o *Orq) deJob(j *job, e orchestrator.Evento) {
 		o.progresso(protocol.OrqProgressoParams{ID: j.id, Agente: j.nome, Projeto: j.projeto, Resumo: e.Resumo})
 	case orchestrator.EvErro:
 		o.emitir(protocol.EventOrqErro, j.projeto, j.nome, protocol.OrqErroParams{ID: j.id, Agente: j.nome, Projeto: j.projeto, Mensagem: e.Mensagem, Cota: e.Cota})
+	case orchestrator.EvFilhosOrfaos:
+		o.emitir(protocol.EventOrqFilhosOrfaos, j.projeto, j.nome, protocol.OrqFilhosOrfaosParams{ID: j.id, Agente: j.nome, Projeto: j.projeto, Filhos: e.Filhos, Mensagem: e.Mensagem})
 	case orchestrator.EvFim:
 		o.mu.Lock()
 		j.fimEmitido = true
 		o.mu.Unlock()
-		o.fim(protocol.OrqFimParams{ID: j.id, Agente: j.nome, Projeto: j.projeto, Codigo: e.Codigo, Tentativas: e.Tentativas, Duracao: e.Duracao.Seconds(), Relatorio: e.Relatorio, Motivo: e.Motivo})
+		o.fim(protocol.OrqFimParams{ID: j.id, Agente: j.nome, Projeto: j.projeto, Codigo: e.Codigo, Tentativas: e.Tentativas, Duracao: e.Duracao.Seconds(), Relatorio: e.Relatorio, Motivo: e.Motivo, Filhos: e.Filhos})
 	}
+}
+
+// filhosDoFim escolhe a lista de filhos do orq.fim conforme o motivo gravado no meta.json.
+func filhosDoFim(m metaArq) []string {
+	if m.Motivo == orchestrator.MotivoFilhoFalhou {
+		return m.FilhosFalhos
+	}
+	return m.FilhosOrfaos
 }
 
 func (o *Orq) perguntar(ctx context.Context, j *job, q orchestrator.Pergunta) (bool, string, bool) {
