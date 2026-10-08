@@ -381,7 +381,8 @@ func (c *ClaudeCodeHarness) parseCLIEvent(data []byte, fallbackSession string) {
 		c.emit(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessionID, Reason: reason}})
 	case "rate_limit_event":
 		info, _ := msg["rate_limit_info"].(map[string]interface{})
-		if stringField(msg, "status") == "rejected" || stringField(msg, "overage_status") == "rejected" || stringField(info, "status") == "rejected" || stringField(info, "overageStatus") == "rejected" {
+		// Só status "rejected" é cota esgotada; overageStatus "rejected" quer dizer apenas que o uso extra pago está desligado.
+		if stringField(msg, "status") == "rejected" || stringField(info, "status") == "rejected" {
 			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessionID, Message: "limite de cota do Claude Code atingido"}})
 		}
 	}
