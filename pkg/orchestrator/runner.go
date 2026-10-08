@@ -441,7 +441,11 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			if attempts > 1 || o.Retomar {
 				text += continuation
 			}
-			e = h.SendPrompt(hctx, text, nil)
+			if strings.TrimSpace(prompt) == "" {
+				e = fmt.Errorf("prompt vazio recebido pelo motor %s", candidate)
+			} else {
+				e = h.SendPrompt(hctx, text, nil)
+			}
 		}
 		if e != nil {
 			lastErr = e

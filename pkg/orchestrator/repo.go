@@ -71,11 +71,9 @@ func ValidateAgentsDir(cwd, dir string) (string, error) {
 	resolved := ResolveAgentsDir(cwd, dir)
 	repoAbs, _ := filepath.Abs(repo)
 	pathAbs, _ := filepath.Abs(resolved)
-	check := pathAbs
-	if real, e := filepath.EvalSymlinks(pathAbs); e == nil {
-		check = real
-	} else if parent, e := filepath.EvalSymlinks(filepath.Dir(pathAbs)); e == nil {
-		check = filepath.Join(parent, filepath.Base(pathAbs))
+	check, err := resolveExistingAncestor(pathAbs)
+	if err != nil {
+		return "", err
 	}
 	realRepo := repoAbs
 	if real, e := filepath.EvalSymlinks(repoAbs); e == nil {
@@ -86,6 +84,27 @@ func ValidateAgentsDir(cwd, dir string) (string, error) {
 		return "", fmt.Errorf("pasta de agentes fora do repositório: %s (raiz: %s)", pathAbs, repoAbs)
 	}
 	return pathAbs, nil
+}
+
+// resolveExistingAncestor resolve symlinks do ancestral existente mais próximo e reanexa os níveis
+// que ainda não existem; assim um symlink acima de vários níveis inexistentes não passa batido.
+func resolveExistingAncestor(p string) (string, error) {
+	rest := ""
+	cur := p
+	for {
+		if real, err := filepath.EvalSymlinks(cur); err == nil {
+			return filepath.Join(real, rest), nil
+		}
+		if _, err := os.Lstat(cur); err == nil {
+			return "", fmt.Errorf("não foi possível resolver %s (symlink quebrado ou em laço)", cur)
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return p, nil
+		}
+		rest = filepath.Join(filepath.Base(cur), rest)
+		cur = parent
+	}
 }
 
 func gitRoot(cwd string) (string, error) { return RepoRoot(cwd) }
