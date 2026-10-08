@@ -76,7 +76,9 @@ rl.on('line', async (line) => {
         options: {
           cwd: cwd || process.cwd(),
           env: { ...process.env, ...(env || {}) },
-          permissionMode: permissionMode || 'ask',
+          // O protocolo do openheinerss chama a opção de "ask", mas o
+          // Claude Code atual expõe esse modo como "manual" no CLI interno.
+          permissionMode: permissionMode === 'ask' || !permissionMode ? 'manual' : permissionMode,
           canUseTool: (toolName, input, o) => {
             return new Promise((resolve) => {
               const reqId = o.requestId || 'perm_' + Math.random().toString(36).substring(2, 9);

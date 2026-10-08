@@ -151,6 +151,7 @@ func (o *OpenCodeHarness) SendPrompt(ctx context.Context, text string, attachmen
 		args = append(args, text)
 
 		cmd := exec.CommandContext(o.ctx, "opencode", args...)
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		cmd.Dir = o.cfg.CWD
 		cmd.Env = o.env
 
@@ -265,7 +266,9 @@ func (o *OpenCodeHarness) Stop() error {
 		_ = o.stdin.Close()
 	}
 	if o.cmd != nil && o.cmd.Process != nil {
-		_ = o.cmd.Process.Signal(syscall.SIGINT)
+		if syscall.Kill(-o.cmd.Process.Pid, syscall.SIGINT) != nil {
+			_ = o.cmd.Process.Signal(syscall.SIGINT)
+		}
 	}
 
 	return nil
