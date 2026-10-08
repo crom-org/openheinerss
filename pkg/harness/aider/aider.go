@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/crom-org/openheinerss/pkg/harness"
 	"github.com/crom-org/openheinerss/pkg/harness/process"
@@ -55,6 +56,7 @@ type AiderHarness struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
 	stopped bool
+	effort  string
 }
 
 // NewAiderHarness instancia o adaptador Aider
@@ -91,6 +93,7 @@ func (a *AiderHarness) Start(ctx context.Context, cfg harness.SessionConfig) err
 	a.cfg = cfg
 	a.ctx, a.cancel = context.WithCancel(ctx)
 	a.stopped = false
+	a.effort = harness.OpcaoTexto(cfg.Options, "reasoning_effort", "effort")
 
 	env := os.Environ()
 	for k, v := range cfg.Env {
@@ -113,7 +116,29 @@ func (a *AiderHarness) SendPrompt(ctx context.Context, text string, attachments 
 	}
 
 	sessID := a.cfg.SessionID
+	if name, rest, ok := harness.SlashCommand(text); ok {
+		switch strings.ToLower(name) {
+		case "model":
+			if rest == "" {
+				return harness.NoEquivalent("aider", name, "informe o modelo, ex.: /model gpt-4o")
+			}
+			a.cfg.Model = rest
+			a.emitLocked(sessID, "modelo das próximas chamadas: "+rest)
+			return nil
+		case "reasoning-effort", "effort":
+			a.effort = rest
+			a.emitLocked(sessID, "esforço (--reasoning-effort) das próximas chamadas: "+rest)
+			return nil
+		}
+		// Os demais /comandos o próprio aider interpreta dentro de --message: vão literais.
+	}
+	files, extraFiles, cleanup, err := a.anexos(attachments)
+	if err != nil {
+		return err
+	}
+	cfg, effort := a.cfg, a.effort
 	go func() {
+		defer cleanup()
 		a.emit(harness.Event{
 			Type: harness.EventThinking,
 			Payload: protocol.ThinkingParams{
@@ -131,7 +156,7 @@ func (a *AiderHarness) SendPrompt(ctx context.Context, text string, attachments 
 		// --yes-always responde "sim" a toda pergunta e --no-pretty/--no-stream evitam
 		// controle de terminal; sem isso o aider pode ficar esperando entrada.
 		// O git fica habilitado para que uma missão possa criar o commit pedido.
-		args := buildArgs(a.cfg, text)
+		args := buildArgs(cfg, effort, files, extraFiles, text)
 
 		runCtx, stopRun := context.WithCancel(a.ctx)
 		defer stopRun()
@@ -171,7 +196,15 @@ func (a *AiderHarness) SendPrompt(ctx context.Context, text string, attachments 
 		a.cmd = cmd
 		a.mu.Unlock()
 		stderrTail := &tailBuffer{}
-		go func() { _, _ = io.Copy(stderrTail, stderr) }()
+		stderrRaw := harness.NewLineWriter(func(line string) {
+			a.emit(harness.RawEvent(sessID, "aider", "stderr", line))
+		})
+		stderrDone := make(chan struct{})
+		go func() {
+			_, _ = io.Copy(io.MultiWriter(stderrTail, stderrRaw), stderr)
+			stderrRaw.Flush()
+			close(stderrDone)
+		}()
 
 		fatal := ""
 		scanner := bufio.NewScanner(stdout)
@@ -200,6 +233,10 @@ func (a *AiderHarness) SendPrompt(ctx context.Context, text string, attachments 
 			})
 		}
 
+		select {
+		case <-stderrDone:
+		case <-time.After(2 * time.Second):
+		}
 		err = cmd.Wait()
 		a.mu.Lock()
 		if a.cmd == cmd {
@@ -241,12 +278,38 @@ func (a *AiderHarness) SendPrompt(ctx context.Context, text string, attachments 
 	return nil
 }
 
-func buildArgs(cfg harness.SessionConfig, text string) []string {
-	args := []string{"--yes-always", "--no-pretty", "--no-stream", "--no-check-update", "--no-analytics", "--no-show-model-warnings", "--no-browser", "--message=" + text}
+// anexos separa os arquivos pedidos nas options (files = editáveis, read_files = só leitura) e
+// grava os anexos do prompt em arquivos temporários (o aider só recebe caminhos).
+func (a *AiderHarness) anexos(attachments []protocol.Attachment) (edit, read []string, cleanup func(), err error) {
+	extra, cleanup, err := harness.AnexosEmArquivos(attachments)
+	if err != nil {
+		return nil, nil, func() {}, err
+	}
+	edit = append(harness.OpcaoLista(a.cfg.Options, "files", "file"), extra...)
+	return edit, harness.OpcaoLista(a.cfg.Options, "read_files", "read"), cleanup, nil
+}
+
+// buildArgs monta a invocação do aider: opções fixas, tipadas, harness_args (intactos, na ordem) e, por
+// último, --message (inclusive "/comando ...", que o aider interpreta).
+func buildArgs(cfg harness.SessionConfig, effort string, files, read []string, text string) []string {
+	args := []string{"--yes-always", "--no-pretty", "--no-stream", "--no-check-update", "--no-analytics", "--no-show-model-warnings", "--no-browser"}
 	if cfg.Model != "" {
 		args = append(args, "--model", cfg.Model)
 	}
-	return args
+	if effort != "" {
+		args = append(args, "--reasoning-effort", effort)
+	}
+	for _, f := range read {
+		args = append(args, "--read", f)
+	}
+	for _, f := range files {
+		args = append(args, "--file", f)
+	}
+	if harness.OpcaoBool(cfg.Options, "continue", "restore_chat_history") {
+		args = append(args, "--restore-chat-history")
+	}
+	args = append(args, harness.HarnessArgs(cfg.Options)...)
+	return append(args, "--message="+text)
 }
 
 const modelFix = "Informe um modelo (--model ou campo model da instância) e exporte a chave do provedor (ex.: OPENROUTER_API_KEY, ANTHROPIC_API_KEY), ou use um modelo local 'ollama/...'."
@@ -398,5 +461,19 @@ func (a *AiderHarness) emit(evt harness.Event) {
 	select {
 	case a.events <- evt:
 	default:
+	}
+}
+
+// emitLocked devolve o aviso de um /comando traduzido pela ponte e encerra o turno
+// (chamar com a.mu preso, como em SendPrompt).
+func (a *AiderHarness) emitLocked(sessionID, message string) {
+	for _, evt := range []harness.Event{
+		{Type: harness.EventText, Payload: protocol.TextParams{SessionID: sessionID, Delta: message + "\n"}},
+		{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessionID, Reason: "completed"}},
+	} {
+		select {
+		case a.events <- evt:
+		default:
+		}
 	}
 }

@@ -4,13 +4,11 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
-
-	"github.com/crom-org/openheinerss/pkg/harness"
 )
 
 func TestArgsOpenCodeTabela(t *testing.T) {
 	for _, prompt := range []string{"faça um arquivo", "--- prompt com hífen"} {
-		got := buildArgs(harness.SessionConfig{Model: "openai/modelo"}, "sess-1", prompt)
+		got := buildArgs(callArgs{resumeID: "sess-1", model: "openai/modelo", text: prompt})
 		want := []string{"run", "--format", "json", "--session", "sess-1", "-m", "openai/modelo", "--", prompt}
 		if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
 			t.Fatalf("prompt %q: %#v", prompt, got)
