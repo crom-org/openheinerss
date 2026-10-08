@@ -103,9 +103,13 @@ func (c *CodexHarness) SendPrompt(ctx context.Context, text string, attachments 
 	}
 	c.cmd = cmd
 	sessionID := c.cfg.SessionID
-	go c.readJSONL(stdout, sessionID)
-	go c.readStderr(stderr, sessionID)
+	// Os leitores precisam terminar antes do Wait, senão o fim pode chegar antes do texto.
+	var leitores sync.WaitGroup
+	leitores.Add(2)
+	go func() { defer leitores.Done(); c.readJSONL(stdout, sessionID) }()
+	go func() { defer leitores.Done(); c.readStderr(stderr, sessionID) }()
 	go func() {
+		leitores.Wait()
 		err := cmd.Wait()
 		c.mu.Lock()
 		stopped := c.stopped
