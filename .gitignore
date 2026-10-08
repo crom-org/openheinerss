@@ -25,3 +25,4 @@ build/
 # Agentes locais (crom-painel clonado e dados dos agentes)
 .claude/crom-painel/
 .claude/agentes/
+RELATORIO-AGENTE.md
