@@ -9,6 +9,8 @@ O openheinerss é só a ponte entre o cliente (CLI, SDKs, Central) e o harness. 
 - **Cota**: só é falta de cota quando o turno não teve resultado bem-sucedido (um `rate_limit_event` ou o texto do agente citando "cota" não derrubam um turno que terminou bem).
 - **Reserva**: ao trocar de motor pela reserva, a instância usa o próprio modelo/esforço padrão; não herda o modelo do harness principal.
 
+- **Catálogo de comandos**: `openheinerss comandos <harness>` / `harness.comandos` lista os `/x` de cada harness com o repasse desta tabela (`literal`, `traduzido`, `sem_equivalente`) e as anotações do usuário (`comandos.yaml`). Ver docs/02-protocol-spec.md.
+
 Detalhe por harness (tabela "antes/agora" e o que não tem equivalente):
 
 

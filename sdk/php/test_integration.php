@@ -85,6 +85,23 @@ $criar = array_values(array_filter($reqs, fn($r) => $r['method'] === 'session.cr
 if ($criar['params']['options']['harnessArgs'] !== ['--x=a,b', '/compact', 'c d'] || $criar['params']['options']['effort'] !== 'high') throw new RuntimeException('harnessArgs fora do JSON-RPC');
 $prompt = array_values(array_filter($reqs, fn($r) => $r['method'] === 'session.prompt'))[0];
 if ($prompt['params']['text'] !== '/model x') throw new RuntimeException('prompt não chegou literal');
+// Comandos do harness: anotar e confirmar gravam em <OPENHEINERSS_CONFIG>/comandos.yaml.
+$cfgComandos = sys_get_temp_dir() . '/openheinerss-cmd-php-' . bin2hex(random_bytes(4));
+mkdir($cfgComandos);
+$antesCfg = getenv('OPENHEINERSS_CONFIG');
+putenv('OPENHEINERSS_CONFIG=' . $cfgComandos);
+try {
+    $cmdAgent = Openheinerss\Agent::session(['harness' => 'mock'], getenv('OPENHEINERSS_BIN') ?: 'openheinerss');
+    $nota = $cmdAgent->annotateCommand('claude-code', '/compact', 'compacta o claude code; o central não usa');
+    if (($nota['anotacao'] ?? '') !== 'compacta o claude code; o central não usa') throw new RuntimeException('anotação não gravada');
+    if (!($cmdAgent->confirmCommand('claude-code', '/compact')['confirmado'] ?? false)) throw new RuntimeException('confirmar falhou');
+    $lista = $cmdAgent->listCommands('claude-code');
+    if ($lista['arquivo'] !== $cfgComandos . '/comandos.yaml') throw new RuntimeException('arquivo de comandos errado: ' . $lista['arquivo']);
+    if (($cmdAgent->listCommands('codex')['desconhecido'] ?? '') !== 'sem_equivalente') throw new RuntimeException('codex deveria recusar /x desconhecido');
+} finally {
+    unset($cmdAgent);
+    putenv($antesCfg === false ? 'OPENHEINERSS_CONFIG' : 'OPENHEINERSS_CONFIG=' . $antesCfg);
+}
 echo "PHP SDK integração OK\n";
 
 // O caminho do executável pode conter espaços; proc_open recebe argv, não shell.

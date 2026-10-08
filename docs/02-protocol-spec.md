@@ -319,6 +319,29 @@ Responde um `orq.precisa_decisao`. `resposta`: `"permitir"` ou `"negar"` (aceita
 {"jsonrpc":"2.0","id":5,"geracao":"geracao-a1b2c3","result":{"id":"dec-2","resposta":"permitir"}}
 ```
 
+### `harness.comandos`, `harness.comandos.anotar`, `harness.comandos.confirmar`
+Comandos nativos (`/compact`, `/model`…) de um harness ou instância. Não é preciso escolher harness para a Central: cada um tem a sua lista. A instância herda o catálogo da sua `base:` (e as anotações de cada nível da herança; a do nível mais específico vence).
+
+- `harness.comandos` `{harness, cwd?}` → `{harness, base, cadeia, desconhecido, arquivo, comandos:[{nome, descricao, repasse, detalhe?, origem, anotacao?, confirmado}]}`.
+  - `repasse`: `literal` (vai como está), `traduzido` (a ponte troca por flag/opção) ou `sem_equivalente` (só existe na tela; mandar dá erro claro). `desconhecido` é o repasse de um `/x` fora da lista.
+  - `origem`: `embutido` (catálogo da auditoria docs/PONTE.md), `descoberto` (achado nos arquivos do harness: `.claude/commands`, `skills/*/SKILL.md` em `cwd` e em `CLAUDE_CONFIG_DIR`; `command(s)/` do opencode; `prompts/` do codex) ou `usuario` (só no `comandos.yaml`).
+  - `cwd` (opcional): pasta do projeto onde procurar comandos do harness.
+- `harness.comandos.anotar` `{harness, comando, anotacao}` e `harness.comandos.confirmar` `{harness, comando}` gravam no `comandos.yaml` e devolvem o comando já mesclado. A tela de confirmação do primeiro uso é do cliente; o openheinerss só guarda `confirmado`.
+- Arquivo: `~/.config/openheinerss/comandos.yaml` (respeita `XDG_CONFIG_HOME`); com `--config`/`OPENHEINERSS_CONFIG`, também `<pasta>/comandos.yaml`, que vence o global e é onde se grava. A gravação preserva comentários.
+
+```yaml
+claude-code:
+  "/compact":
+    anotacao: "serve para compactar o Claude Code; o central não usa (memória é organizada de outro jeito)"
+    confirmado: true
+```
+```json
+{"jsonrpc":"2.0","id":7,"method":"harness.comandos","params":{"harness":"conta2"}}
+```
+```json
+{"jsonrpc":"2.0","id":7,"result":{"harness":"conta2","base":"claude-code","cadeia":["claude-code","conta2"],"desconhecido":"literal","arquivo":"/home/u/.config/openheinerss/comandos.yaml","comandos":[{"nome":"/compact","descricao":"Compacta a conversa do Claude Code (resume o histórico para liberar contexto)","repasse":"literal","detalhe":"vai literal ao claude -p; se o claude não aceitar o comando sem tela, ele mesmo responde","origem":"embutido","anotacao":"serve para compactar o Claude Code; o central não usa (memória é organizada de outro jeito)","confirmado":true}]}}
+```
+
 ### `limites.obter` e `harness.listar`
 `limites.obter` devolve o mesmo JSON do `openheinerss limites --json` (o método antigo `limites` continua valendo). `harness.listar` devolve os harnesses e instâncias carregados, no formato de `catalog.list`.
 

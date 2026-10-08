@@ -143,6 +143,18 @@ class Agent:
     def list_harnesses(self) -> list[dict[str, Any]]:
         return self._request("harness.listar", {}).get("harnesses", [])
 
+    def list_commands(self, harness: str, cwd: Optional[str] = None) -> Dict[str, Any]:
+        """Comandos nativos (/compact, /model…) do harness ou instância, com anotações do usuário."""
+        return self._request("harness.comandos", {k: v for k, v in {"harness": harness, "cwd": cwd}.items() if v})
+
+    def annotate_command(self, harness: str, comando: str, anotacao: str) -> Dict[str, Any]:
+        """Grava uma anotação livre para o comando (comandos.yaml)."""
+        return self._request("harness.comandos.anotar", {"harness": harness, "comando": comando, "anotacao": anotacao})
+
+    def confirm_command(self, harness: str, comando: str) -> Dict[str, Any]:
+        """Marca o primeiro uso do comando como já confirmado."""
+        return self._request("harness.comandos.confirmar", {"harness": harness, "comando": comando})
+
     def run(self, options: Dict[str, Any]) -> Dict[str, Any]:
         return self._request("rodar.iniciar", options)
 
@@ -172,6 +184,9 @@ class Agent:
         self._request("eventos.assinar", filter)
 
     listHarnesses = list_harnesses
+    listCommands = list_commands
+    annotateCommand = annotate_command
+    confirmCommand = confirm_command
     listRuns = list_runs
     stopRun = stop_run
     decideRun = decide_run

@@ -149,6 +149,12 @@ class Agent
 
     public function registerHarness(array $spec): void { $this->request('harness.register', $spec); }
     public function listHarnesses(): array { return $this->request('harness.listar', [])['harnesses'] ?? []; }
+    /** Comandos nativos (/compact, /model…) do harness ou instância, com anotações do usuário. */
+    public function listCommands(string $harness, ?string $cwd = null): array { return $this->request('harness.comandos', array_filter(['harness' => $harness, 'cwd' => $cwd])); }
+    /** Grava uma anotação livre para o comando (comandos.yaml). */
+    public function annotateCommand(string $harness, string $comando, string $anotacao): array { return $this->request('harness.comandos.anotar', ['harness' => $harness, 'comando' => $comando, 'anotacao' => $anotacao]); }
+    /** Marca o primeiro uso do comando como já confirmado. */
+    public function confirmCommand(string $harness, string $comando): array { return $this->request('harness.comandos.confirmar', ['harness' => $harness, 'comando' => $comando]); }
     public function run(array|RunOptions $options): array { return $this->request('rodar.iniciar', $options instanceof RunOptions ? $options->toArray() : $options); }
     public function listRuns(array $filter = []): array { return $this->request('rodar.listar', $filter); }
     public function stopRun(?string $id = null, ?string $agente = null): void {

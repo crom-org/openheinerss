@@ -14,6 +14,7 @@ Usage:
 
 Available Commands:
   agentes     Lista e controla agentes em execução
+  comandos    Lista os comandos nativos (/compact, /model…) de um harness ou instância e como são repassados
   docs        Gera ou verifica o manual do CLI em docs/09-cli.md
   doctor      Verifica ferramentas, dependências e pré-requisitos do sistema
   harness     Lista, instala e testa harnesses
@@ -61,6 +62,37 @@ Global Flags:
       --configuracao string   Alias de --config
 
 Use "openheinerss agentes [command] --help" for more information about a command.
+
+```
+
+## `openheinerss comandos --help`
+
+```text
+Lista os comandos nativos do harness (catálogo embutido da base, mais comandos e skills achados
+nos arquivos do harness) mesclados com as anotações do usuário em comandos.yaml.
+Repasse: literal (vai como está), traduzido (a ponte troca por flag/opção), sem_equivalente (só existe na tela).
+Anotações ficam em ~/.config/openheinerss/comandos.yaml; com --config/OPENHEINERSS_CONFIG, em <pasta>/comandos.yaml.
+
+Usage:
+  openheinerss comandos <harness> [flags]
+  openheinerss comandos [command]
+
+Aliases:
+  comandos, commands
+
+Available Commands:
+  anotar      Grava uma anotação livre para o comando (vale para as instâncias que herdam do harness)
+  confirmar   Marca o primeiro uso do comando como já confirmado
+
+Flags:
+      --cwd string   Pasta do projeto onde procurar comandos/skills do harness (padrão: pasta atual)
+      --json         Emite JSON
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
+Use "openheinerss comandos [command] --help" for more information about a command.
 
 ```
 
@@ -400,6 +432,44 @@ Global Flags:
       --configuracao string    Alias de --config
       --json                   Emite JSON
       --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
+
+```
+
+## `openheinerss comandos anotar --help`
+
+```text
+Grava uma anotação livre para o comando (vale para as instâncias que herdam do harness)
+
+Usage:
+  openheinerss comandos anotar <harness> </comando> <texto> [flags]
+
+Aliases:
+  anotar, annotate
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+      --cwd string            Pasta do projeto onde procurar comandos/skills do harness (padrão: pasta atual)
+      --json                  Emite JSON
+
+```
+
+## `openheinerss comandos confirmar --help`
+
+```text
+Marca o primeiro uso do comando como já confirmado
+
+Usage:
+  openheinerss comandos confirmar <harness> </comando> [flags]
+
+Aliases:
+  confirmar, confirm
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+      --cwd string            Pasta do projeto onde procurar comandos/skills do harness (padrão: pasta atual)
+      --json                  Emite JSON
 
 ```
 

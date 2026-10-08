@@ -2,7 +2,13 @@
 
 O transporte comum é JSON-RPC 2.0 em NDJSON via `openheinerss serve --stdio`. O servidor WebSocket (`ws://127.0.0.1:4820/ws`; `OPENHEINERSS_PORTA` muda a porta) também existe; só o SDK TypeScript o usa. Os SDKs Python e PHP usam STDIO.
 
-Os três SDKs (versão 1.1.0) expõem a mesma orquestração: `registerHarness`, `listHarnesses`, `run` (`rodar.iniciar`), `listRuns`, `stopRun`, `decideRun`, `getLimits` e `subscribeEvents`. Todos os callbacks `orq.*` recebem `geracao`; a geração da última resposta também fica disponível no cliente. `decideRun(id, resposta, mensagem?, run?)`: `run` (id da execução, vem em `orq.precisa_decisao`) é opcional e, se enviado, o servidor recusa a resposta quando ele não bate com o da decisão. Em `run`, `texto` é o prompt em texto e `prompt` é o caminho de um arquivo de prompt.
+Os três SDKs (versão 1.1.0) expõem a mesma orquestração: `registerHarness`, `listHarnesses`, `run` (`rodar.iniciar`), `listRuns`, `stopRun`, `decideRun`, `getLimits` e `subscribeEvents`. Todos os callbacks `orq.*` recebem `geracao`; a geração da última resposta também fica disponível no cliente. Comandos nativos do harness (`harness.comandos*`): `listCommands(harness, cwd?)`,
+`annotateCommand(harness, comando, anotacao)` e `confirmCommand(harness, comando)` (Python também
+`list_commands`, `annotate_command`, `confirm_command`). Cada comando traz `nome`, `descricao`,
+`repasse` (`literal`/`traduzido`/`sem_equivalente`), `origem`, `anotacao` e `confirmado`. A tela de
+confirmação do primeiro uso fica no cliente; o SDK só lê e grava o estado.
+
+`decideRun(id, resposta, mensagem?, run?)`: `run` (id da execução, vem em `orq.precisa_decisao`) é opcional e, se enviado, o servidor recusa a resposta quando ele não bate com o da decisão. Em `run`, `texto` é o prompt em texto e `prompt` é o caminho de um arquivo de prompt.
 
 ## TypeScript
 

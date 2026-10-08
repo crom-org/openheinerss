@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/crom-org/openheinerss/pkg/comandos"
 	"github.com/crom-org/openheinerss/pkg/doctor"
 	"github.com/crom-org/openheinerss/pkg/harness"
 	"github.com/crom-org/openheinerss/pkg/limites"
@@ -147,6 +148,28 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (respo
 
 	case protocol.MethodHarnessListar:
 		return protocol.NewResponse(req.ID, protocol.CatalogListResult{Harnesses: harness.ListCatalog()})
+
+	case protocol.MethodHarnessComandos, protocol.MethodHarnessComandosAnotar, protocol.MethodHarnessComandosConfirmar:
+		var p protocol.HarnessComandosParams
+		if err := json.Unmarshal(req.Params, &p); err != nil || p.Harness == "" {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para "+req.Method+": informe harness", nil)
+		}
+		var (
+			res interface{}
+			err error
+		)
+		switch req.Method {
+		case protocol.MethodHarnessComandos:
+			res, err = comandos.Listar(p.Harness, p.CWD)
+		case protocol.MethodHarnessComandosAnotar:
+			res, err = comandos.Anotar(p.Harness, p.Comando, p.Anotacao, p.CWD)
+		default:
+			res, err = comandos.Confirmar(p.Harness, p.Comando, p.CWD)
+		}
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, err.Error(), nil)
+		}
+		return protocol.NewResponse(req.ID, res)
 
 	case protocol.MethodRodarIniciar:
 		var p protocol.RodarIniciarParams
