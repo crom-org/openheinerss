@@ -9,6 +9,10 @@ export interface SessionOptions {
   model?: string;
   permissionMode?: "ask" | "always_allow" | "plan";
   systemPrompt?: string;
+  /** Esforço de raciocínio repassado ao harness. */
+  effort?: string;
+  /** Argumentos nativos extras do harness: vão intactos e na ordem, sem filtro. */
+  harnessArgs?: string[];
 }
 
 export interface HarnessRegistration {
@@ -29,6 +33,8 @@ export interface RunOptions {
   nome: string; motor: string; modelo?: string; esforco?: string; prompt?: string; texto?: string;
   retomar?: boolean; pasta?: string; branchBase?: string; cargaMax?: number;
   maxAgentes?: number; tentativas?: number; cotaMax?: number; cwd?: string; projeto?: string;
+  /** Argumentos nativos extras do harness: vão intactos e na ordem, sem filtro. */
+  harnessArgs?: string[];
 }
 export interface RunStarted { geracao: string; id: string; agente: string; projeto: string; }
 export interface AgentInfo { id?: string; agente: string; projeto: string; estado: string; motor?: string; modelo?: string; tentativa?: number; inicio?: string; fim?: string; codigo?: number; pid?: number; log?: string; }
@@ -65,7 +71,16 @@ export interface ToolResult {
   output: string;
 }
 
+/** Linha original do harness (`agent.raw`): stdout sem mapeamento ou stderr, como foi escrita. */
+export interface RawLine {
+  sessionId: string;
+  harness: string;
+  stream: "stdout" | "stderr" | string;
+  line: string;
+}
+
 export interface OpenheinerssEvents {
+  raw: (raw: RawLine) => void;
   thinking: (delta: string) => void;
   text: (delta: string) => void;
   tool_call: (call: ToolCall) => void;

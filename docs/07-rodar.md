@@ -44,7 +44,9 @@ Cada execução atualiza `logs/<nome>.log` e, atomicamente,
 `logs/<nome>.meta.json`. `--retomar` (ou `RETOMAR=1`) preserva o log e adiciona
 o texto de continuação. Uma instância custom pode declarar `reserva: [outra]`;
 ao encontrar a regex de cota ou um erro, as reservas são tentadas até
-`--tentativas` (padrão 4).
+`--tentativas` (padrão 4). Cada reserva usa o modelo e o esforço da própria
+instância: `--modelo`/`--esforco` valem só para o motor principal (o modelo de
+um harness não serve em outro).
 
 Uma instância baseada em `claude-code` pode declarar `modo: sdk`; o `rodar`
 também aceita `--modo sdk` para forçar o modo. Erro de provedor (sobrecarga,
@@ -61,12 +63,16 @@ texto final curto (até 160 caracteres) e a frase do provedor logo no início
 overloaded`). **Limitação:** um agente que escreve sobre "cota" num resumo, usa
 ferramentas ou responde algo mais longo nunca é confundido (houve falsos
 positivos reais); em troca, uma mensagem do provedor embutida num texto maior
-não é reconhecida sem `quotaRegex`/`error_regex` na instância.
+não é reconhecida sem `quotaRegex`/`error_regex` na instância. No `claude-code`,
+um `rate_limit_event` com `status: rejected` só vira falta de cota se o turno
+terminar sem resultado bem-sucedido, e um `result` com sucesso nunca é cota.
 
 **Erro transitório sem reserva.** Sem `reserva`, erro do provedor repete a
 MESMA instância até `--tentativas`, com espera curta crescente (2 s, 4 s, 6 s…
 até 10 s). Com `reserva`, troca de instância na hora. Cota sem reserva não é
 repetida (código 2).
+
+**Repasse ao harness.** `--harness-arg X` (alias `--arg`, repetível) manda `X` intacto e na ordem ao processo do motor, sem separar por vírgula nem filtrar; `--seco` mostra esses args. Linhas que o motor escreve e que não viram evento, e o stderr, aparecem no log como `[raw stdout] ...`/`[raw stderr] ...`. Um prompt que começa com `/` vai literalmente ao motor (ver `session.prompt` em `02-protocol-spec.md`).
 
 Um agente interrompido por Ctrl-C deixa a worktree e o log para o `--retomar`. Limites opcionais: `--carga-maxima`, `--max-agentes`, `--pasta-agentes` e
 `--branch-base`. O protocolo JSON-RPC oferece os mesmos recursos pelo método

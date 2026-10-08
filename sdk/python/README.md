@@ -31,3 +31,12 @@ for event in agent.stream("Escreva uma função que calcula fibonacci"):
 resultado = agent.prompt("Refatore a função para usar memoização")
 print(resultado)
 ```
+
+## Repasse ao harness (ponte)
+`harness_args` vai intacto e na ordem ao processo do harness, sem lista de permitidos; texto que começa com `/` vai literalmente (ver `docs/02-protocol-spec.md`). `agent.raw` aparece no `stream()` e em `on("agent.raw", fn)`.
+```python
+agent = Agent(harness="codex", effort="high", harness_args=["--add-dir", "../x"])
+agent.on("agent.raw", lambda p: print("[raw]", p["stream"], p["line"]))
+agent.prompt("/compact")
+# run: agent.run({"nome": "a", "motor": "codex", "harnessArgs": ["--x"]})
+```

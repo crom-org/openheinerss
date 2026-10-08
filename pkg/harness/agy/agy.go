@@ -86,6 +86,10 @@ func (a *AGYHarness) Start(ctx context.Context, cfg harness.SessionConfig) error
 	defer a.mu.Unlock()
 
 	a.cfg = cfg
+	a.cfg.Options = make(map[string]interface{}, len(cfg.Options))
+	for k, v := range cfg.Options {
+		a.cfg.Options[k] = v
+	}
 	a.ctx, a.cancel = context.WithCancel(ctx)
 	a.stopped = false
 
@@ -110,7 +114,25 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 	}
 
 	sessID := a.cfg.SessionID
-
+	if name, rest, ok := harness.SlashCommand(text); ok {
+		// Em modo print o agy expande /comandos e skills sozinho (--disable-slash-commands desliga): vão literais.
+		// Só os que mudam a invocação (e não existem no print mode) são traduzidos.
+		if msg, handled, err := a.translate(name, rest); err != nil {
+			return err
+		} else if handled {
+			for _, evt := range []harness.Event{
+				{Type: harness.EventText, Payload: protocol.TextParams{SessionID: sessID, Delta: msg + "\n"}},
+				{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessID, Reason: "completed"}},
+			} {
+				select {
+				case a.events <- evt:
+				default:
+				}
+			}
+			return nil
+		}
+	}
+	cfg := a.cfg
 	go func() {
 		a.emit(harness.Event{
 			Type: harness.EventThinking,
@@ -122,7 +144,7 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 
 		// O modo headless precisa autorizar ferramentas e emitir eventos para que
 		// o agente consiga editar/commitar na worktree sem pedir interação.
-		args := buildArgs(a.cfg, text)
+		args := buildArgs(cfg, text)
 
 		cmd := exec.CommandContext(a.ctx, "agy", args...)
 		process.Configure(cmd)
@@ -176,6 +198,7 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 				if f := agyFailureLine(line); f != "" {
 					setFailure(f)
 				}
+				a.emit(harness.RawEvent(sessID, "agy", "stderr", line))
 				a.emit(harness.Event{Type: harness.EventText, Payload: protocol.TextParams{SessionID: sessID, Delta: line + "\n"}})
 			}
 		}()
@@ -244,7 +267,8 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 	return nil
 }
 
-// buildArgs monta a invocação não-interativa documentada pelo agy. O prompt é
+// buildArgs monta a invocação não-interativa documentada pelo agy: opções fixas, tipadas (cfg.Options),
+// harness_args (intactos, na ordem) e, por último, o prompt. O prompt é
 // um valor da opção -p; separá-lo com "--" faz o agy interpretar prompts que
 // começam por hífen como sintaxe inválida.
 func buildArgs(cfg harness.SessionConfig, text string) []string {
@@ -252,7 +276,65 @@ func buildArgs(cfg harness.SessionConfig, text string) []string {
 	if cfg.Model != "" {
 		args = append([]string{"--model", cfg.Model}, args...)
 	}
+	o := cfg.Options
+	if v := harness.OpcaoTexto(o, "effort"); v != "" {
+		args = append(args, "--effort", v)
+	}
+	if v := harness.OpcaoTexto(o, "agent"); v != "" {
+		args = append(args, "--agent", v)
+	}
+	if v := harness.OpcaoTexto(o, "mode"); v != "" {
+		args = append(args, "--mode", v)
+	}
+	if v := harness.OpcaoTexto(o, "conversation"); v != "" {
+		args = append(args, "--conversation", v)
+	} else if harness.OpcaoBool(o, "continue") {
+		args = append(args, "--continue")
+	}
+	if v := harness.OpcaoTexto(o, "project"); v != "" {
+		args = append(args, "--project", v)
+	}
+	for _, dir := range harness.OpcaoLista(o, "add_dirs", "add_dir") {
+		args = append(args, "--add-dir", dir)
+	}
+	if harness.OpcaoBool(o, "sandbox") {
+		args = append(args, "--sandbox")
+	}
+	args = append(args, harness.HarnessArgs(o)...)
 	return append(args, "-p="+text)
+}
+
+// translate converte em ajustes das próximas chamadas os /comandos que o print mode do agy não tem.
+// Chamar com a.mu preso.
+func (a *AGYHarness) translate(name, rest string) (msg string, handled bool, err error) {
+	set := func(key, label string) (string, bool, error) {
+		if rest == "" {
+			return "", false, harness.NoEquivalent("agy", name, "informe o valor, ex.: /"+name+" <valor>")
+		}
+		a.cfg.Options[key] = rest
+		return label + " das próximas chamadas: " + rest, true, nil
+	}
+	switch strings.ToLower(name) {
+	case "model":
+		if rest == "" {
+			return "", false, harness.NoEquivalent("agy", name, "informe o modelo, ex.: /model gemini-3-pro")
+		}
+		a.cfg.Model = rest
+		return "modelo das próximas chamadas: " + rest, true, nil
+	case "effort":
+		return set("effort", "esforço")
+	case "agent":
+		return set("agent", "agente")
+	case "mode":
+		return set("mode", "modo de execução")
+	case "new", "clear":
+		delete(a.cfg.Options, "conversation")
+		delete(a.cfg.Options, "continue")
+		return "conversa esquecida: a próxima chamada começa uma conversa nova", true, nil
+	case "exit", "quit":
+		return "", false, harness.NoEquivalent("agy", name, "o modo print termina sozinho a cada turno; use parar a sessão")
+	}
+	return "", false, nil
 }
 
 func (a *AGYHarness) RespondPermission(ctx context.Context, reqID string, allow bool, message string) error {

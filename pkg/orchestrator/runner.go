@@ -45,9 +45,11 @@ type Options struct {
 	MaxAgents, Attempts   int
 	QuotaMax              float64
 	EventLog              string
-	Load                  func() (float64, error)
-	Sleep                 func(time.Duration)
-	Now                   func() time.Time
+	// HarnessArgs vai intacto, na ordem, para o processo do harness (--arg/--harness-arg).
+	HarnessArgs []string
+	Load        func() (float64, error)
+	Sleep       func(time.Duration)
+	Now         func() time.Time
 	// OnEvent recebe os eventos de orquestração (opcional; o CLI não usa).
 	OnEvent func(Evento)
 	// ViaServidor marca execuções lançadas por `serve`: o PID do meta.json é o do servidor.
@@ -145,6 +147,8 @@ func resumoEvento(ev harness.Event, buf *string) string {
 		*buf = ""
 		in, _ := json.Marshal(p.Input)
 		return curto("ferramenta "+p.Tool+" "+string(in), 160)
+	case protocol.RawParams:
+		return curto("raw "+p.Stream+": "+p.Line, 160)
 	}
 	return ""
 }
@@ -383,7 +387,9 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		}
 		p := profile
 		if candidate != o.Motor {
-			p, err = motor.Resolve(candidate, o.Model, o.Effort)
+			// A reserva usa o modelo e o esforço da própria instância: o modelo pedido para o motor
+			// principal (ex.: claude-sonnet-5-5) não vale em outro harness (o codex devolvia 400).
+			p, err = motor.Resolve(candidate, "", "")
 			if err != nil {
 				lastErr = err
 				continue
@@ -438,6 +444,9 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		hctx, cancel := context.WithCancel(ctx)
 		options := map[string]interface{}{"effort": effort}
 		options["rodar"] = true
+		if len(o.HarnessArgs) > 0 {
+			options[harness.OptionHarnessArgs] = append([]string(nil), o.HarnessArgs...)
+		}
 		if resumeID != "" && resumeMotor == candidate {
 			options["codex_session_id"] = resumeID
 			options["claude_session_id"] = resumeID
@@ -733,6 +742,9 @@ func eventText(e harness.Event) string {
 	}
 	if e.Type == harness.EventComplete {
 		return "\n[completo]\n"
+	}
+	if p, ok := e.Payload.(protocol.RawParams); ok {
+		return fmt.Sprintf("\n[raw %s] %s\n", p.Stream, p.Line)
 	}
 	// O texto chega em pedaços sem quebra de linha; os outros eventos começam numa linha nova.
 	return fmt.Sprintf("\n[%s] %s\n", e.Type, b)

@@ -121,6 +121,20 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 		}
 	}
 
+	// Opções tipadas e o repasse nativo viajam para o adaptador dentro de Options.
+	options := make(map[string]interface{}, len(params.Options.Extra)+2)
+	for k, v := range params.Options.Extra {
+		options[k] = v
+	}
+	if params.Options.Effort != "" {
+		if _, ok := options["effort"]; !ok {
+			options["effort"] = params.Options.Effort
+		}
+	}
+	if len(params.Options.HarnessArgs) > 0 {
+		options[harness.OptionHarnessArgs] = append(harness.HarnessArgs(options), params.Options.HarnessArgs...)
+	}
+
 	sessID := generateSessionID()
 	sessCtx, cancel := context.WithCancel(context.Background())
 
@@ -134,7 +148,7 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 		Env:            params.Env,
 		PermissionMode: params.Options.PermissionMode,
 		SystemPrompt:   params.Options.SystemPrompt,
-		Options:        params.Options.Extra,
+		Options:        options,
 	}
 	// O snapshot é feito antes de o motor receber o primeiro prompt.
 	// Sem checkpoint (pasta somente leitura, por exemplo) a sessão continua, mas o aviso não se perde.
@@ -390,6 +404,8 @@ func (m *Manager) forwardEvents(s *Session) {
 			s.mu.Unlock()
 		case harness.EventUsage:
 			method = protocol.EventAgentUsage
+		case harness.EventRaw:
+			method = protocol.EventAgentRaw
 		default:
 			method = "agent." + string(evt.Type)
 		}

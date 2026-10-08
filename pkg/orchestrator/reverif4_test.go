@@ -367,3 +367,24 @@ func TestSecoNaoDeixaArquivosEMostraComandoCompleto(t *testing.T) {
 		t.Errorf("modelo efetivo do codex: %s", c)
 	}
 }
+
+// Defeito do ponte-a: a reserva (codex) recebia o modelo do claude e o provedor devolvia 400.
+func TestReservaNaoHerdaModeloNemEsforcoDoMotorPrincipal(t *testing.T) {
+	root, agents := repoFixture(t)
+	registrar(t, harness.CustomSpec{Name: "principal-modelo", Command: scriptTeste(t, root, "pm", stderrDoMotor("Service temporarily overloaded")), Reserva: []string{"reserva-modelo"}})
+	registrar(t, harness.CustomSpec{Name: "reserva-modelo", Command: scriptTeste(t, root, "rm", texto("feito")), Model: "modelo-da-reserva", Effort: "low"})
+	if err := os.WriteFile(filepath.Join(agents, "prompts", "modelo.md"), []byte("prompt"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Run(context.Background(), root, Options{Name: "modelo", Motor: "principal-modelo", Model: "claude-sonnet-5-5", Effort: "max", AgentsDir: agents, Attempts: 2, MaxAgents: 99})
+	if err != nil || res.Code != 0 || res.Attempts != 2 {
+		t.Fatalf("err=%v código=%d tentativas=%d", err, res.Code, res.Attempts)
+	}
+	if got := strings.TrimSpace(mustRead(t, filepath.Join(agents, "logs", "modelo.modelo"))); got != "modelo-da-reserva" {
+		t.Fatalf("modelo usado pela reserva: %q", got)
+	}
+	meta := mustRead(t, filepath.Join(agents, "logs", "modelo.meta.json"))
+	if strings.Contains(meta, "claude-sonnet-5-5") || strings.Contains(meta, `"max"`) || !strings.Contains(meta, `"low"`) {
+		t.Fatalf("meta herdou modelo/esforço do principal: %s", meta)
+	}
+}

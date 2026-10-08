@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { spawn, type ChildProcess } from "node:child_process";
-import type { SessionOptions, HarnessRegistration, PermissionRequest, ToolCall, ToolResult, RunOptions, RunStarted, RunList, Limits, EventFilter, OrchestrationEventName, OrchestrationCallback } from "./types.js";
+import type { SessionOptions, HarnessRegistration, PermissionRequest, ToolCall, ToolResult, RawLine, RunOptions, RunStarted, RunList, Limits, EventFilter, OrchestrationEventName, OrchestrationCallback } from "./types.js";
 
 export * from "./types.js";
 export * from "./react.js";
@@ -83,6 +83,8 @@ export class Openheinerss extends EventEmitter {
       options: {
         permissionMode: opts.permissionMode || "ask",
         systemPrompt: opts.systemPrompt,
+        effort: opts.effort,
+        harnessArgs: opts.harnessArgs,
       },
     });
 
@@ -237,6 +239,9 @@ export class Openheinerss extends EventEmitter {
           this.emit("permission", permReq);
           break;
         }
+        case "agent.raw":
+          this.emit("raw", p as RawLine);
+          break;
         case "agent.complete":
           this.emit("complete", p.reason);
           break;

@@ -29,6 +29,9 @@ func TestClaudeCodeStreamNormalizaEventosEGuardaSessao(t *testing.T) {
 	var cost float64
 	for len(c.events) > 0 {
 		ev := <-c.events
+		if ev.Type == harness.EventRaw {
+			continue // a linha system/init também sai como raw; aqui só importam os eventos mapeados
+		}
 		types = append(types, ev.Type)
 		if usage, ok := ev.Payload.(protocol.UsageParams); ok {
 			cost = usage.CostUSD

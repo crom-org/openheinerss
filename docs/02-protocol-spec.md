@@ -20,6 +20,7 @@ Inicia uma nova sessão de agente com o harness escolhido.
     "model": "anthropic/claude-3.7-sonnet",
     "options": {
       "effort": "high",
+      "harnessArgs": ["--add-dir", "../outro"],
       "permissionMode": "ask",
       "systemPrompt": "Você é um assistente sênior..."
     }
@@ -27,8 +28,12 @@ Inicia uma nova sessão de agente com o harness escolhido.
 }
 ```
 
+`options.harnessArgs` (lista de strings) são argumentos nativos extras do harness: vão **intactos e na mesma ordem** ao processo, antes do prompt. Não há lista de permitidos; a ponte não filtra nada. O mesmo campo existe em `rodar.iniciar`/`run` (`harnessArgs`) e na CLI como `--harness-arg`/`--arg` (repetível, sem separar por vírgula).
+
 ### `session.prompt`
 Envia uma instrução ou mensagem do usuário para a sessão ativa.
+
+**Regra das `/`.** Texto que começa com `/` (ex.: `/compact`, `/model x`) vai **literalmente** ao harness quando ele aceita no modo sem tela. Onde não aceita, a ponte traduz para o equivalente (`/model X` muda o modelo das próximas chamadas, `/clear` ou `/new` esquece o id de retomada, `/effort X` muda o esforço, `/compact` usa o nativo se houver) e emite um `agent.text` avisando, seguido de `agent.complete`. Sem equivalente, a resposta é um **erro JSON-RPC** com mensagem clara ("o harness X não aceita /cmd no modo sem tela e não há equivalente na linha de comando; <dica>"); nada é engolido. A CLI não intercepta nenhuma `/`, então não há prefixo de escape.
 ```json
 {
   "jsonrpc": "2.0",
@@ -168,6 +173,21 @@ Quando uma ferramenta requer aprovação do usuário.
 }
 ```
 
+### `agent.raw`
+Linha original do harness que não virou outro evento (stdout sem mapeamento) e as linhas de stderr, exatamente como foram escritas. Chega no WebSocket e no stdio como as demais notificações; o `rodar` também a grava no log (`[raw stdout] ...`).
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "agent.raw",
+  "params": {
+    "sessionId": "sess_abc123",
+    "harness": "codex",
+    "stream": "stderr",
+    "line": "texto exatamente como veio"
+  }
+}
+```
+
 ---
 
 ## 3. Comandos de Sistema e Catálogo
@@ -254,7 +274,7 @@ Registra a conexão para receber os eventos `orq.*`. Sem assinar, nenhum `orq.*`
 Mesmas opções do `openheinerss rodar` (nomes em português, como em `run`), mais `projeto`. O prompt vem de `texto` (texto direto), de `prompt` (caminho de um arquivo) ou, na falta dos dois, de `<pasta>/prompts/<nome>.md`; o nome do agente só aceita letras, números, `.`, `_` e `-`. Não bloqueia: devolve o `id` e os eventos informam o andamento.
 
 ```json
-{"jsonrpc":"2.0","id":2,"method":"rodar.iniciar","params":{"nome":"etapa-1","motor":"codex2","modelo":"","esforco":"high","prompt":"","retomar":false,"pasta":"","branchBase":"main","cargaMax":0,"maxAgentes":4,"tentativas":4,"cotaMax":0,"cwd":"/home/j/projetos/crom-tv","projeto":"crom-tv"}}
+{"jsonrpc":"2.0","id":2,"method":"rodar.iniciar","params":{"nome":"etapa-1","motor":"codex2","modelo":"","esforco":"high","prompt":"","retomar":false,"pasta":"","branchBase":"main","cargaMax":0,"maxAgentes":4,"tentativas":4,"cotaMax":0,"harnessArgs":["--x","a,b"],"cwd":"/home/j/projetos/crom-tv","projeto":"crom-tv"}}
 ```
 ```json
 {"jsonrpc":"2.0","id":2,"geracao":"geracao-a1b2c3","result":{"geracao":"geracao-a1b2c3","id":"rodar-1","agente":"etapa-1","projeto":"crom-tv"}}

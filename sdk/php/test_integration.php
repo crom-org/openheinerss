@@ -56,6 +56,35 @@ while ($fimNegado === null && microtime(true) < $fim) $agent->listen(0.05);
 if (($fimNegado['codigo'] ?? null) !== 3 || ($fimNegado['motivo'] ?? null) !== 'negado' || $iniciosNegar !== 1) {
     throw new RuntimeException('negar com encerrar: ' . json_encode([$fimNegado, $iniciosNegar]));
 }
+
+// Ponte: harnessArgs sai no JSON-RPC e agent.raw é entregue (servidor falso, sem depender do binário).
+$pasta = sys_get_temp_dir() . '/openheinerss-ponte-php-' . bin2hex(random_bytes(4));
+mkdir($pasta);
+$falso = $pasta . '/falso.php';
+$registro = $pasta . '/reqs.jsonl';
+file_put_contents($falso, '#!/usr/bin/env php
+<?php
+while (($l = fgets(STDIN)) !== false) {
+    $r = json_decode($l, true);
+    file_put_contents(' . var_export($registro, true) . ', $l, FILE_APPEND);
+    if ($r["method"] === "session.create") echo json_encode(["jsonrpc" => "2.0", "id" => $r["id"], "result" => ["sessionId" => "s1"]]) . "\n";
+    if ($r["method"] === "session.prompt") {
+        echo json_encode(["jsonrpc" => "2.0", "method" => "agent.raw", "params" => ["sessionId" => "s1", "harness" => "falso", "stream" => "stderr", "line" => "linha crua"]]) . "\n";
+        echo json_encode(["jsonrpc" => "2.0", "method" => "agent.complete", "params" => ["reason" => "completed"]]) . "\n";
+    }
+}
+');
+chmod($falso, 0755);
+$ponte = Openheinerss\Agent::session(['harness' => 'falso', 'effort' => 'high', 'harnessArgs' => ['--x=a,b', '/compact', 'c d']], $falso);
+$cruas = [];
+$ponte->on('agent.raw', function (array $p) use (&$cruas): void { $cruas[] = $p['line']; });
+$ponte->prompt('/model x');
+if ($cruas !== ['linha crua']) throw new RuntimeException('agent.raw não entregue');
+$reqs = array_map(fn($l) => json_decode($l, true), file($registro, FILE_IGNORE_NEW_LINES));
+$criar = array_values(array_filter($reqs, fn($r) => $r['method'] === 'session.create'))[0];
+if ($criar['params']['options']['harnessArgs'] !== ['--x=a,b', '/compact', 'c d'] || $criar['params']['options']['effort'] !== 'high') throw new RuntimeException('harnessArgs fora do JSON-RPC');
+$prompt = array_values(array_filter($reqs, fn($r) => $r['method'] === 'session.prompt'))[0];
+if ($prompt['params']['text'] !== '/model x') throw new RuntimeException('prompt não chegou literal');
 echo "PHP SDK integração OK\n";
 
 // O caminho do executável pode conter espaços; proc_open recebe argv, não shell.

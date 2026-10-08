@@ -6,6 +6,7 @@ from .transport import StdioTransport
 class RunOptions(TypedDict, total=False):
     nome: str; motor: str; modelo: str; esforco: str; prompt: str; texto: str; retomar: bool
     pasta: str; branchBase: str; cargaMax: float; maxAgentes: int; tentativas: int; cotaMax: float; cwd: str; projeto: str
+    harnessArgs: list
 
 class OrchestrationEvent(TypedDict):
     type: str
@@ -19,7 +20,9 @@ class Agent:
         provider: Optional[str] = None,
         model: Optional[str] = None,
         cwd: Optional[str] = None,
-        bin_path: str = "openheinerss"
+        bin_path: str = "openheinerss",
+        effort: Optional[str] = None,
+        harness_args: Optional[list] = None,
     ):
         self.transport = StdioTransport(bin_path)
         self.req_id = 1
@@ -31,24 +34,36 @@ class Agent:
             mode=mode,
             provider=provider,
             model=model,
-            cwd=cwd or os.getcwd()
+            cwd=cwd or os.getcwd(),
+            effort=effort,
+            harness_args=harness_args,
         )
 
-    def _create_session(self, harness: str, mode: str, provider: Optional[str], model: Optional[str], cwd: str) -> str:
+    def _create_session(self, harness: str, mode: str, provider: Optional[str], model: Optional[str], cwd: str, effort: Optional[str] = None, harness_args: Optional[list] = None) -> str:
         req_id = self.req_id
         self.req_id += 1
+
+        params: Dict[str, Any] = {
+            "harness": harness,
+            "mode": mode,
+            "provider": provider,
+            "model": model,
+            "cwd": cwd
+        }
+        options: Dict[str, Any] = {}
+        if effort:
+            options["effort"] = effort
+        if harness_args:
+            # Intactos e na ordem, sem filtro: a ponte não esconde nada do harness.
+            options["harnessArgs"] = [str(a) for a in harness_args]
+        if options:
+            params["options"] = options
 
         response = self.transport.request({
             "jsonrpc": "2.0",
             "id": req_id,
             "method": "session.create",
-            "params": {
-                "harness": harness,
-                "mode": mode,
-                "provider": provider,
-                "model": model,
-                "cwd": cwd
-            }
+            "params": params
         })
 
         if "error" in response:
@@ -105,6 +120,10 @@ class Agent:
     # Alias alinhado ao nome usado pelos SDKs TypeScript e pelo protocolo.
     def registerHarness(self, spec: Dict[str, Any]) -> None:
         self.register_harness(spec)
+
+    def on(self, method: str, callback: Callable[[Dict[str, Any]], None]) -> None:
+        """Registra um callback para uma notificação, ex.: on("agent.raw", fn) recebe sessionId, harness, stream e line."""
+        self.callbacks[method] = callback
 
     def _event(self, msg: Dict[str, Any]) -> None:
         callback = self.callbacks.get(msg.get("method", ""))

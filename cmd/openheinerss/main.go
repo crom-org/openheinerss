@@ -437,6 +437,8 @@ func newRunCmd() *cobra.Command {
 		model       string
 		effort      string
 		resumeID    string
+		harnessArgs []string
+		interactive bool
 	)
 
 	cmd := &cobra.Command{
@@ -446,8 +448,8 @@ func newRunCmd() *cobra.Command {
 		Args:    cobra.MinimumNArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			promptText := strings.Join(args, " ")
-			if promptText == "" {
-				return fmt.Errorf("run exige um prompt; com --retomar informe o novo prompt depois do ID")
+			if promptText == "" && !interactive {
+				return fmt.Errorf("run exige um prompt; com --retomar informe o novo prompt depois do ID (ou use --interativo)")
 			}
 			cwd, _ := os.Getwd()
 			var env map[string]string
@@ -490,7 +492,7 @@ func newRunCmd() *cobra.Command {
 					Provider: provider,
 					Model:    model,
 					Env:      env,
-					Options:  protocol.SessionOptions{Extra: extra},
+					Options:  protocol.SessionOptions{Extra: extra, Effort: effort, HarnessArgs: harnessArgs},
 				})
 			}
 			if err != nil {
@@ -550,6 +552,11 @@ func newRunCmd() *cobra.Command {
 					remarshal(notification.Params, &p)
 					fmt.Printf("\033[32m✔ [Resultado] %s: %s\033[0m\n", p.Status, p.Output)
 
+				case protocol.EventAgentRaw:
+					var p protocol.RawParams
+					remarshal(notification.Params, &p)
+					fmt.Printf("\033[90m[raw %s] %s\033[0m\n", p.Stream, p.Line)
+
 				case protocol.EventAgentComplete:
 					fmt.Println("\n🏁 [Turno Finalizado]")
 					select {
@@ -559,18 +566,47 @@ func newRunCmd() *cobra.Command {
 				}
 			})
 
-			if _, err := manager.PromptSession(ctx, protocol.SessionPromptParams{
-				SessionID: sessRes.SessionID,
-				Text:      promptText,
-			}); err != nil {
+			// A CLI não intercepta nenhuma "/": a linha vai literalmente ao harness.
+			send := func(text string) error {
+				_, err := manager.PromptSession(ctx, protocol.SessionPromptParams{SessionID: sessRes.SessionID, Text: text})
 				return err
 			}
-
-			select {
-			case <-doneChan:
+			wait := func() error {
+				select {
+				case <-doneChan:
+					return nil
+				case <-ctx.Done():
+					return fmt.Errorf("interrompido")
+				}
+			}
+			if promptText != "" {
+				if err := send(promptText); err != nil {
+					if !interactive {
+						return err
+					}
+					fmt.Fprintf(os.Stderr, "❌ %v\n", err)
+				} else if err := wait(); err != nil {
+					return err
+				}
+			}
+			if !interactive {
 				return nil
-			case <-ctx.Done():
-				return fmt.Errorf("interrompido")
+			}
+			for {
+				fmt.Print("> ")
+				line, rerr := reader.ReadString('\n')
+				line = strings.TrimRight(line, "\r\n")
+				if strings.TrimSpace(line) != "" {
+					if err := send(line); err != nil {
+						// erro como "comando sem equivalente" aparece e a sessão continua
+						fmt.Fprintf(os.Stderr, "❌ %v\n", err)
+					} else if err := wait(); err != nil {
+						return err
+					}
+				}
+				if rerr != nil {
+					return nil
+				}
 			}
 		},
 	}
@@ -590,8 +626,29 @@ func newRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&effort, "esforco", "", "Esforço de raciocínio do motor")
 	cmd.Flags().StringVar(&resumeID, "resume", "", "Alias em inglês de --retomar")
 	cmd.Flags().StringVar(&resumeID, "retomar", "", "Retoma a sessão persistida pelo ID")
+	addHarnessArgFlags(cmd, &harnessArgs)
+	cmd.Flags().BoolVarP(&interactive, "interativo", "i", false, "Sessão interativa: lê um prompt por linha; linhas com / vão literalmente ao harness")
+	cmd.Flags().BoolVar(&interactive, "interactive", false, "Alias em inglês de --interativo")
 
 	return cmd
+}
+
+// argsHarness acumula cada ocorrência de --harness-arg/--arg sem separar por vírgula,
+// e os dois nomes compartilham a lista para manter a ordem da linha de comando.
+type argsHarness struct{ p *[]string }
+
+func (a argsHarness) Set(v string) error { *a.p = append(*a.p, v); return nil }
+func (a argsHarness) String() string {
+	if a.p == nil {
+		return "[]"
+	}
+	return "[" + strings.Join(*a.p, " ") + "]"
+}
+func (a argsHarness) Type() string { return "stringArray" }
+
+func addHarnessArgFlags(cmd *cobra.Command, dst *[]string) {
+	cmd.Flags().Var(argsHarness{dst}, "harness-arg", "Argumento nativo extra para o harness, intacto e na ordem (repetível)")
+	cmd.Flags().Var(argsHarness{dst}, "arg", "Alias de --harness-arg")
 }
 
 func newRodarCmd() *cobra.Command {
@@ -601,6 +658,7 @@ func newRodarCmd() *cobra.Command {
 	var maxAgentes, tentativas int
 	var cotaMax float64
 	var eventosLog string
+	var harnessArgs []string
 	cmd := &cobra.Command{
 		Use:     "rodar <nome> <instância|harness>",
 		Aliases: []string{"launch", "dispatch"},
@@ -618,7 +676,7 @@ func newRodarCmd() *cobra.Command {
 			if cargaAbaixo > 0 {
 				carga = cargaAbaixo
 			}
-			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Mode: modo, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog})
+			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Mode: modo, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog, HarnessArgs: harnessArgs})
 			if err != nil && res.Name == "" {
 				return err
 			}
@@ -682,6 +740,7 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&semRegras, "no-default-rules", false, "Alias em inglês de --sem-regras-padrao")
 	cmd.Flags().StringVar(&arquivoChaves, "arquivo-chaves", "", "Arquivo opcional de variáveis secretas (não imprime valores)")
 	cmd.Flags().StringVar(&arquivoChaves, "keys-file", "", "Alias em inglês de --arquivo-chaves")
+	addHarnessArgFlags(cmd, &harnessArgs)
 	return cmd
 }
 

@@ -118,3 +118,43 @@ loop:
 		}
 	}
 }
+
+func TestMockPonteGravaHarnessArgsEComandoLiteral(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	h := mock.NewMockHarness()
+	h.SetStepDelay(time.Millisecond)
+	cfg := harness.SessionConfig{SessionID: "p1", Options: map[string]interface{}{harness.OptionHarnessArgs: []interface{}{"--a", "b c"}}}
+	if err := h.Start(ctx, cfg); err != nil {
+		t.Fatal(err)
+	}
+	defer h.Stop()
+	if err := h.SendPrompt(ctx, "/x arg", nil); err != nil {
+		t.Fatal(err)
+	}
+	var raws []string
+	var text string
+	for done := false; !done; {
+		select {
+		case e := <-h.Events():
+			if r, ok := e.Payload.(protocol.RawParams); ok && e.Type == harness.EventRaw {
+				raws = append(raws, r.Line)
+			}
+			if p, ok := e.Payload.(protocol.TextParams); ok {
+				text = p.Delta
+			}
+			done = e.Type == harness.EventComplete
+		case <-ctx.Done():
+			t.Fatal("timeout")
+		}
+	}
+	if len(raws) != 2 || raws[0] != `harness_args=["--a","b c"]` || raws[1] != "comando /x recebido" || text != "comando /x recebido" {
+		t.Fatalf("raws=%q text=%q", raws, text)
+	}
+	if got := h.ReceivedArgs(); len(got) != 2 || got[1] != "b c" {
+		t.Fatalf("args: %q", got)
+	}
+	if p := h.ReceivedPrompts(); len(p) != 1 || p[0] != "/x arg" {
+		t.Fatalf("prompts: %q", p)
+	}
+}
