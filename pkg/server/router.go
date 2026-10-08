@@ -18,11 +18,12 @@ import (
 // Router processa requisições JSON-RPC e delega para o SessionManager ou subsistemas
 type Router struct {
 	manager *session.Manager
+	orq     *Orq
 }
 
 // NewRouter cria um novo despachante de métodos
 func NewRouter(m *session.Manager) *Router {
-	return &Router{manager: m}
+	return &Router{manager: m, orq: newOrq()}
 }
 
 // HandleRequest executa a lógica do método solicitado e devolve a resposta JSON-RPC
@@ -106,8 +107,56 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) protoc
 		}
 		return protocol.NewResponse(req.ID, protocol.RunResult{Nome: res.Name, WorkDir: res.WorkDir, Log: res.LogFile, Meta: res.MetaFile, Tentativas: res.Attempts, Codigo: res.Code})
 
-	case protocol.MethodLimits:
+	case protocol.MethodLimits, protocol.MethodLimitesObter:
 		return protocol.NewResponse(req.ID, limites.Obter())
+
+	case protocol.MethodHarnessListar:
+		return protocol.NewResponse(req.ID, protocol.CatalogListResult{Harnesses: harness.ListCatalog()})
+
+	case protocol.MethodRodarIniciar:
+		var p protocol.RodarIniciarParams
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para rodar.iniciar", nil)
+		}
+		res, err := r.orq.iniciar(p)
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, err.Error(), nil)
+		}
+		return protocol.NewResponse(req.ID, res)
+
+	case protocol.MethodRodarListar:
+		var p protocol.RodarListarParams
+		_ = json.Unmarshal(req.Params, &p)
+		return protocol.NewResponse(req.ID, r.orq.listar(p))
+
+	case protocol.MethodRodarParar:
+		var p protocol.RodarPararParams
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para rodar.parar", nil)
+		}
+		if err := r.orq.parar(p); err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, err.Error(), nil)
+		}
+		return protocol.NewResponse(req.ID, map[string]interface{}{"parando": true})
+
+	case protocol.MethodRodarDecidir:
+		var p protocol.RodarDecidirParams
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para rodar.decidir", nil)
+		}
+		if err := r.orq.decidir(p); err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, err.Error(), nil)
+		}
+		return protocol.NewResponse(req.ID, map[string]interface{}{"id": p.ID, "resposta": p.Resposta})
+
+	case protocol.MethodEventosAssinar:
+		c, _ := ctx.Value(ctxKey{}).(*conexao)
+		if c == nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, "eventos.assinar exige uma conexão com saída de eventos", nil)
+		}
+		var p protocol.EventosAssinarParams
+		_ = json.Unmarshal(req.Params, &p)
+		return protocol.NewResponse(req.ID, r.orq.assinar(c, p))
 
 	case protocol.MethodDoctorCheck:
 		var params protocol.DoctorCheckParams

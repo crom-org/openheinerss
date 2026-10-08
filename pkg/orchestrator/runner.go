@@ -39,6 +39,43 @@ type Options struct {
 	Load                                   func() (float64, error)
 	Sleep                                  func(time.Duration)
 	Now                                    func() time.Time
+	// OnEvent recebe os eventos de orquestração (opcional; o CLI não usa).
+	OnEvent func(Evento)
+	// Decidir responde pedidos de permissão do agente; nil aprova sempre.
+	Decidir func(ctx context.Context, q Pergunta) (allow bool, msg string)
+}
+
+// Tipos de Evento.
+const (
+	EvInicio    = "inicio"
+	EvProgresso = "progresso"
+	EvFim       = "fim"
+	EvErro      = "erro"
+)
+
+// Evento é um fato da execução do rodar, no vocabulário do protocolo orq.*.
+type Evento struct {
+	Tipo       string
+	Agente     string
+	Motor      string
+	Modelo     string
+	Tentativa  int
+	Worktree   string
+	Resumo     string
+	Mensagem   string
+	Cota       bool
+	Codigo     int
+	Tentativas int
+	Duracao    time.Duration
+	Relatorio  string
+}
+
+// Pergunta é um permission_request que precisa de decisão.
+type Pergunta struct {
+	Agente   string
+	Pergunta string
+	Opcoes   []string
+	Request  protocol.PermissionRequestParams
 }
 
 type Result struct {
@@ -57,6 +94,39 @@ type meta struct {
 	PID       int    `json:"pid"`
 	Fim       string `json:"fim,omitempty"`
 	Codigo    *int   `json:"codigo,omitempty"`
+}
+
+func (o Options) emit(e Evento) {
+	if o.OnEvent != nil {
+		e.Agente = o.Name
+		o.OnEvent(e)
+	}
+}
+
+// resumoEvento devolve uma frase curta sobre o último texto ou ferramenta; texto acumula em buf.
+func resumoEvento(ev harness.Event, buf *string) string {
+	switch p := ev.Payload.(type) {
+	case protocol.TextParams:
+		*buf += p.Delta
+		if len(*buf) > 2000 {
+			*buf = (*buf)[len(*buf)-1000:]
+		}
+		return curto(*buf, 160)
+	case protocol.ToolCallParams:
+		*buf = ""
+		in, _ := json.Marshal(p.Input)
+		return curto("ferramenta "+p.Tool+" "+string(in), 160)
+	}
+	return ""
+}
+
+// curto junta os espaços e devolve no máximo n runas do fim do texto.
+func curto(s string, n int) string {
+	r := []rune(strings.Join(strings.Fields(s), " "))
+	if len(r) > n {
+		return "…" + string(r[len(r)-n:])
+	}
+	return string(r)
 }
 
 func (o Options) defaults() Options {
@@ -166,6 +236,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			if percentual, ok := limites.Percentual(candidate); ok && percentual >= o.QuotaMax {
 				lastErr = fmt.Errorf("cota de %s em %.1f%% (limite %.1f%%)", candidate, percentual, o.QuotaMax)
 				write(fmt.Sprintf("pulando %s: %v\n", candidate, lastErr))
+				o.emit(Evento{Tipo: EvErro, Motor: candidate, Mensagem: lastErr.Error(), Cota: true})
 				continue
 			}
 		}
@@ -197,10 +268,12 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			return Result{}, err
 		}
 		write(fmt.Sprintf("### tentativa %d (%s) motor %s\n", attempts, o.Now().Format("15:04"), candidate))
+		o.emit(Evento{Tipo: EvInicio, Motor: candidate, Modelo: modeloMeta, Tentativa: attempts, Worktree: work})
 		h, e := harness.Create(candidate, harness.ModeCLI)
 		if e != nil {
 			lastErr = e
 			write("ERRO: " + e.Error() + "\n")
+			o.emit(Evento{Tipo: EvErro, Motor: candidate, Mensagem: e.Error()})
 			continue
 		}
 		hctx, cancel := context.WithCancel(ctx)
@@ -219,10 +292,12 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		if e != nil {
 			lastErr = e
 			write("ERRO: " + e.Error() + "\n")
+			o.emit(Evento{Tipo: EvErro, Motor: candidate, Mensagem: e.Error()})
 			_ = h.Stop()
 			cancel()
 			continue
 		}
+		var textBuf string
 		quota := quotaPattern(candidate)
 		if s, ok := harness.CustomSpecFor(candidate); ok && s.QuotaRegex != "" {
 			quota = regexp.MustCompile(s.QuotaRegex)
@@ -243,9 +318,16 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				if e, ok := ev.Payload.(protocol.ErrorParams); ok && e.Message == "limite de cota detectado" {
 					quotaHit = true
 				}
+				if resumo := resumoEvento(ev, &textBuf); resumo != "" {
+					o.emit(Evento{Tipo: EvProgresso, Motor: candidate, Resumo: resumo})
+				}
 				if ev.Type == harness.EventPermission {
 					if q, ok := ev.Payload.(protocol.PermissionRequestParams); ok {
-						_ = h.RespondPermission(hctx, q.RequestID, true, "")
+						allow, msg := true, ""
+						if o.Decidir != nil {
+							allow, msg = o.Decidir(ctx, Pergunta{Agente: o.Name, Pergunta: perguntaDe(q), Opcoes: []string{"permitir", "negar"}, Request: q})
+						}
+						_ = h.RespondPermission(hctx, q.RequestID, allow, msg)
 					}
 				}
 				// Avisos no stderr (rede, MCP) chegam como erro mas não derrubam a tarefa;
@@ -264,7 +346,13 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			case <-ctx.Done():
 				_ = h.Stop()
 				cancel()
-				return Result{}, ctx.Err()
+				// Interrompido (rodar.parar ou Ctrl-C): fecha meta e log para ninguém achar que ainda roda.
+				parado := 130
+				m.Fim, m.Codigo = o.Now().Format(time.RFC3339), &parado
+				_ = writeMeta(metaPath, m)
+				write(fmt.Sprintf("FIM %s código %d\n", o.Now().Format("15:04"), parado))
+				o.emit(Evento{Tipo: EvFim, Motor: candidate, Codigo: parado, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: relatorio(work)})
+				return Result{o.Name, work, logPath, metaPath, attempts, parado}, ctx.Err()
 			}
 		}
 	done:
@@ -279,10 +367,12 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			m.Fim, m.Codigo = o.Now().Format(time.RFC3339), &finalCode
 			_ = writeMeta(metaPath, m)
 			write(fmt.Sprintf("FIM %s código %d\n", o.Now().Format("15:04"), finalCode))
+			o.emit(Evento{Tipo: EvFim, Motor: candidate, Codigo: finalCode, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: relatorio(work)})
 			return Result{o.Name, work, logPath, metaPath, attempts, finalCode}, nil
 		}
 		lastErr = fmt.Errorf("execução interrompida%s", map[bool]string{true: " por falta de cota", false: ""}[quotaHit])
 		write("saiu com erro; tentando continuar...\n")
+		o.emit(Evento{Tipo: EvErro, Motor: candidate, Mensagem: lastErr.Error(), Cota: quotaHit})
 	}
 	if lastErr == nil {
 		lastErr = fmt.Errorf("nenhuma tentativa executada")
@@ -292,7 +382,27 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	m.Fim, m.Codigo = o.Now().Format(time.RFC3339), &code
 	_ = writeMeta(filepath.Join(agents, "logs", o.Name+".meta.json"), m)
 	write(fmt.Sprintf("FIM %s código %d\n", o.Now().Format("15:04"), code))
+	o.emit(Evento{Tipo: EvFim, Motor: o.Motor, Codigo: code, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: relatorio(work)})
 	return Result{o.Name, work, logPath, filepath.Join(agents, "logs", o.Name+".meta.json"), attempts, code}, lastErr
+}
+
+func relatorio(work string) string {
+	p := filepath.Join(work, "RELATORIO-AGENTE.md")
+	if _, err := os.Stat(p); err == nil {
+		return p
+	}
+	return ""
+}
+
+func perguntaDe(q protocol.PermissionRequestParams) string {
+	s := "Permitir a ferramenta " + q.Tool
+	if q.Command != "" {
+		s += ": " + q.Command
+	}
+	if q.Risk != "" {
+		s += " (risco " + q.Risk + ")"
+	}
+	return s + "?"
 }
 
 func prepareWorktree(ctx context.Context, repo, agents, name, base string) (string, error) {

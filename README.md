@@ -256,6 +256,10 @@ openheinerss harness test cco-openrouter --prompt 'responda OK'
 
 SDKs também expõem `registerHarness({...})` (método JSON-RPC `harness.register`).
 
+## Orquestração ao vivo (WebSocket / STDIO)
+
+O servidor (`openheinerss serve`, porta 4820) lança e acompanha agentes do `rodar`: `rodar.iniciar`, `rodar.listar`, `rodar.parar`, `rodar.decidir`, `limites.obter`, `harness.listar` e `eventos.assinar` (filtro por projeto e/ou agente). Quem assina recebe `orq.inicio`, `orq.progresso`, `orq.precisa_decisao`, `orq.erro` e `orq.fim`, inclusive de agentes lançados pelo CLI. Detalhes e exemplos JSON em [docs/02-protocol-spec.md](docs/02-protocol-spec.md#5-orquestração-rodar-limites-e-eventos-orq).
+
 ## 📄 Licença
 
 Distribuído sob a licença MIT. Desenvolvido com orgulho pela organização [crom-org](https://github.com/crom-org).
