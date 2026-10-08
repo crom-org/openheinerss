@@ -13,7 +13,16 @@ export interface SessionOptions {
   effort?: string;
   /** Argumentos nativos extras do harness: vão intactos e na ordem, sem filtro. */
   harnessArgs?: string[];
+  /** Não entrega ao harness os servidores de mcp.json (padrão: entrega todos). */
+  semMcp?: boolean;
+  /** Entrega só estes servidores de mcp.json. */
+  mcp?: string[];
+  /** Liga (true) ou desliga (false) o classificador de risco opcional; ausente segue o servidor (desligado). */
+  classificarRisco?: boolean;
 }
+
+/** Nível do classificador de risco opcional (só informa, nunca bloqueia). */
+export type Risco = "baixo" | "medio" | "alto";
 
 export interface HarnessRegistration {
   name: string;
@@ -58,6 +67,9 @@ export interface PermissionRequest {
   tool: string;
   command?: string;
   risk?: string;
+  /** Só com classificarRisco ligado. */
+  risco?: Risco;
+  motivoRisco?: string;
   allow: () => Promise<void>;
   deny: (reason?: string) => Promise<void>;
 }
@@ -67,6 +79,9 @@ export interface ToolCall {
   callId: string;
   tool: string;
   input: Record<string, unknown>;
+  /** Só com classificarRisco ligado. */
+  risco?: Risco;
+  motivoRisco?: string;
 }
 
 export interface ToolResult {
