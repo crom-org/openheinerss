@@ -286,6 +286,12 @@ Para uma execução **lançada por este servidor**, por `id` ou `agente`. O fim 
 ### `rodar.decidir`
 Responde um `orq.precisa_decisao`. `resposta`: `"permitir"` ou `"negar"` (aceita também `sim`/`não`, `allow`/`deny`); `mensagem` é opcional. O agente fica parado até a resposta (ou até `rodar.parar`). `run` (id da execução) e `geracao` são opcionais; se enviados e não baterem com os da decisão/servidor, a resposta é recusada (`-32602`) e a decisão continua pendente. `rodar.listar` mostra as decisões ainda pendentes para quem conectar depois. Rodando pelo CLI (sem servidor) as permissões são aprovadas automaticamente, como antes.
 
+**Negar = encerrar.** `encerrar` (bool, opcional) numa negação termina a execução na hora: o agente é parado, o log recebe `FIM HH:MM código 3`, o `meta.json` fica com `codigo` 3 e `motivo` `"negado"` e sai `orq.fim` com `codigo` 3 e `motivo` `"negado"`, sem nova tentativa nem reserva. Sem o campo vale o padrão do servidor: `serve --negar-encerra` (alias `--deny-ends`) liga; sem a flag, a negação continua como falha comum (`orq.erro` e nova tentativa, se houver). `encerrar` vence a flag naquela decisão (`false` desliga com a flag ligada); com `permitir` é ignorado.
+
+```json
+{"jsonrpc":"2.0","id":7,"method":"rodar.decidir","params":{"run":"rodar-1","id":"dec-3","resposta":"negar","encerrar":true}}
+```
+
 ```json
 {"jsonrpc":"2.0","id":5,"method":"rodar.decidir","params":{"geracao":"geracao-a1b2c3","run":"rodar-1","id":"dec-2","resposta":"permitir"}}
 ```
@@ -312,7 +318,7 @@ Notificações sem `id`. Os eventos de execuções lançadas por `rodar.iniciar`
 | `orq.progresso` | texto ou ferramenta nova; **no máximo 1 a cada 2 s por agente** (o excedente sai no fim da janela, só o mais recente) | `geracao`, `agente`, `projeto`, `resumo` (até ~160 caracteres) |
 | `orq.precisa_decisao` | `agent.permission_request` do agente | `geracao`, `run`, `id`, `agente`, `projeto`, `pergunta`, `opcoes` |
 | `orq.erro` | falha de uma tentativa, cota ou erro antes de começar | `geracao`, `agente`, `projeto`, `mensagem`, `cota` (bool) |
-| `orq.fim` | missão terminou (também após erro ou parada) | `geracao`, `agente`, `projeto`, `codigo`, `tentativas`, `duracao` (segundos), `relatorio` (caminho do `RELATORIO-AGENTE.md`, se existir) |
+| `orq.fim` | missão terminou (também após erro ou parada) | `geracao`, `agente`, `projeto`, `codigo`, `tentativas`, `duracao` (segundos), `relatorio` (caminho do `RELATORIO-AGENTE.md`, se existir), `motivo` (`"negado"` quando uma negação encerrou; ausente nos demais) |
 
 Ordem garantida por agente: `orq.inicio` → (`orq.progresso` | `orq.precisa_decisao` | `orq.erro`)* → `orq.fim`; nenhum progresso depois do fim. Com reservas ou novas tentativas há um `orq.inicio` por tentativa e um só `orq.fim`.
 

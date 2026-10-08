@@ -42,6 +42,13 @@ func NewRouterWithMaxAgents(m *session.Manager, maxAgents int) *Router {
 	return &Router{manager: m, orq: o, geracao: o.geracao}
 }
 
+// SetNegarEncerra liga serve --negar-encerra: uma negação em rodar.decidir sem "encerrar" termina a execução.
+func (r *Router) SetNegarEncerra(v bool) {
+	r.orq.mu.Lock()
+	r.orq.negarEncerra = v
+	r.orq.mu.Unlock()
+}
+
 // HandleRequest executa a lógica do método solicitado e devolve a resposta JSON-RPC
 func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (response protocol.Response) {
 	defer func() { response.Geracao = r.geracao }()

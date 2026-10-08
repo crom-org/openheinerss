@@ -51,6 +51,9 @@ func NewStdioServerWithMaxAgents(m *session.Manager, in io.Reader, out io.Writer
 	return s
 }
 
+// SetNegarEncerra liga serve --negar-encerra (veja Router.SetNegarEncerra).
+func (s *StdioServer) SetNegarEncerra(v bool) { s.router.SetNegarEncerra(v) }
+
 // Run inicia o loop de leitura e processamento de linhas do stdin
 func (s *StdioServer) Run(ctx context.Context) error {
 	ctx, c := comConexao(ctx, func(v interface{}) { s.writeMessage(v) })

@@ -6,6 +6,10 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 
 ## [Não lançado]
 
+### Adicionado (negar = encerrar)
+
+- `serve --negar-encerra` (alias `--deny-ends`) e campo opcional `encerrar` em `rodar.decidir` (vence a flag naquela decisão): uma negação termina a execução com `FIM HH:MM código 3`, `meta.json` com `codigo` 3 e `motivo` `"negado"`, e `orq.fim` com `motivo` `"negado"`, sem nova tentativa nem reserva. Sem a opção, nada muda. SDKs TS/Py/PHP: `decideRun(..., encerrar)`. Pedido da crom-central.
+
 ### Adicionado (pasta de configuração)
 
 - Flag global `--config <pasta>` (alias `--configuracao`) e variável `OPENHEINERSS_CONFIG`: apontam a pasta de instâncias (`harnesses/`) e `motores.yaml` para todos os comandos (`limites`, `harness`, `rodar`, `run`, `motores`, `serve`), sem depender da pasta atual. Ordem: flag > variável > busca atual. Pedido da crom-central (`limites --json` mudava conforme o cwd).

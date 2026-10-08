@@ -312,6 +312,7 @@ func newServeCmd() *cobra.Command {
 		port       int
 		host       string
 		maxAgentes int
+		negarEnc   bool
 	)
 
 	cmd := &cobra.Command{
@@ -326,11 +327,13 @@ func newServeCmd() *cobra.Command {
 
 			if useStdio {
 				stdioServer := server.NewStdioServerWithMaxAgents(manager, os.Stdin, os.Stdout, maxAgentes)
+				stdioServer.SetNegarEncerra(negarEnc)
 				return stdioServer.Run(ctx)
 			}
 
 			addr := fmt.Sprintf("%s:%d", host, port)
 			wsServer := server.NewWSServerWithMaxAgents(manager, maxAgentes)
+			wsServer.SetNegarEncerra(negarEnc)
 			listener, err := net.Listen("tcp", addr)
 			if err != nil {
 				return fmt.Errorf("abrir porta %s: %w", addr, err)
@@ -364,6 +367,8 @@ func newServeCmd() *cobra.Command {
 	cmd.Flags().StringVar(&host, "hospedeiro", "127.0.0.1", "Alias em português de --host")
 	cmd.Flags().IntVar(&maxAgentes, "max-agentes", 0, "Máximo de agentes simultâneos no servidor")
 	cmd.Flags().IntVar(&maxAgentes, "max-agents", 0, "Alias em inglês de --max-agentes")
+	cmd.Flags().BoolVar(&negarEnc, "negar-encerra", false, "Negar em rodar.decidir encerra a execução (código 3, motivo negado) sem nova tentativa")
+	cmd.Flags().BoolVar(&negarEnc, "deny-ends", false, "Alias em inglês de --negar-encerra")
 
 	return cmd
 }

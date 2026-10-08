@@ -35,6 +35,25 @@ test("SDK TypeScript conversa com o servidor real", async () => {
   } finally { client.close(); }
 });
 
+test("SDK TypeScript nega com encerrar e recebe orq.fim código 3", async () => {
+  const client = new Openheinerss({ binPath: bin, transport: "stdio" });
+  try {
+    let fim;
+    const terminou = new Promise((resolve) => { fim = resolve; });
+    const inicios = [];
+    await client.subscribeEvents({ projeto: "teste-ts-negar" }, {
+      "orq.inicio": (p) => inicios.push(p),
+      "orq.fim": (p) => fim(p),
+      "orq.precisa_decisao": (p) => { void client.decideRun(p.id, "negar", undefined, p.run, true); },
+    });
+    await client.run({ nome: "teste-ts-negar", motor: "mock", texto: "responda OK", cwd: await repoTemporario(), projeto: "teste-ts-negar", tentativas: 2 });
+    const p = await Promise.race([terminou, new Promise((_, reject) => setTimeout(() => reject(new Error("timeout de orq.fim")), 5000))]);
+    assert.equal(p.codigo, 3);
+    assert.equal(p.motivo, "negado");
+    assert.equal(inicios.length, 1);
+  } finally { client.close(); }
+});
+
 test("SDK TypeScript falha pendências quando o servidor chega ao EOF", async () => {
   const pasta = await mkdtemp(join(tmpdir(), "openheinerss caminho com espaco-"));
   const falso = join(pasta, "servidor falso.mjs");

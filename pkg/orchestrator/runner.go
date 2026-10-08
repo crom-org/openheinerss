@@ -54,7 +54,13 @@ type Options struct {
 	ViaServidor bool
 	// Decidir responde pedidos de permissão do agente; nil aprova sempre.
 	Decidir func(ctx context.Context, q Pergunta) (allow bool, msg string)
+	// DecidirFim é como Decidir, mas uma negação com encerra=true termina a execução
+	// (código CodigoNegado, motivo "negado") sem nova tentativa. Se definido, vence Decidir.
+	DecidirFim func(ctx context.Context, q Pergunta) (allow bool, msg string, encerra bool)
 }
+
+// CodigoNegado é o código de fim quando uma negação de permissão encerra a execução.
+const CodigoNegado = 3
 
 // Tipos de Evento.
 const (
@@ -79,6 +85,7 @@ type Evento struct {
 	Tentativas int
 	Duracao    time.Duration
 	Relatorio  string
+	Motivo     string // no EvFim: "negado" quando uma negação encerrou a execução
 }
 
 // Pergunta é um permission_request que precisa de decisão.
@@ -112,6 +119,7 @@ type meta struct {
 	Servidor  bool   `json:"servidor,omitempty"`
 	Fim       string `json:"fim,omitempty"`
 	Codigo    *int   `json:"codigo,omitempty"`
+	Motivo    string `json:"motivo,omitempty"`
 }
 
 // nomeValido impede que o nome do agente saia da pasta de agentes (worktree, log e meta usam o nome em caminhos).
@@ -322,7 +330,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			// A pasta da missão é descartável: o relatório precisa sair dela antes de ser apagada.
 			rel = salvarRelatorio(work, agents, o.Name)
 		}
-		o.emit(Evento{Tipo: EvFim, Motor: motorName, Codigo: code, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: rel})
+		o.emit(Evento{Tipo: EvFim, Motor: motorName, Codigo: code, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: rel, Motivo: cur.Motivo})
 		finalized = true
 		return Result{Name: o.Name, WorkDir: work, LogFile: logPath, MetaFile: metaPath, Attempts: attempts, Code: code, Causa: causa, Resumo: curto(ultimoResumo, 240), Relatorio: rel}
 	}
@@ -505,11 +513,22 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				}
 				if ev.Type == harness.EventPermission {
 					if q, ok := ev.Payload.(protocol.PermissionRequestParams); ok {
-						allow, msg := true, ""
-						if o.Decidir != nil {
-							allow, msg = o.Decidir(ctx, Pergunta{Agente: o.Name, Pergunta: perguntaDe(q), Opcoes: []string{"permitir", "negar"}, Request: q})
+						allow, msg, encerra := true, "", false
+						pq := Pergunta{Agente: o.Name, Pergunta: perguntaDe(q), Opcoes: []string{"permitir", "negar"}, Request: q}
+						if o.DecidirFim != nil {
+							allow, msg, encerra = o.DecidirFim(ctx, pq)
+						} else if o.Decidir != nil {
+							allow, msg = o.Decidir(ctx, pq)
 						}
 						_ = h.RespondPermission(hctx, q.RequestID, allow, msg)
+						if !allow && encerra && ctx.Err() == nil {
+							// Negação que encerra: para o agente já, sem reserva nem nova tentativa.
+							_ = h.Stop()
+							cancel()
+							write("permissão negada; execução encerrada\n")
+							cur.Motivo = "negado"
+							return finish(CodigoNegado, "negado: "+curto(pq.Pergunta, 160), candidate, true), nil
+						}
 					}
 				}
 				// Avisos no stderr (rede, MCP) chegam como erro mas não derrubam a tarefa;

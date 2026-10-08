@@ -85,6 +85,9 @@ func NewWSServerWithMaxAgents(m *session.Manager, maxAgents int) *WSServer {
 	return s
 }
 
+// SetNegarEncerra liga serve --negar-encerra (veja Router.SetNegarEncerra).
+func (s *WSServer) SetNegarEncerra(v bool) { s.router.SetNegarEncerra(v) }
+
 func (s *WSServer) broadcast(v interface{}) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
