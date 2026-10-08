@@ -92,10 +92,24 @@ func newServeCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&useStdio, "stdio", false, "Executa via pipes padrão STDIO (JSON-RPC / NDJSON)")
-	cmd.Flags().IntVarP(&port, "port", "p", 4799, "Porta para o servidor WebSocket")
+	defaultPort := configuredPort()
+	cmd.Flags().IntVarP(&port, "port", "p", defaultPort, "Porta para o servidor WebSocket (alias de --porta)")
+	cmd.Flags().IntVar(&port, "porta", defaultPort, "Porta para o servidor WebSocket")
 	cmd.Flags().StringVar(&host, "host", "127.0.0.1", "Host de vinculação do WebSocket")
 
 	return cmd
+}
+
+func configuredPort() int {
+	for _, name := range []string{"OPENHEINERSS_PORTA", "OPENHEINERSS_PORT"} {
+		if value, ok := os.LookupEnv(name); ok {
+			var port int
+			if _, err := fmt.Sscanf(value, "%d", &port); err == nil && port > 0 && port <= 65535 {
+				return port
+			}
+		}
+	}
+	return 4820
 }
 
 func newDoctorCmd() *cobra.Command {

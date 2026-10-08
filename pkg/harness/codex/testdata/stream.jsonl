@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"thread-test-123"}
+{"type":"item.started","item":{"id":"cmd-1","type":"command_execution","command":"printf oi"}}
+{"type":"item.completed","item":{"id":"cmd-1","type":"command_execution","aggregated_output":"oi\n","exit_code":0}}
+{"type":"item.completed","item":{"type":"agent_message","text":"OK"}}
+{"type":"turn.completed","usage":{"input_tokens":12,"output_tokens":4,"total_tokens":16}}

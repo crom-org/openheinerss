@@ -29,6 +29,7 @@ const (
 	EventPermission EventType = "permission"
 	EventComplete   EventType = "complete"
 	EventError      EventType = "error"
+	EventUsage      EventType = "usage"
 )
 
 // Event encapsula um evento emitido pelo harness

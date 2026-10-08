@@ -24,7 +24,7 @@ export class Openheinerss extends EventEmitter {
     super();
     this.config = {
       transport: config.transport || (typeof window !== "undefined" ? "websocket" : "stdio"),
-      wsEndpoint: config.wsEndpoint || "ws://127.0.0.1:4799",
+      wsEndpoint: config.wsEndpoint || "ws://127.0.0.1:4820",
       binPath: config.binPath || "openheinerss",
       options: config.options || {},
       ...config,

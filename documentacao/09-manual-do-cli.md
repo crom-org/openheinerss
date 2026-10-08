@@ -85,12 +85,12 @@ Inicia o processo servidor para atender requisições de clientes, IDEs e aplica
 openheinerss serve --stdio
 
 # Modo WebSocket (para interfaces Web e clientes remotos):
-openheinerss serve --port 4799
+openheinerss serve --port 4820
 ```
 
 #### Flags do Comando `serve`:
 - `--stdio`: Escuta requisições JSON-RPC via entrada e saída padrão (STDIO).
-- `--port` (int): Porta de escuta do servidor WebSocket (padrão: `4799`).
+- `--port` (int): Porta de escuta do servidor WebSocket (padrão: `4820`).
 - `--host` (string): Host de ligação (padrão: `127.0.0.1`).
 
 ---
@@ -113,7 +113,7 @@ openheinerss mcp add git uvx mcp-server-git --repository .
 
 O Openheinerss respeita variáveis de ambiente para customização do comportamento:
 
-- `OPENHEINERSS_PORT`: Porta padrão para o servidor WebSocket (substitui `4799`).
+- `OPENHEINERSS_PORTA`: Porta padrão para o servidor WebSocket; `--porta` e `--port` podem sobrescrevê-la.
 - `OPENHEINERSS_HARNESS`: Harness padrão caso não seja especificado.
 - `OPENHEINERSS_LOG_LEVEL`: Nível de verbosidade de logs (`debug`, `info`, `warn`, `error`).
 - `CLAUDE_CONFIG_DIR`: Sobrescrito automaticamente para isolar perfis de cada provedor em `~/.openheinerss/profiles/claude-<provider>`.

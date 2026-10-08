@@ -272,6 +272,8 @@ func (m *Manager) forwardEvents(s *Session) {
 			s.mu.Lock()
 			s.Running = false
 			s.mu.Unlock()
+		case harness.EventUsage:
+			method = protocol.EventAgentUsage
 		default:
 			method = "agent." + string(evt.Type)
 		}

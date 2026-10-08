@@ -9,6 +9,7 @@ const (
 	EventAgentPermissionRequest = "agent.permission_request"
 	EventAgentComplete          = "agent.complete"
 	EventAgentError             = "agent.error"
+	EventAgentUsage             = "agent.usage"
 )
 
 // ThinkingParams payload para agent.thinking
@@ -59,4 +60,12 @@ type ErrorParams struct {
 	SessionID string `json:"sessionId"`
 	Message   string `json:"message"`
 	Code      int    `json:"code,omitempty"`
+}
+
+// UsageParams informa o consumo de tokens quando o motor o fornece.
+type UsageParams struct {
+	SessionID    string `json:"sessionId"`
+	InputTokens  int64  `json:"inputTokens,omitempty"`
+	OutputTokens int64  `json:"outputTokens,omitempty"`
+	TotalTokens  int64  `json:"totalTokens,omitempty"`
 }
