@@ -137,6 +137,14 @@ func (c *CodexHarness) RespondPermission(ctx context.Context, reqID string, allo
 	return nil
 }
 func (c *CodexHarness) Events() <-chan harness.Event { return c.events }
+
+// ResumeID expõe o thread_id descoberto pelo codex exec para retomadas nativas.
+func (c *CodexHarness) ResumeID() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.threadID
+}
+
 func (c *CodexHarness) Stop() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

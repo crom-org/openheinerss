@@ -30,6 +30,7 @@ type CustomSpec struct {
 	Prompt      string            `json:"prompt,omitempty" yaml:"prompt,omitempty"`
 	FinishRegex string            `json:"finishRegex,omitempty" yaml:"finishRegex,omitempty"`
 	QuotaRegex  string            `json:"quotaRegex,omitempty" yaml:"quotaRegex,omitempty"`
+	Reserva     []string          `json:"reserva,omitempty" yaml:"reserva,omitempty"`
 }
 
 var customMu sync.RWMutex
@@ -83,6 +84,14 @@ func RegisterCustom(spec CustomSpec) error {
 		return newCustom(resolved, mode), nil
 	})
 	return nil
+}
+
+// CustomSpecFor retorna a configuração efetiva de uma instância declarada pelo usuário.
+func CustomSpecFor(name string) (CustomSpec, bool) {
+	customMu.RLock()
+	defer customMu.RUnlock()
+	s, ok := customSpecs[name]
+	return s, ok
 }
 
 func resolveSpec(s CustomSpec, seen map[string]bool) (CustomSpec, error) {
@@ -152,6 +161,9 @@ func resolveSpec(s CustomSpec, seen map[string]bool) (CustomSpec, error) {
 	}
 	if s.QuotaRegex != "" {
 		base.QuotaRegex = s.QuotaRegex
+	}
+	if s.Reserva != nil {
+		base.Reserva = append([]string(nil), s.Reserva...)
 	}
 	return base, nil
 }

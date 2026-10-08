@@ -153,6 +153,19 @@ openheinerss serve --stdio
 openheinerss serve --port 4820
 ```
 
+### 6. Rodar uma missão
+
+Para executar uma tarefa com worktree, log compatível com a Central e troca
+automática de instância, use:
+
+```bash
+openheinerss rodar <nome> <instância-ou-harness> [--modelo ...] [--esforco ...]
+```
+
+O prompt fica em `.claude/agentes/prompts/<nome>.md`. `--retomar` ou
+`RETOMAR=1` preserva o log e continua a tarefa. Consulte
+[`docs/07-rodar.md`](docs/07-rodar.md) para limites e reservas.
+
 ---
 
 ## 🌐 SDKs Oficiais da Comunidade
