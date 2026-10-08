@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -29,23 +30,36 @@ type harnessTestResult struct {
 }
 
 func harnessTestCases(includePrincipal bool) []harnessTestCase {
-	items := []harnessTestCase{
-		{Name: "codex", Base: "codex", Mode: harness.ModeCLI},
-		{Name: "codex2", Base: "codex", Mode: harness.ModeCLI},
-		{Name: "claude-conta2", Base: "claude-code", Mode: harness.ModeCLI},
-		{Name: "claude-conta2", Base: "claude-code", Mode: harness.ModeSDK},
-		{Name: "opencode", Base: "opencode", Mode: harness.ModeCLI},
-		{Name: "opencode-gratis", Base: "opencode", Mode: harness.ModeCLI},
-		{Name: "aider", Base: "aider", Mode: harness.ModeCLI},
-		{Name: "agy", Base: "agy", Mode: harness.ModeCLI},
+	// A lista vem do catálogo (embutidos + instâncias do usuário); nada de instância fixa no código.
+	// O mock fica de fora (não é motor real) e o claude-code puro só entra com --incluir-principal.
+	var items []harnessTestCase
+	for _, item := range harness.ListCatalog() {
+		base := item.ID
+		if spec, ok := harness.CustomSpecFor(item.ID); ok && spec.Base != "" {
+			base = rootBase(spec.Base)
+		}
+		if item.ID == "mock" || base == "mock" || (item.ID == "claude-code" && !includePrincipal) {
+			continue
+		}
+		items = append(items, harnessTestCase{Name: item.ID, Base: base, Mode: harness.ModeCLI})
+		if base == "claude-code" {
+			items = append(items, harnessTestCase{Name: item.ID, Base: base, Mode: harness.ModeSDK})
+		}
 	}
-	if includePrincipal {
-		items = append(items,
-			harnessTestCase{Name: "claude-code", Base: "claude-code", Mode: harness.ModeCLI},
-			harnessTestCase{Name: "claude-code", Base: "claude-code", Mode: harness.ModeSDK},
-		)
-	}
+	sort.SliceStable(items, func(a, b int) bool { return items[a].Name < items[b].Name })
 	return items
+}
+
+// rootBase segue a cadeia de herança até o harness embutido.
+func rootBase(name string) string {
+	for i := 0; i < 10; i++ {
+		spec, ok := harness.CustomSpecFor(name)
+		if !ok || spec.Base == "" {
+			return name
+		}
+		name = spec.Base
+	}
+	return name
 }
 
 func runHarnessTodos(cmd *cobra.Command, prompt string, jsonOutput bool, skip string, timeout time.Duration, includePrincipal bool) error {
@@ -66,7 +80,7 @@ func runHarnessTodos(cmd *cobra.Command, prompt string, jsonOutput bool, skip st
 	for _, tc := range harnessTestCases(includePrincipal) {
 		key := tc.Name
 		modeKey := key + ":" + string(tc.Mode)
-		if skips[key] || skips[modeKey] || skips[tc.Base] {
+		if skips[key] || skips[modeKey] {
 			continue
 		}
 		results = append(results, runHarnessTest(cmd.Context(), tc, prompt, timeout))

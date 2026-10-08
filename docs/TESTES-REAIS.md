@@ -65,3 +65,20 @@ Os timeouts de Claude SDK e Aider foram registrados como falha por timeout, não
 `openheinerss harness test --todos --timeout 90s`: 7 de 8 OK — codex, codex2, claude-conta2 (CLI e SDK), opencode, opencode-gratis e agy.
 `aider` (configuração padrão do usuário) falhou por causa **externa**: o provedor recusou por créditos ("request requires more credits, or fewer max_tokens"); o openheinerss classificou como "sem cota" em 3,4 s.
 Como resolver: usar a instância `aider-gratis` (`.openheinerss/harnesses/aider-gratis.yaml`, modelo `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`), que respondeu de verdade (611 tokens enviados, 47 recebidos, depois de uma nova tentativa automática por sobrecarga do provedor), ou pôr créditos/outro modelo no aider.
+
+## Rodada de 08/10 09:50 — 8/8 OK (decisão do usuário: aider via `aider-gratis`)
+
+`openheinerss harness test --todos --pular aider --timeout 150s` (lista lida do catálogo: embutidos + instâncias do usuário):
+
+| nome | base | modo | resultado | tempo | tokens |
+|---|---|---|---|---:|---:|
+| agy | agy | cli | OK | 25,3 s | — |
+| aider-gratis | aider | cli | OK | 22,6 s | — |
+| claude-conta2 | claude-code | cli | OK | 27,0 s | 6 |
+| claude-conta2 | claude-code | sdk | OK | 6,2 s | 6 |
+| codex | codex | cli | OK | 1 min 57 s | 13.935 |
+| codex2 | codex | cli | OK | 46,4 s | 12.425 |
+| opencode | opencode | cli | OK | 14,1 s | 13.817 |
+| opencode-gratis | opencode | cli | OK | 13,2 s | 13.649 |
+
+Tempos altos com a máquina em carga ~20. Corrigido: a lista do `--todos` era fixa no código (instâncias embutidas) e o `--pular` pulava também as instâncias da mesma base.
