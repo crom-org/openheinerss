@@ -344,6 +344,17 @@ func parseOpenCodeEvent(raw map[string]interface{}, sessionID string) []harness.
 		if message == "" {
 			message = str(part, "message")
 		}
+		if message == "" {
+			if nested, ok := raw["error"].(map[string]interface{}); ok {
+				message = str(nested, "message")
+				if data, ok := nested["data"].(map[string]interface{}); ok && str(data, "message") != "" {
+					message = str(data, "message")
+				}
+			}
+		}
+		if message == "" {
+			message = "erro do OpenCode sem mensagem"
+		}
 		return []harness.Event{{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessionID, Message: message}}}
 	}
 	return nil

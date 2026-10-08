@@ -162,6 +162,55 @@ func TestRunCotaSemReservaParaSemRepetir(t *testing.T) {
 	}
 }
 
+func TestRunErroProvedorComFimSucessoTentaReserva(t *testing.T) {
+	root, agents := repoFixture(t)
+	falha := filepath.Join(root, "provedor-falha.sh")
+	reserva := filepath.Join(root, "provedor-reserva.sh")
+	for path, body := range map[string]string{
+		falha:   "#!/bin/sh\nread p\nprintf '%s\\n' '{\"type\":\"error\",\"message\":\"Upstream error from Nvidia: Service temporarily overloaded\"}'\nprintf '%s\\n' '{\"type\":\"end\",\"reason\":\"completed\"}'\n",
+		reserva: "#!/bin/sh\nread p\nprintf '%s\\n' '{\"type\":\"text\",\"text\":\"OK reserva\"}'\nprintf '%s\\n' '{\"type\":\"end\"}'\n",
+	} {
+		if err := os.WriteFile(path, []byte(body), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := harness.RegisterCustom(harness.CustomSpec{Name: "provedor-sobrecarregado", Command: falha, Reserva: []string{"provedor-reserva"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := harness.RegisterCustom(harness.CustomSpec{Name: "provedor-reserva", Command: reserva}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(agents, "prompts", "provedor.md"), []byte("prompt"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Run(context.Background(), root, Options{Name: "provedor", Motor: "provedor-sobrecarregado", AgentsDir: agents, Attempts: 2, MaxAgents: 99})
+	if err != nil || res.Code != 0 || res.Attempts != 2 {
+		t.Fatalf("reserva de provedor: err=%v código=%d tentativas=%d", err, res.Code, res.Attempts)
+	}
+	log := mustRead(t, res.LogFile)
+	if !strings.Contains(log, "tentativa 2") || !strings.Contains(log, "OK reserva") {
+		t.Fatalf("log sem troca por erro de provedor: %s", log)
+	}
+}
+
+func TestRunErroProvedorNaoViraFimZero(t *testing.T) {
+	root, agents := repoFixture(t)
+	script := filepath.Join(root, "provedor-sem-reserva.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nread p\nprintf '%s\\n' '{\"type\":\"error\",\"message\":\"ServiceUnavailableError: 503\"}'\nprintf '%s\\n' '{\"type\":\"end\",\"reason\":\"completed\"}'\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := harness.RegisterCustom(harness.CustomSpec{Name: "provedor-sem-reserva", Command: script}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(agents, "prompts", "provedor-falha.md"), []byte("prompt"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Run(context.Background(), root, Options{Name: "provedor-falha", Motor: "provedor-sem-reserva", AgentsDir: agents, Attempts: 3, MaxAgents: 99})
+	if err == nil || res.Code != 1 || strings.Contains(mustRead(t, res.LogFile), "código 0") {
+		t.Fatalf("erro de provedor aceito como sucesso: err=%v código=%d log=%s", err, res.Code, mustRead(t, res.LogFile))
+	}
+}
+
 func TestPadraoCotaClaudeReconheceAmostrasReais(t *testing.T) {
 	for _, amostra := range []string{"You've hit your session limit · resets 9am", "You have hit your session limit", "usage limit reached"} {
 		if !quotaPattern("claude-code").MatchString(amostra) {

@@ -34,7 +34,7 @@ const missionRules = "\n\n--- MISSÃO SOMENTE LEITURA ---\nEsta é uma missão d
 const defaultPromptRules = "--- REGRAS PADRÃO DO AGENTE ---\nTrabalhe somente dentro da pasta do agente e da worktree desta missão.\nÉ proibido buscar fora da worktree: não use `find /`, `find ~`, `locate`, varreduras de disco ou buscas equivalentes fora dela."
 
 type Options struct {
-	Name, Motor, Model, Effort, PromptFile string
+	Name, Motor, Model, Effort, Mode, PromptFile string
 	// PromptText é o prompt em texto; quando preenchido, vale no lugar de PromptFile e de prompts/<nome>.md.
 	PromptText    string
 	Conta, Regras string
@@ -352,7 +352,13 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		ran = true
 		write(fmt.Sprintf("### tentativa %d (%s) motor %s\n", attempts, o.Now().Format("15:04"), candidate))
 		o.emit(Evento{Tipo: EvInicio, Motor: candidate, Modelo: modeloMeta, Tentativa: attempts, Worktree: work})
-		h, e := harness.Create(candidate, harness.ModeCLI)
+		mode := harness.ModeCLI
+		if o.Mode != "" {
+			mode = harness.Mode(o.Mode)
+		} else if s, ok := harness.CustomSpecFor(candidate); ok && s.Mode != "" {
+			mode = harness.Mode(s.Mode)
+		}
+		h, e := harness.Create(candidate, mode)
 		if e != nil {
 			lastErr = e
 			write("ERRO: " + e.Error() + "\n")
@@ -387,8 +393,10 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		if s, ok := harness.CustomSpecFor(candidate); ok && s.QuotaRegex != "" {
 			quota = regexp.MustCompile(s.QuotaRegex)
 		}
-		failed, quotaHit := false, false
+		failed, quotaHit, providerFailure := false, false, false
 		quotaNotice := ""
+		providerNotice := ""
+		providerRe := providerPattern(candidate)
 		for {
 			select {
 			case ev := <-h.Events():
@@ -401,6 +409,12 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 					quotaHit = true
 					if quotaNotice == "" {
 						quotaNotice = quotaResetNotice(line)
+					}
+				}
+				if ev.Type == harness.EventError && providerRe != nil && providerRe.MatchString(line) {
+					providerFailure = true
+					if providerNotice == "" {
+						providerNotice = strings.TrimSpace(line)
 					}
 				}
 				// Harness custom já detecta a cota pelo próprio regex e avisa com este erro.
@@ -425,7 +439,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				// Avisos no stderr (rede, MCP) chegam como erro mas não derrubam a tarefa;
 				// quem decide é o motivo do fim.
 				if ev.Type == harness.EventComplete {
-					failed = quotaHit
+					failed = quotaHit || providerFailure
 					if c, ok := ev.Payload.(protocol.CompleteParams); ok && falhaNoFim[c.Reason] {
 						failed = true
 					}
@@ -471,7 +485,17 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			}
 			break
 		}
+		if providerFailure && !hasReserva(candidate) {
+			finalCode = 1
+			if providerNotice != "" {
+				write("Erro do provedor: " + providerNotice + "\n")
+			}
+			break
+		}
 		lastErr = fmt.Errorf("execução interrompida%s", map[bool]string{true: " por falta de cota", false: ""}[quotaHit])
+		if providerFailure {
+			lastErr = fmt.Errorf("erro do provedor: %s", providerNotice)
+		}
 		write("saiu com erro; tentando continuar...\n")
 		o.emit(Evento{Tipo: EvErro, Motor: candidate, Mensagem: lastErr.Error(), Cota: quotaHit})
 	}
@@ -639,6 +663,16 @@ func quotaPattern(name string) *regexp.Regexp {
 		return regexp.MustCompile(s.QuotaRegex)
 	}
 	return regexp.MustCompile(`(?i)(SEM COTA|RESOURCE_EXHAUSTED|quota.*(exceeded|limit)|session limit|usage limit|hit your limit|rate limit|limite.*cota)`)
+}
+
+// providerPattern identifica erros transitórios ou respostas inválidas do provedor
+// que às vezes chegam antes de um fim com reason=completed. A instância pode
+// substituir este padrão com error_regex/erro_regex.
+func providerPattern(name string) *regexp.Regexp {
+	if s, ok := harness.CustomSpecFor(name); ok && s.ErrorRegex != "" {
+		return regexp.MustCompile(s.ErrorRegex)
+	}
+	return regexp.MustCompile(`(?i)(upstream error|serviceunavailableerror|service temporarily overloaded|temporarily unavailable|too many requests|\b429\b|\b5\d\d\b|bad gateway|gateway timeout|internal server error|overloaded)`)
 }
 
 func acquireNameLock(agents, name string) (*os.File, error) {

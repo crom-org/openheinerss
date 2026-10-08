@@ -12,8 +12,10 @@ args: []
 env:
   PROVEDOR_URL: https://exemplo.invalid
 model: meu-modelo
+modo: sdk # opcional; usado pelo `rodar` para instâncias base: claude-code
 finishRegex: '"type"\s*:\s*"end"'
 quotaRegex: 'quota|rate limit'
+error_regex: 'upstream error|ServiceUnavailableError|429|5xx|temporarily overloaded'
 eventosLog: '/caminho/para/eventos.log' # opcional; também há --events-log/--eventos-log
 ```
 
@@ -22,6 +24,8 @@ eventosLog: '/caminho/para/eventos.log' # opcional; também há --events-log/--e
 O comando escreve uma linha JSON por evento. O protocolo aceita `text`, `tool`/`tool_call`, `error`, `usage` e `end`/`complete`; linhas não JSON viram texto. Os eventos são normalizados para `agent.text`, `agent.tool_call`, `agent.error`, `agent.usage` e `agent.complete`.
 
 Se o processo sair com erro sem ter emitido o evento de fim, o harness emite um `agent.error` com o código de saída e o fim do stderr, e termina com `reason: "process_error"` (o `rodar` conta como falha e tenta a próxima instância). Se o stderr casar com `quotaRegex`, o erro é reportado como limite de cota. Saída com código 0 sem evento de fim termina com `process_exit` (sucesso). Para cota, use `reserva: [outra-instancia]` e veja o exemplo completo no roteiro [VERIFICACAO.md](VERIFICACAO.md).
+
+Mensagens de provedor podem chegar como erro antes de um fim `completed`. O padrão padrão reconhece sobrecarga, `ServiceUnavailableError`, HTTP 429 e 5xx; `error_regex` (também `erro_regex`) substitui esse padrão na instância. Assim o `rodar` encerra com código 1 e tenta `reserva`, em vez de aceitar `FIM 0` sem resultado útil.
 
 Herança usa `base: claude-code` (ou outro harness custom já carregado) e faz merge de `env`; `command`, `args`, `model`, `prompt` e regexes podem ser substituídos. Veja `examples/cco-openrouter.yaml` e `examples/harness-ndjson.sh`.
 

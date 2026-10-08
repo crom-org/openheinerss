@@ -279,6 +279,8 @@ func fatalAiderLine(line string) string {
 		return "sem cota/créditos no provedor do aider: " + strings.TrimSpace(line)
 	case strings.Contains(lower, "authenticationerror"), strings.Contains(lower, "incorrect api key"), strings.Contains(lower, "invalid api key"), strings.Contains(lower, "invalid x-api-key"), strings.Contains(lower, "no api key"):
 		return "sem login: chave de API inválida ou ausente no aider: " + strings.TrimSpace(line)
+	case strings.Contains(lower, "upstream error"), strings.Contains(lower, "service temporarily overloaded"), strings.Contains(lower, "serviceunavailableerror"), strings.Contains(lower, "too many requests"), strings.Contains(lower, "status code: 429"), strings.Contains(lower, "status code: 5"):
+		return "erro do provedor no aider: " + strings.TrimSpace(line)
 	}
 	return ""
 }

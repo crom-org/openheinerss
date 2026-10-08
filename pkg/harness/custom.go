@@ -28,9 +28,14 @@ type CustomSpec struct {
 	Model       string            `json:"model,omitempty" yaml:"model,omitempty"`
 	Modelo      string            `json:"modelo,omitempty" yaml:"modelo,omitempty"`
 	Effort      string            `json:"effort,omitempty" yaml:"effort,omitempty"`
+	Mode        string            `json:"mode,omitempty" yaml:"mode,omitempty"`
+	Modo        string            `json:"modo,omitempty" yaml:"modo,omitempty"`
 	Prompt      string            `json:"prompt,omitempty" yaml:"prompt,omitempty"`
 	FinishRegex string            `json:"finishRegex,omitempty" yaml:"finishRegex,omitempty"`
 	QuotaRegex  string            `json:"quotaRegex,omitempty" yaml:"quotaRegex,omitempty"`
+	ErrorRegex  string            `json:"errorRegex,omitempty" yaml:"errorRegex,omitempty"`
+	ErroRegex   string            `json:"error_regex,omitempty" yaml:"error_regex,omitempty"`
+	ErroRegexPT string            `json:"erro_regex,omitempty" yaml:"erro_regex,omitempty"`
 	Reserva     []string          `json:"reserva,omitempty" yaml:"reserva,omitempty"`
 	EventLog    string            `json:"eventosLog,omitempty" yaml:"eventosLog,omitempty"`
 }
@@ -50,6 +55,15 @@ func RegisterCustom(spec CustomSpec) error {
 	if resolved.Model == "" {
 		resolved.Model = resolved.Modelo
 	}
+	if resolved.Mode == "" {
+		resolved.Mode = resolved.Modo
+	}
+	if resolved.ErrorRegex == "" {
+		resolved.ErrorRegex = resolved.ErroRegex
+	}
+	if resolved.ErrorRegex == "" {
+		resolved.ErrorRegex = resolved.ErroRegexPT
+	}
 	if resolved.Command == "" && resolved.Base == "" {
 		return fmt.Errorf("harness custom '%s': informe base ou command", resolved.Name)
 	}
@@ -68,6 +82,9 @@ func RegisterCustom(spec CustomSpec) error {
 	if resolved.Prompt != "stdin" && resolved.Prompt != "argument" {
 		return fmt.Errorf("harness custom '%s': prompt deve ser stdin ou argument", resolved.Name)
 	}
+	if resolved.Mode != "" && resolved.Mode != string(ModeCLI) && resolved.Mode != string(ModeSDK) {
+		return fmt.Errorf("harness custom '%s': modo deve ser cli ou sdk", resolved.Name)
+	}
 	if resolved.FinishRegex != "" {
 		if _, err := regexp.Compile(resolved.FinishRegex); err != nil {
 			return fmt.Errorf("harness custom '%s': finishRegex inválido: %w", resolved.Name, err)
@@ -76,6 +93,11 @@ func RegisterCustom(spec CustomSpec) error {
 	if resolved.QuotaRegex != "" {
 		if _, err := regexp.Compile(resolved.QuotaRegex); err != nil {
 			return fmt.Errorf("harness custom '%s': quotaRegex inválido: %w", resolved.Name, err)
+		}
+	}
+	if resolved.ErrorRegex != "" {
+		if _, err := regexp.Compile(resolved.ErrorRegex); err != nil {
+			return fmt.Errorf("harness custom '%s': errorRegex inválido: %w", resolved.Name, err)
 		}
 	}
 	customMu.Lock()
@@ -164,6 +186,12 @@ func resolveSpec(s CustomSpec, seen map[string]bool) (CustomSpec, error) {
 	if s.Effort != "" {
 		base.Effort = s.Effort
 	}
+	if s.Mode != "" {
+		base.Mode = s.Mode
+	}
+	if s.Modo != "" {
+		base.Mode = s.Modo
+	}
 	if s.Prompt != "" {
 		base.Prompt = s.Prompt
 	}
@@ -172,6 +200,15 @@ func resolveSpec(s CustomSpec, seen map[string]bool) (CustomSpec, error) {
 	}
 	if s.QuotaRegex != "" {
 		base.QuotaRegex = s.QuotaRegex
+	}
+	if s.ErrorRegex != "" {
+		base.ErrorRegex = s.ErrorRegex
+	}
+	if s.ErroRegex != "" {
+		base.ErrorRegex = s.ErroRegex
+	}
+	if s.ErroRegexPT != "" {
+		base.ErrorRegex = s.ErroRegexPT
 	}
 	if s.Reserva != nil {
 		base.Reserva = append([]string(nil), s.Reserva...)
@@ -236,6 +273,7 @@ func filepathBase(p string) string {
 type customHarness struct {
 	finishRe  *regexp.Regexp
 	quotaRe   *regexp.Regexp
+	errorRe   *regexp.Regexp
 	mu        sync.Mutex
 	spec      CustomSpec
 	mode      Mode
@@ -256,6 +294,9 @@ func newCustom(s CustomSpec, mode Mode) *customHarness {
 	}
 	if s.QuotaRegex != "" {
 		c.quotaRe, _ = regexp.Compile(s.QuotaRegex)
+	}
+	if s.ErrorRegex != "" {
+		c.errorRe, _ = regexp.Compile(s.ErrorRegex)
 	}
 	return c
 }
@@ -416,6 +457,8 @@ func (c *customHarness) read(cmd *exec.Cmd, r io.Reader, stderr *tailBuffer) {
 		tail := strings.TrimSpace(stderr.String())
 		if c.quotaRe != nil && c.quotaRe.MatchString(tail) {
 			c.emit(Event{Type: EventError, Payload: protocol.ErrorParams{SessionID: c.cfg.SessionID, Message: "limite de cota detectado: " + tail}})
+		} else if c.errorRe != nil && c.errorRe.MatchString(tail) {
+			c.emit(Event{Type: EventError, Payload: protocol.ErrorParams{SessionID: c.cfg.SessionID, Message: "erro do provedor detectado: " + tail}})
 		} else {
 			c.emit(Event{Type: EventError, Payload: protocol.ErrorParams{SessionID: c.cfg.SessionID, Message: fmt.Sprintf("harness custom '%s' terminou com erro: %v %s", c.spec.Name, err, tail)}})
 		}
@@ -427,6 +470,10 @@ func (c *customHarness) read(cmd *exec.Cmd, r io.Reader, stderr *tailBuffer) {
 func (c *customHarness) parseLine(line string) {
 	if c.quotaRe != nil && c.quotaRe.MatchString(line) {
 		c.emit(Event{Type: EventError, Payload: protocol.ErrorParams{SessionID: c.cfg.SessionID, Message: "limite de cota detectado: " + line}})
+		return
+	}
+	if c.errorRe != nil && c.errorRe.MatchString(line) {
+		c.emit(Event{Type: EventError, Payload: protocol.ErrorParams{SessionID: c.cfg.SessionID, Message: "erro do provedor detectado: " + line}})
 		return
 	}
 	if c.finishRe != nil && c.finishRe.MatchString(line) {

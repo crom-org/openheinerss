@@ -10,6 +10,7 @@ uma pasta simples. O padrão da worktree é `.claude/agentes` e a branch base é
 openheinerss rodar revisor claude-conta2 --modelo claude-sonnet --esforco high
 openheinerss rodar missao-relatorio mock --retomar
 openheinerss rodar rapido mock --texto "responda OK"
+openheinerss rodar curta claude-conta2 --modo sdk --texto "crie SDK-OK.txt e faça commit"
 ```
 
 `--texto` (`--text`) dá o prompt direto na linha de comando, sem arquivo; `--prompt` aponta outro arquivo. O nome do agente só aceita letras, números, `.`, `_` e `-` (ele vira nome de pasta e de branch).
@@ -23,6 +24,12 @@ Cada execução atualiza `logs/<nome>.log` e, atomicamente,
 o texto de continuação. Uma instância custom pode declarar `reserva: [outra]`;
 ao encontrar a regex de cota ou um erro, as reservas são tentadas até
 `--tentativas` (padrão 4).
+
+Uma instância baseada em `claude-code` pode declarar `modo: sdk`; o `rodar`
+também aceita `--modo sdk` para forçar o modo. Erro de provedor (sobrecarga,
+indisponibilidade, HTTP 429/5xx ou o padrão `error_regex`/`erro_regex` da
+instância) é falha mesmo quando o motor termina com `completed`; com `reserva`,
+a próxima instância é tentada.
 
 Um agente interrompido por Ctrl-C deixa a worktree e o log para o `--retomar`. Limites opcionais: `--carga-maxima`, `--max-agentes`, `--pasta-agentes` e
 `--branch-base`. O protocolo JSON-RPC oferece os mesmos recursos pelo método
