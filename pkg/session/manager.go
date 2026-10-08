@@ -15,6 +15,7 @@ import (
 	"github.com/crom-org/openheinerss/pkg/harness"
 	"github.com/crom-org/openheinerss/pkg/motor"
 	"github.com/crom-org/openheinerss/pkg/protocol"
+	"github.com/crom-org/openheinerss/pkg/risco"
 	"github.com/crom-org/openheinerss/pkg/storage"
 )
 
@@ -33,6 +34,8 @@ type Session struct {
 	inputTokens, outputTokens int64
 	ctx                       context.Context
 	cancel                    context.CancelFunc
+	// risco fica nil com o classificador desligado (padrão): a ponte é só túnel.
+	risco *risco.Classificador
 }
 
 // Manager coordena o ciclo de vida de todas as sessões ativas no Openheinerss
@@ -41,6 +44,29 @@ type Manager struct {
 	sessions  map[string]*Session
 	listeners []EventHandler
 	storage   *storage.Storage
+	// classificarRisco é o padrão das sessões (serve/run --classificar-risco); a sessão pode mudar.
+	classificarRisco bool
+}
+
+// SetClassificarRisco liga ou desliga o classificador de risco como padrão das próximas sessões.
+func (m *Manager) SetClassificarRisco(on bool) {
+	m.mu.Lock()
+	m.classificarRisco = on
+	m.mu.Unlock()
+}
+
+// classificador carrega as regras de risco quando a sessão (ou o padrão do manager) pede.
+func (m *Manager) classificador(cwd string, pedido *bool) (*risco.Classificador, error) {
+	m.mu.RLock()
+	on := m.classificarRisco
+	m.mu.RUnlock()
+	if pedido != nil {
+		on = *pedido
+	}
+	if !on {
+		return nil, nil
+	}
+	return risco.Carregar(cwd)
 }
 
 // NewManager cria uma nova instância de SessionManager
@@ -134,6 +160,18 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 	if len(params.Options.HarnessArgs) > 0 {
 		options[harness.OptionHarnessArgs] = append(harness.HarnessArgs(options), params.Options.HarnessArgs...)
 	}
+	if params.Options.SemMCP {
+		options[harness.OptionSemMCP] = true
+	} else if len(params.Options.MCP) > 0 {
+		options[harness.OptionMCP] = append([]string(nil), params.Options.MCP...)
+	}
+	classif, err := m.classificador(params.CWD, params.Options.ClassificarRisco)
+	if err != nil {
+		return nil, &protocol.RPCError{Code: protocol.CodeInvalidParams, Message: err.Error()}
+	}
+	if classif != nil {
+		options["classificar_risco"] = true
+	}
 
 	sessID := generateSessionID()
 	sessCtx, cancel := context.WithCancel(context.Background())
@@ -173,6 +211,7 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 		ctx:       sessCtx,
 		cancel:    cancel,
 		startedAt: time.Now(),
+		risco:     classif,
 	}
 
 	m.mu.Lock()
@@ -232,13 +271,21 @@ func (m *Manager) ResumeSession(ctx context.Context, params protocol.SessionResu
 	if p := h.ValidatePrerequisites(ctx); !p.Satisfied {
 		return nil, &protocol.RPCError{Code: protocol.CodeHarnessDependencyMissing, Message: strings.Join(p.MissingItems, ", "), Data: protocol.ErrorData{SuggestedFix: p.SuggestedFix}}
 	}
+	var pedido *bool
+	if v, ok := cfg.Options["classificar_risco"].(bool); ok {
+		pedido = &v
+	}
+	classif, err := m.classificador(cfg.CWD, pedido)
+	if err != nil {
+		return nil, &protocol.RPCError{Code: protocol.CodeInvalidParams, Message: err.Error()}
+	}
 	// A sessão vive além da requisição que a retomou: o harness usa o contexto da própria sessão.
 	sessCtx, cancel := context.WithCancel(context.Background())
 	if err := h.Start(sessCtx, cfg); err != nil {
 		cancel()
 		return nil, &protocol.RPCError{Code: protocol.CodeInternalError, Message: err.Error()}
 	}
-	s := &Session{ID: params.SessionID, Harness: h, Config: cfg, CreatedAt: time.Now(), ctx: sessCtx, cancel: cancel, startedAt: time.Now()}
+	s := &Session{ID: params.SessionID, Harness: h, Config: cfg, CreatedAt: time.Now(), ctx: sessCtx, cancel: cancel, startedAt: time.Now(), risco: classif}
 	m.mu.Lock()
 	m.sessions[s.ID] = s
 	m.mu.Unlock()
@@ -440,6 +487,11 @@ func (m *Manager) forwardEvents(s *Session) {
 				}
 			}
 		}
+		if s.risco != nil {
+			if p, ok := classificarEvento(s.risco, evt.Payload, s.Config.CWD); ok {
+				n.Params = p
+			}
+		}
 		if evt.Type == harness.EventError {
 			if p, ok := evt.Payload.(protocol.ErrorParams); ok && p.SuggestedFix == "" {
 				_, p.SuggestedFix = harness.ClassifyFailure(p.Message)
@@ -449,6 +501,27 @@ func (m *Manager) forwardEvents(s *Session) {
 		_ = m.storage.Record(s.Config.CWD, s.ID, "event", &n, "", nil)
 		m.broadcast(n)
 	}
+}
+
+// classificarEvento acrescenta risco e motivo a tool_call e permission_request (só informa).
+func classificarEvento(c *risco.Classificador, payload interface{}, cwd string) (interface{}, bool) {
+	switch p := payload.(type) {
+	case protocol.ToolCallParams:
+		p.Risco, p.MotivoRisco = c.Classificar(p.Tool, "", p.Input, cwd)
+		return p, true
+	case *protocol.ToolCallParams:
+		q := *p
+		q.Risco, q.MotivoRisco = c.Classificar(q.Tool, "", q.Input, cwd)
+		return q, true
+	case protocol.PermissionRequestParams:
+		p.Risco, p.MotivoRisco = c.Classificar(p.Tool, p.Command, nil, cwd)
+		return p, true
+	case *protocol.PermissionRequestParams:
+		q := *p
+		q.Risco, q.MotivoRisco = c.Classificar(q.Tool, q.Command, nil, cwd)
+		return q, true
+	}
+	return nil, false
 }
 
 func generateSessionID() string {

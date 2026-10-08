@@ -46,6 +46,12 @@ type SessionOptions struct {
 	// HarnessArgs vai intacto, na ordem, para o processo do harness (repasse de opções nativas).
 	HarnessArgs []string               `json:"harnessArgs,omitempty"`
 	Extra       map[string]interface{} `json:"extra,omitempty"`
+	// SemMCP desliga a entrega dos servidores de mcp.json ao harness; MCP escolhe quais (vazio = todos).
+	SemMCP bool     `json:"semMcp,omitempty"`
+	MCP    []string `json:"mcp,omitempty"`
+	// ClassificarRisco liga (true) ou desliga (false) o classificador de risco nesta sessão;
+	// ausente segue o padrão do servidor (desligado, salvo serve --classificar-risco).
+	ClassificarRisco *bool `json:"classificarRisco,omitempty"`
 }
 
 // SessionCreateParams parâmetros para session.create
@@ -169,6 +175,8 @@ type HarnessCatalogItem struct {
 	SupportedProtocols []string       `json:"supportedProtocols"`
 	DefaultProviders   []ProviderInfo `json:"defaultProviders,omitempty"`
 	Origin             string         `json:"origin,omitempty"`
+	// MCP diz como os servidores de mcp.json chegam ao harness (ou por que não chegam).
+	MCP string `json:"mcp,omitempty"`
 }
 
 // CatalogListResult retorno de catalog.list

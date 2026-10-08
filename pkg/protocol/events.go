@@ -32,6 +32,9 @@ type ToolCallParams struct {
 	CallID    string      `json:"callId"`
 	Tool      string      `json:"tool"`
 	Input     interface{} `json:"input"`
+	// Risco e MotivoRisco só vêm com o classificador ligado (classificarRisco); só informam, nunca bloqueiam.
+	Risco       string `json:"risco,omitempty"` // "baixo", "medio", "alto"
+	MotivoRisco string `json:"motivoRisco,omitempty"`
 }
 
 // ToolResultParams payload para agent.tool_result
@@ -48,7 +51,10 @@ type PermissionRequestParams struct {
 	RequestID string `json:"requestId"`
 	Tool      string `json:"tool"`
 	Command   string `json:"command,omitempty"`
-	Risk      string `json:"risk,omitempty"` // "low", "medium", "high"
+	Risk      string `json:"risk,omitempty"` // "low", "medium", "high" (quando o próprio harness informa)
+	// Risco e MotivoRisco só vêm com o classificador ligado (classificarRisco); só informam, nunca bloqueiam.
+	Risco       string `json:"risco,omitempty"` // "baixo", "medio", "alto"
+	MotivoRisco string `json:"motivoRisco,omitempty"`
 }
 
 // CompleteParams payload para agent.complete
