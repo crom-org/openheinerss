@@ -51,8 +51,12 @@ type PermissionRequestParams struct {
 
 // CompleteParams payload para agent.complete
 type CompleteParams struct {
-	SessionID string `json:"sessionId"`
-	Reason    string `json:"reason,omitempty"`
+	SessionID    string `json:"sessionId"`
+	Reason       string `json:"reason,omitempty"`
+	DurationMs   int64  `json:"duration_ms,omitempty"`
+	InputTokens  int64  `json:"input_tokens,omitempty"`
+	OutputTokens int64  `json:"output_tokens,omitempty"`
+	TotalTokens  int64  `json:"total_tokens,omitempty"`
 }
 
 // ErrorParams payload para agent.error
@@ -60,6 +64,8 @@ type ErrorParams struct {
 	SessionID string `json:"sessionId"`
 	Message   string `json:"message"`
 	Code      int    `json:"code,omitempty"`
+	// SuggestedFix é preenchido nos casos conhecidos (CLI ausente, sem login, sem cota).
+	SuggestedFix string `json:"suggestedFix,omitempty"`
 }
 
 // UsageParams informa o consumo de tokens quando o motor o fornece.

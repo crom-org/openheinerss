@@ -61,7 +61,7 @@ func (c *CodexHarness) Start(ctx context.Context, cfg harness.SessionConfig) err
 	defer c.mu.Unlock()
 	c.cfg = cfg
 	c.stopped = false
-	c.threadID = optionString(cfg.Options, "codex_session_id", "resume_session")
+	c.threadID = optionString(cfg.Options, "codex_session_id", "resume_session", "session_id")
 	var cancel context.CancelFunc
 	c.ctx, cancel = context.WithCancel(ctx)
 	c.cancel = cancel

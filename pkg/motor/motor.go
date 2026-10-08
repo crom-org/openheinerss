@@ -4,6 +4,7 @@ package motor
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -111,7 +112,7 @@ func FindRoles(cwd string) (map[string]Perfil, string, error) {
 	path := filepath.Join(cwd, ".openheinerss", "motores.yaml")
 	roles, err := LoadRoles(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return map[string]Perfil{}, path, nil
 		}
 		return nil, path, err

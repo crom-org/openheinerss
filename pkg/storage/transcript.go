@@ -15,11 +15,12 @@ import (
 
 // TranscriptEntry representa uma linha gravada no arquivo de histórico de sessão (.jsonl)
 type TranscriptEntry struct {
-	Timestamp string                `json:"timestamp"`
-	SessionID string                `json:"sessionId"`
-	Type      string                `json:"type"` // "user_prompt", "event", "system"
+	Timestamp string                 `json:"timestamp"`
+	SessionID string                 `json:"sessionId"`
+	Type      string                 `json:"type"` // "user_prompt", "event", "system"
 	Event     *protocol.Notification `json:"event,omitempty"`
-	Prompt    string                `json:"prompt,omitempty"`
+	Prompt    string                 `json:"prompt,omitempty"`
+	Config    interface{}            `json:"config,omitempty"`
 }
 
 // Storage coordena a gravação e leitura de históricos de sessões
@@ -36,6 +37,10 @@ func GetStorage() *Storage {
 
 // RecordEvent adiciona um evento no arquivo .jsonl da sessão
 func (s *Storage) RecordEvent(cwd, sessionID, entryType string, notification *protocol.Notification, prompt string) error {
+	return s.Record(cwd, sessionID, entryType, notification, prompt, nil)
+}
+
+func (s *Storage) Record(cwd, sessionID, entryType string, notification *protocol.Notification, prompt string, sessionConfig interface{}) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -57,6 +62,7 @@ func (s *Storage) RecordEvent(cwd, sessionID, entryType string, notification *pr
 		Type:      entryType,
 		Event:     notification,
 		Prompt:    prompt,
+		Config:    sessionConfig,
 	}
 
 	data, err := json.Marshal(entry)

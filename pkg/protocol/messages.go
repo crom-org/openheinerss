@@ -7,6 +7,7 @@ const (
 	MethodSessionPermissionRespond = "session.permission_respond"
 	MethodSessionAbort             = "session.abort"
 	MethodSessionList              = "session.list"
+	MethodSessionResume            = "session.resume"
 	MethodDoctorCheck              = "doctor.check"
 	MethodCatalogList              = "catalog.list"
 	MethodMCPList                  = "mcp.list"
@@ -65,6 +66,13 @@ type SessionCreateResult struct {
 	CWD       string `json:"cwd"`
 	Status    string `json:"status"` // "ready", "running"
 }
+
+type SessionResumeParams struct {
+	SessionID string `json:"sessionId"`
+	CWD       string `json:"cwd,omitempty"`
+}
+
+type SessionResumeResult = SessionCreateResult
 
 // SessionPromptParams parâmetros para session.prompt
 type SessionPromptParams struct {

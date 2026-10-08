@@ -20,7 +20,7 @@ func TestClaudeCodeStreamNormalizaEventosEGuardaSessao(t *testing.T) {
 		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]},"session_id":"sess-1"}`,
 		`{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.12,"usage":{"input_tokens":2,"output_tokens":3},"session_id":"sess-1"}`,
 	} {
-		c.parseCLIEvent([]byte(line), "fallback")
+		c.parseCLIEvent([]byte(line), "fallback", &cliTurn{})
 	}
 	if got := c.ResumeID(); got != "sess-1" {
 		t.Fatalf("sessão salva: %q", got)
@@ -50,7 +50,7 @@ func TestClaudeCodeStreamNormalizaEventosEGuardaSessao(t *testing.T) {
 
 func TestClaudeCodeCotaViraErro(t *testing.T) {
 	c := NewClaudeCodeHarness(harness.ModeCLI)
-	c.parseCLIEvent([]byte(`{"type":"result","subtype":"error","is_error":true,"result":"usage limit reached","session_id":"sess-q"}`), "fallback")
+	c.parseCLIEvent([]byte(`{"type":"result","subtype":"error","is_error":true,"result":"usage limit reached","session_id":"sess-q"}`), "fallback", &cliTurn{})
 	seenError, seenComplete := false, false
 	for len(c.events) > 0 {
 		ev := <-c.events

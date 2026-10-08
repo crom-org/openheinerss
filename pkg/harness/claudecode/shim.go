@@ -28,6 +28,17 @@ class InputQueue {
   }
 }
 
+function mapPermissionMode(mode) {
+  // Compatibilidade documentada: permissionMode === 'ask' vira manual.
+  switch (mode) {
+    case 'always_allow': case 'bypassPermissions': return 'bypassPermissions';
+    case 'plan': return 'plan';
+    case 'acceptEdits': return 'acceptEdits';
+    case 'ask': return 'manual'; // nome do protocolo -> nome aceito pelo SDK instalado
+    default: return 'manual'; // "manual" ou vazio
+  }
+}
+
 function send(method, params = {}) {
   process.stdout.write(JSON.stringify({ method, params }) + '\n');
 }
@@ -69,16 +80,18 @@ rl.on('line', async (line) => {
         send('agent.error', { message: '@anthropic-ai/claude-agent-sdk não encontrado no ambiente Node.' });
         return;
       }
-      const { cwd, env, model, permissionMode } = params || {};
+      const { cwd, env, model, permissionMode, resume } = params || {};
       
       activeQuery = sdk.query({
         prompt: inputQueue,
         options: {
           cwd: cwd || process.cwd(),
           env: { ...process.env, ...(env || {}) },
-          // O protocolo do openheinerss chama a opção de "ask", mas o
-          // Claude Code atual expõe esse modo como "manual" no CLI interno.
-          permissionMode: permissionMode === 'ask' || !permissionMode ? 'manual' : permissionMode,
+          // O protocolo do openheinerss chama o modo de "ask"; o SDK chama de "default".
+          permissionMode: mapPermissionMode(permissionMode),
+          ...(permissionMode === 'always_allow' || permissionMode === 'bypassPermissions' ? { allowDangerouslySkipPermissions: true } : {}),
+          ...(model ? { model } : {}),
+          ...(resume ? { resume } : {}),
           canUseTool: (toolName, input, o) => {
             return new Promise((resolve) => {
               const reqId = o.requestId || 'perm_' + Math.random().toString(36).substring(2, 9);
@@ -98,20 +111,26 @@ rl.on('line', async (line) => {
       (async () => {
         try {
           for await (const m of activeQuery) {
-            if (m.type === 'stream_event') {
-              const evt = m.event;
-              if (evt && evt.type === 'content_block_delta') {
-                if (evt.delta && evt.delta.type === 'text_delta') {
-                  send('agent.text', { delta: evt.delta.text });
-                } else if (evt.delta && evt.delta.type === 'thinking_delta') {
-                  send('agent.thinking', { delta: evt.delta.thinking });
-                }
+            if (m.type === 'assistant') {
+              const content = (m.message && m.message.content) || [];
+              for (const b of content) {
+                if (b.type === 'text' && b.text) send('agent.text', { delta: b.text });
+                else if (b.type === 'thinking' && b.thinking) send('agent.thinking', { delta: b.thinking });
+                else if (b.type === 'tool_use') send('agent.tool_call', { callId: b.id, tool: b.name, input: b.input });
               }
-            } else if (m.type === 'assistant') {
-              // Bloco completo
+            } else if (m.type === 'result') {
+              const u = m.usage || {};
+              send('agent.usage', {
+                inputTokens: u.input_tokens || 0,
+                outputTokens: u.output_tokens || 0,
+                costUsd: m.total_cost_usd || 0,
+                sessionId: m.session_id || ''
+              });
+              if (m.is_error) send('agent.error', { message: (typeof m.result === 'string' && m.result) || 'Claude Code encerrou com erro' });
+              send('agent.complete', { reason: m.subtype || 'completed', sessionId: m.session_id || '' });
             }
           }
-          send('agent.complete', { reason: 'turn_ended' });
+          send('agent.complete', { reason: 'stream_closed' });
         } catch (err) {
           send('agent.error', { message: err.message });
         }

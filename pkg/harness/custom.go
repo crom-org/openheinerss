@@ -286,7 +286,15 @@ func (o *overlayHarness) RespondPermission(ctx context.Context, id string, allow
 	return o.base.RespondPermission(ctx, id, allow, msg)
 }
 func (o *overlayHarness) Events() <-chan Event { return o.base.Events() }
-func (o *overlayHarness) Stop() error          { return o.base.Stop() }
+
+// ResumeID repassa o ID de retomada nativa do motor base, se ele tiver um.
+func (o *overlayHarness) ResumeID() string {
+	if r, ok := o.base.(interface{ ResumeID() string }); ok {
+		return r.ResumeID()
+	}
+	return ""
+}
+func (o *overlayHarness) Stop() error { return o.base.Stop() }
 func mergeEnv(first, second map[string]string) map[string]string {
 	out := make(map[string]string, len(first)+len(second))
 	for k, v := range first {

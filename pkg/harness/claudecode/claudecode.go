@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -71,6 +72,8 @@ type ClaudeCodeHarness struct {
 	cancel   context.CancelFunc
 	stopped  bool
 	resumeID string
+	// stderrTail guarda o fim do stderr do processo atual para explicar falhas.
+	stderrTail string
 }
 
 // NewClaudeCodeHarness instancia o adaptador Claude Code
@@ -98,6 +101,10 @@ func (c *ClaudeCodeHarness) ValidatePrerequisites(ctx context.Context) harness.P
 				SuggestedFix: "Node.js 18+ é necessário para o modo SDK. Instale via nvm ('nvm install 20') ou use o modo CLI.",
 			}
 		}
+		check := exec.CommandContext(ctx, "node", "-e", "for (const p of [ '@anthropic-ai/claude-agent-sdk', '/home/j/Documentos/GitHub/claude-code-open/app/node_modules/@anthropic-ai/claude-agent-sdk' ]) { try { require.resolve(p); process.exit(0) } catch (_) {} } process.exit(1)")
+		if err := check.Run(); err != nil {
+			return harness.PrerequisiteResult{Satisfied: false, MissingItems: []string{"@anthropic-ai/claude-agent-sdk"}, SuggestedFix: "Instale a versão do SDK compatível com o Claude Code ou use o modo CLI; o worker não deve esperar até timeout."}
+		}
 		return harness.PrerequisiteResult{Satisfied: true}
 	}
 
@@ -117,22 +124,22 @@ func (c *ClaudeCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig
 	defer c.mu.Unlock()
 
 	c.cfg = cfg
-	c.resumeID = cfg.SessionID
-	if c.mode == harness.ModeCLI && optionString(cfg.Options, "claude_session_id", "resume_session", "session_id") == "" {
-		// A sessão criada pelo CLI só pode ser retomada depois que o primeiro
-		// stream informar o session_id real do Claude.
-		c.resumeID = ""
-	}
+	// O ID de retomada é o session_id real do Claude, informado pelo primeiro stream
+	// (ou recebido via opções ao retomar uma sessão).
+	c.resumeID = optionString(cfg.Options, "claude_session_id", "resume_session", "session_id")
 	c.ctx, c.cancel = context.WithCancel(ctx)
 	c.stopped = false
 
 	env := os.Environ()
 	env = append(env,
 		"DISABLE_AUTOUPDATER=1",
-		"DISABLE_PROMPT_CACHING=1",
 		"API_TIMEOUT_MS=600000",
 		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
 	)
+	// O cache de prompt é da Anthropic; provedores de terceiros costumam rejeitá-lo.
+	if !directAnthropic(cfg) {
+		env = append(env, "DISABLE_PROMPT_CACHING=1")
+	}
 
 	globalDir, _ := config.GetGlobalDir()
 	if cfg.Provider != "" && cfg.Provider != "default" {
@@ -187,6 +194,7 @@ func (c *ClaudeCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig
 				"env":            cfg.Env,
 				"model":          cfg.Model,
 				"permissionMode": cfg.PermissionMode,
+				"resume":         optionString(cfg.Options, "claude_session_id", "resume_session"),
 			},
 		}
 		data, _ := json.Marshal(initPayload)
@@ -194,6 +202,29 @@ func (c *ClaudeCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig
 	}
 
 	return nil
+}
+
+// directAnthropic informa se a sessão fala direto com a API da Anthropic
+// (sem ANTHROPIC_BASE_URL apontando para outro host e sem provedor de terceiros).
+func directAnthropic(cfg harness.SessionConfig) bool {
+	switch strings.ToLower(cfg.Provider) {
+	case "", "default", "anthropic", "claude-native":
+	default:
+		return false
+	}
+	base := cfg.Env["ANTHROPIC_BASE_URL"]
+	if base == "" {
+		base = os.Getenv("ANTHROPIC_BASE_URL")
+	}
+	if base == "" {
+		return true
+	}
+	u, err := url.Parse(base)
+	if err != nil || u.Hostname() == "" {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	return host == "anthropic.com" || strings.HasSuffix(host, ".anthropic.com")
 }
 
 func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachments []protocol.Attachment) error {
@@ -270,29 +301,43 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 		c.mu.Lock()
 		c.cmd = cmd
 		c.mu.Unlock()
-		go c.readStderr(stderr)
+		stderrDone := make(chan struct{})
+		go func() { defer close(stderrDone); c.readStderr(stderr) }()
 
+		turn := &cliTurn{}
 		scanner := bufio.NewScanner(stdout)
 		scanner.Buffer(make([]byte, 64*1024), 64*1024*1024)
 		for scanner.Scan() {
-			c.parseCLIEvent(scanner.Bytes(), sessID)
+			c.parseCLIEvent(scanner.Bytes(), sessID, turn)
 		}
 		if scanErr := scanner.Err(); scanErr != nil {
 			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: "falha lendo stream do Claude: " + scanErr.Error()}})
 		}
 
+		<-stderrDone
 		err = cmd.Wait()
 		c.mu.Lock()
 		if c.cmd == cmd {
 			c.cmd = nil
 		}
 		stopped := c.stopped
+		tail := strings.TrimSpace(c.stderrTail)
+		c.stderrTail = ""
 		c.mu.Unlock()
 		if stopped {
 			return
 		}
+		// O evento "result" do stream já encerrou o turno; um segundo complete aqui
+		// faria o turno seguinte parecer terminado sem texto.
+		if turn.completed {
+			return
+		}
 		if err != nil {
-			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()}})
+			message := err.Error()
+			if tail != "" {
+				message += ": " + tail
+			}
+			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: message}})
 		}
 
 		c.emit(harness.Event{
@@ -349,7 +394,10 @@ func (c *ClaudeCodeHarness) ResumeID() string {
 	return c.resumeID
 }
 
-func (c *ClaudeCodeHarness) parseCLIEvent(data []byte, fallbackSession string) {
+// cliTurn guarda o estado de um único `claude -p`.
+type cliTurn struct{ completed bool }
+
+func (c *ClaudeCodeHarness) parseCLIEvent(data []byte, fallbackSession string, turn *cliTurn) {
 	var msg map[string]interface{}
 	if err := json.Unmarshal(data, &msg); err != nil {
 		c.emit(harness.Event{Type: harness.EventText, Payload: protocol.TextParams{SessionID: fallbackSession, Delta: string(data) + "\n"}})
@@ -394,6 +442,7 @@ func (c *ClaudeCodeHarness) parseCLIEvent(data []byte, fallbackSession string) {
 			}
 			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessionID, Message: message}})
 		}
+		turn.completed = true
 		c.emit(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessionID, Reason: reason}})
 	case "rate_limit_event":
 		info, _ := msg["rate_limit_info"].(map[string]interface{})
@@ -586,8 +635,26 @@ func (c *ClaudeCodeHarness) handleSDKMessage(method string, params map[string]in
 				Risk:      risk,
 			},
 		})
+	case "agent.tool_call":
+		callID, _ := params["callId"].(string)
+		tool, _ := params["tool"].(string)
+		c.emit(harness.Event{
+			Type:    harness.EventToolCall,
+			Payload: protocol.ToolCallParams{SessionID: sessID, CallID: callID, Tool: tool, Input: params["input"]},
+		})
+	case "agent.usage":
+		in, out := int64(number(params, "inputTokens")), int64(number(params, "outputTokens"))
+		c.emit(harness.Event{
+			Type:    harness.EventUsage,
+			Payload: protocol.UsageParams{SessionID: sessID, InputTokens: in, OutputTokens: out, TotalTokens: in + out, CostUSD: number(params, "costUsd")},
+		})
 	case "agent.complete":
 		reason, _ := params["reason"].(string)
+		if id, _ := params["sessionId"].(string); id != "" {
+			c.mu.Lock()
+			c.resumeID = id
+			c.mu.Unlock()
+		}
 		c.emit(harness.Event{
 			Type:    harness.EventComplete,
 			Payload: protocol.CompleteParams{SessionID: sessID, Reason: reason},
@@ -605,7 +672,12 @@ func (c *ClaudeCodeHarness) readStderr(r io.Reader) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	for scanner.Scan() {
-		// Stderr do processo pode ser logado ou monitorado
+		c.mu.Lock()
+		c.stderrTail += scanner.Text() + "\n"
+		if len(c.stderrTail) > 2048 {
+			c.stderrTail = c.stderrTail[len(c.stderrTail)-2048:]
+		}
+		c.mu.Unlock()
 	}
 }
 
