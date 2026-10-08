@@ -41,3 +41,7 @@ Mensagens de provedor podem chegar como erro antes de um fim `completed`. O padr
 Herança usa `base: claude-code` (ou outro harness custom já carregado) e faz merge de `env`; `command`, `args`, `model`, `prompt` e regexes podem ser substituídos. Veja `examples/cco-openrouter.yaml` e `examples/harness-ndjson.sh`.
 
 `openheinerss harness list`, `harness add <arquivo>` e `harness test <nome> --prompt 'responda OK'` gerenciam e verificam os harnesses. Pelo protocolo e SDKs, `harness.register`/`registerHarness({...})` registra um spec em tempo de execução sem gravar arquivo.
+
+## MCP e risco
+
+Instância com `base:` (ex.: `cco-openrouter` com `base: claude-code`) recebe os servidores de `mcp.json` como a base (o campo `mcp` do catálogo mostra como). Harness custom por `command` não recebe `mcp.json`: passe a config dele em `args`/`env`. O classificador de risco opcional (`--classificar-risco`) vale para qualquer harness que emita `tool` no NDJSON. Veja [PONTE.md](PONTE.md#servidores-mcp).

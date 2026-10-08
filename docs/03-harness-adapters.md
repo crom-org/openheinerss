@@ -6,16 +6,18 @@ O adaptador é só a ponte: argumentos nativos (`harness_args`), comandos `/x` e
 
 ## Harnesses embutidos
 
-| Nome | Execução real | Permissão |
-|---|---|---|
-| `mock` | simulação determinística offline | emite pedido fixo para teste |
-| `claude-code` | CLI `claude` ou worker SDK | emite `agent.permission_request` |
-| `opencode` | CLI `opencode run --format json` | não emite permissão própria |
-| `codex` | `codex exec --json` (com retomada nativa quando aplicável) | executa com bypass de aprovações |
-| `agy` | CLI `agy` | não emite permissão própria |
-| `aider` | CLI `aider` | não emite permissão própria |
+| Nome | Execução real | Permissão | Servidores MCP (`mcp.json`) |
+|---|---|---|---|
+| `mock` | simulação determinística offline | emite pedido fixo para teste | — |
+| `claude-code` | CLI `claude` ou worker SDK | emite `agent.permission_request` | por execução: `--mcp-config <arquivo temporário 0600>` |
+| `opencode` | CLI `opencode run --format json` | não emite permissão própria | por execução: `OPENCODE_CONFIG_CONTENT` |
+| `codex` | `codex exec --json` (com retomada nativa quando aplicável) | executa com bypass de aprovações | por execução: `-c mcp_servers.<nome>.*` (valores de env/headers pelo ambiente) |
+| `agy` | CLI `agy` | não emite permissão própria | sem equivalente por execução (só `agy mcp add`, que edita a config do usuário) |
+| `aider` | CLI `aider` | não emite permissão própria | sem suporte (o aider não tem cliente MCP) |
 
-Os eventos comuns são `agent.thinking`, `agent.text`, `agent.tool_call`, `agent.tool_result`, `agent.complete`, `agent.error` e, quando o motor informa, `agent.usage`. Apenas `claude-code` e `mock` emitem hoje `agent.permission_request`; `risk` é um valor recebido/fixo, não uma classificação universal do Openheinerss.
+Os eventos comuns são `agent.thinking`, `agent.text`, `agent.tool_call`, `agent.tool_result`, `agent.complete`, `agent.error` e, quando o motor informa, `agent.usage`. Apenas `claude-code` e `mock` emitem hoje `agent.permission_request`; `risk` é um valor recebido do harness. O classificador de risco do Openheinerss (`risco`/`motivoRisco`) é opcional e desligado por padrão; veja [PONTE.md](PONTE.md#classificador-de-risco-opcional).
+
+Os servidores MCP são lidos de `~/.openheinerss/mcp.json`, `~/.config/openheinerss/mcp.json` e `<projeto>/.openheinerss/mcp.json` (o projeto vence no mesmo nome) e entregues no `Start` de cada adaptador, sem editar a config pessoal do usuário. Instâncias com `base:` herdam o comportamento da base; harness custom por comando não recebe `mcp.json`.
 
 ## Modos e modelos
 

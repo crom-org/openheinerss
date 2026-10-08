@@ -15,7 +15,10 @@ type ServerConfig struct {
 	Command string            `json:"command,omitempty"`
 	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
-	URL     string            `json:"url,omitempty"` // Para servidores MCP remotos via SSE
+	URL     string            `json:"url,omitempty"` // Para servidores MCP remotos (HTTP ou SSE)
+	// Type força "http" ou "sse" para servidores por URL (padrão: sse se a URL termina em /sse).
+	Type    string            `json:"type,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
 }
 
 // Config estrutura o arquivo .openheinerss/mcp.json
@@ -85,7 +88,7 @@ func (h *Hub) ListServers(cwd string) ([]ServerSummary, error) {
 	for name, s := range cfg.MCPServers {
 		t := "stdio"
 		if s.URL != "" {
-			t = "sse"
+			t = tipoRemoto(s)
 		}
 		list = append(list, ServerSummary{
 			Name:    name,

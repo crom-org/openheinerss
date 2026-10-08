@@ -204,6 +204,7 @@ Usage:
 
 Available Commands:
   add         Registra um novo servidor MCP local no projeto
+  efetivos    Lista os servidores que cada harness recebe nesta pasta (global + projeto; valores de env/headers ocultos)
   list        Lista os servidores MCP configurados em .openheinerss/mcp.json
 
 Global Flags:
@@ -266,11 +267,13 @@ Flags:
       --max-agentes int             Máximo de agentes simultâneos
       --max-agents int              Alias em inglês de --max-agentes
       --max-load float              Alias em inglês de --carga-maxima
+      --mcp strings                 Entrega só estes servidores de mcp.json (repita ou separe por vírgula; padrão: todos)
       --mode string                 Alias em inglês de --modo
       --model string                Alias em inglês de --modelo
       --modelo string               Modelo a usar
       --modo string                 Modo do harness (cli ou sdk; a instância pode definir o padrão)
       --no-default-rules            Alias em inglês de --sem-regras-padrao
+      --no-mcp                      Alias em inglês de --sem-mcp
       --no-rules                    Alias em inglês de --sem-regras
       --pasta-agentes string        Pasta dos agentes (padrão .claude/agentes)
       --prompt string               Arquivo de prompt alternativo
@@ -284,6 +287,7 @@ Flags:
       --rodadas-filhos int          Máximo de retomadas automáticas depois dos filhos (padrão 5)
       --rules string                Alias em inglês de --regras
       --seco                        Mostra o comando sem executá-lo
+      --sem-mcp                     Não entrega ao harness os servidores de mcp.json (global e do projeto)
       --sem-regras                  Não acrescenta regras padrão ao prompt
       --sem-regras-padrao           Desliga as regras padrão do prompt
       --tentativas int              Máximo de tentativas
@@ -311,6 +315,8 @@ Aliases:
 
 Flags:
       --arg stringArray           Alias de --harness-arg (default [])
+      --classificar-risco         Acrescenta risco (baixo|medio|alto) e motivo a tool_call e permission_request; só informa, nunca bloqueia
+      --classify-risk             Alias em inglês de --classificar-risco
       --effort string             Alias em inglês de --esforco
       --engine string             Alias em inglês de --motor
       --esforco string            Esforço de raciocínio do motor
@@ -318,17 +324,20 @@ Flags:
       --harness-arg stringArray   Argumento nativo extra para o harness, intacto e na ordem (repetível) (default [])
       --interactive               Alias em inglês de --interativo
   -i, --interativo                Sessão interativa: lê um prompt por linha; linhas com / vão literalmente ao harness
+      --mcp strings               Entrega só estes servidores de mcp.json (repita ou separe por vírgula; padrão: todos)
       --mode string               Modo do harness ('mock', 'sdk', 'cli') (default "mock")
       --model string              Nome do modelo
       --modelo string             Alias em português de --model
       --modo string               Alias em português de --mode (default "mock")
       --motor string              Harness base ou instância custom definida pelo usuário
+      --no-mcp                    Alias em inglês de --sem-mcp
       --papel string              Papel definido em .openheinerss/motores.yaml
       --provedor string           Alias em português de --provider
       --provider string           Provedor do modelo
       --resume string             Alias em inglês de --retomar
       --retomar string            Retoma a sessão persistida pelo ID
       --role string               Alias em inglês de --papel
+      --sem-mcp                   Não entrega ao harness os servidores de mcp.json (global e do projeto)
 
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
@@ -348,6 +357,8 @@ Aliases:
   serve, servir
 
 Flags:
+      --classificar-risco   Acrescenta risco (baixo|medio|alto) e motivo a tool_call e permission_request; só informa, nunca bloqueia
+      --classify-risk       Alias em inglês de --classificar-risco
       --deny-ends           Alias em inglês de --negar-encerra
       --hospedeiro string   Alias em português de --host (default "127.0.0.1")
       --host string         Host de vinculação do WebSocket (default "127.0.0.1")
@@ -554,6 +565,23 @@ Usage:
 
 Aliases:
   add, adicionar
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
+```
+
+## `openheinerss mcp efetivos --help`
+
+```text
+Lista os servidores que cada harness recebe nesta pasta (global + projeto; valores de env/headers ocultos)
+
+Usage:
+  openheinerss mcp efetivos [flags]
+
+Aliases:
+  efetivos, effective
 
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual

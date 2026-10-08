@@ -15,12 +15,13 @@ import (
 
 	"github.com/crom-org/openheinerss/pkg/harness"
 	"github.com/crom-org/openheinerss/pkg/harness/process"
+	"github.com/crom-org/openheinerss/pkg/mcp"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 )
 
 func init() {
 	register := func(name string) {
-		harness.Register(name, protocol.HarnessCatalogItem{ID: name, DisplayName: "OpenAI Codex / Assistant Engine", SupportedModes: []string{"cli", "api"}, SupportedProtocols: []string{"openai"}}, func(mode harness.Mode) (harness.Harness, error) {
+		harness.Register(name, protocol.HarnessCatalogItem{ID: name, DisplayName: "OpenAI Codex / Assistant Engine", SupportedModes: []string{"cli", "api"}, SupportedProtocols: []string{"openai"}, MCP: "por execução: -c mcp_servers.<nome>.* (env e headers pelo ambiente)"}, func(mode harness.Mode) (harness.Harness, error) {
 			if mode == "" || mode == harness.ModeMock {
 				mode = harness.ModeCLI
 			}
@@ -74,6 +75,31 @@ func (c *CodexHarness) Start(ctx context.Context, cfg harness.SessionConfig) err
 	}
 	c.stopped = false
 	c.threadID = optionString(cfg.Options, "codex_session_id", "resume_session", "session_id")
+	// Servidores MCP do openheinerss: -c mcp_servers.<nome>.* por execução; os valores secretos
+	// (env/headers) vão no ambiente do processo, nunca na linha de comando.
+	servs, err := harness.ServidoresMCP(cfg)
+	if err != nil {
+		return fmt.Errorf("MCP: %w", err)
+	}
+	if len(servs) > 0 {
+		args, env, err := mcp.ParaCodex(servs)
+		if err != nil {
+			return fmt.Errorf("MCP: %w", err)
+		}
+		var kv []string
+		for i := 1; i < len(args); i += 2 {
+			kv = append(kv, args[i])
+		}
+		c.cfg.Options = harness.WithOption(c.cfg.Options, "config", append(kv, harness.OptionStrings(c.cfg.Options, "config")...))
+		merged := make(map[string]string, len(env)+len(cfg.Env))
+		for k, v := range env {
+			merged[k] = v
+		}
+		for k, v := range cfg.Env {
+			merged[k] = v
+		}
+		c.cfg.Env = merged
+	}
 	var cancel context.CancelFunc
 	c.ctx, cancel = context.WithCancel(ctx)
 	c.cancel = cancel

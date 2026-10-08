@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -328,6 +329,7 @@ func newServeCmd() *cobra.Command {
 		host       string
 		maxAgentes int
 		negarEnc   bool
+		classRisco bool
 	)
 
 	cmd := &cobra.Command{
@@ -337,6 +339,7 @@ func newServeCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			manager := session.NewManager()
 			defer manager.Close()
+			manager.SetClassificarRisco(classRisco)
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
 
@@ -384,6 +387,7 @@ func newServeCmd() *cobra.Command {
 	cmd.Flags().IntVar(&maxAgentes, "max-agents", 0, "Alias em inglês de --max-agentes")
 	cmd.Flags().BoolVar(&negarEnc, "negar-encerra", false, "Negar em rodar.decidir encerra a execução (código 3, motivo negado) sem nova tentativa")
 	cmd.Flags().BoolVar(&negarEnc, "deny-ends", false, "Alias em inglês de --negar-encerra")
+	addRiscoFlag(cmd, &classRisco)
 
 	return cmd
 }
@@ -454,6 +458,9 @@ func newRunCmd() *cobra.Command {
 		resumeID    string
 		harnessArgs []string
 		interactive bool
+		semMCP      bool
+		mcpNomes    []string
+		classRisco  bool
 	)
 
 	cmd := &cobra.Command{
@@ -492,6 +499,7 @@ func newRunCmd() *cobra.Command {
 
 			manager := session.NewManager()
 			defer manager.Close()
+			manager.SetClassificarRisco(classRisco)
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
 
@@ -507,7 +515,7 @@ func newRunCmd() *cobra.Command {
 					Provider: provider,
 					Model:    model,
 					Env:      env,
-					Options:  protocol.SessionOptions{Extra: extra, Effort: effort, HarnessArgs: harnessArgs},
+					Options:  protocol.SessionOptions{Extra: extra, Effort: effort, HarnessArgs: harnessArgs, SemMCP: semMCP, MCP: mcpNomes},
 				})
 			}
 			if err != nil {
@@ -536,6 +544,9 @@ func newRunCmd() *cobra.Command {
 					var p protocol.PermissionRequestParams
 					remarshal(notification.Params, &p)
 					fmt.Printf("\n⚠️  [PERMISSÃO NECESSÁRIA] Ferramenta: %s | Comando: %s\n", p.Tool, p.Command)
+					if p.Risco != "" {
+						fmt.Printf("   Risco: %s (%s)\n", p.Risco, p.MotivoRisco)
+					}
 					fmt.Print("   Deseja autorizar a execução? [s/N]: ")
 					resp, _ := reader.ReadString('\n')
 					resp = strings.TrimSpace(strings.ToLower(resp))
@@ -560,7 +571,11 @@ func newRunCmd() *cobra.Command {
 				case protocol.EventAgentToolCall:
 					var p protocol.ToolCallParams
 					remarshal(notification.Params, &p)
-					fmt.Printf("\033[36m⚡ [Ferramenta Executando] %s (Call: %s)\033[0m\n", p.Tool, p.CallID)
+					if p.Risco != "" {
+						fmt.Printf("\033[36m⚡ [Ferramenta Executando] %s (Call: %s) [risco %s: %s]\033[0m\n", p.Tool, p.CallID, p.Risco, p.MotivoRisco)
+					} else {
+						fmt.Printf("\033[36m⚡ [Ferramenta Executando] %s (Call: %s)\033[0m\n", p.Tool, p.CallID)
+					}
 
 				case protocol.EventAgentToolResult:
 					var p protocol.ToolResultParams
@@ -644,8 +659,23 @@ func newRunCmd() *cobra.Command {
 	addHarnessArgFlags(cmd, &harnessArgs)
 	cmd.Flags().BoolVarP(&interactive, "interativo", "i", false, "Sessão interativa: lê um prompt por linha; linhas com / vão literalmente ao harness")
 	cmd.Flags().BoolVar(&interactive, "interactive", false, "Alias em inglês de --interativo")
+	addMCPFlags(cmd, &semMCP, &mcpNomes)
+	addRiscoFlag(cmd, &classRisco)
 
 	return cmd
+}
+
+// addMCPFlags liga --sem-mcp e --mcp (servidores de mcp.json entregues ao harness nesta execução).
+func addMCPFlags(cmd *cobra.Command, sem *bool, nomes *[]string) {
+	cmd.Flags().BoolVar(sem, "sem-mcp", false, "Não entrega ao harness os servidores de mcp.json (global e do projeto)")
+	cmd.Flags().BoolVar(sem, "no-mcp", false, "Alias em inglês de --sem-mcp")
+	cmd.Flags().StringSliceVar(nomes, "mcp", nil, "Entrega só estes servidores de mcp.json (repita ou separe por vírgula; padrão: todos)")
+}
+
+// addRiscoFlag liga o classificador de risco opcional (desligado por padrão: a ponte é só túnel).
+func addRiscoFlag(cmd *cobra.Command, on *bool) {
+	cmd.Flags().BoolVar(on, "classificar-risco", false, "Acrescenta risco (baixo|medio|alto) e motivo a tool_call e permission_request; só informa, nunca bloqueia")
+	cmd.Flags().BoolVar(on, "classify-risk", false, "Alias em inglês de --classificar-risco")
 }
 
 // argsHarness acumula cada ocorrência de --harness-arg/--arg sem separar por vírgula,
@@ -677,6 +707,8 @@ func newRodarCmd() *cobra.Command {
 	var esperarFilhos string
 	var rodadasFilhos int
 	var filhosObrigatorios bool
+	var semMCP bool
+	var mcpNomes []string
 	cmd := &cobra.Command{
 		Use:     "rodar <nome> <instância|harness>",
 		Aliases: []string{"launch", "dispatch"},
@@ -697,6 +729,12 @@ func newRodarCmd() *cobra.Command {
 			espera, err := orchestrator.ParseEsperarFilhos(esperarFilhos)
 			if err != nil {
 				return err
+			}
+			// A escolha de MCP chega aos adaptadores pelo ambiente (OPENHEINERSS_MCP).
+			if semMCP {
+				_ = os.Setenv(mcp.EnvSelecao, "nenhum")
+			} else if len(mcpNomes) > 0 {
+				_ = os.Setenv(mcp.EnvSelecao, strings.Join(mcpNomes, ","))
 			}
 			if os.Getenv(orchestrator.EnvPai) != "" && !seco {
 				// Agente filho: sessão própria, para não morrer junto com o grupo do harness do pai.
@@ -772,6 +810,7 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().IntVar(&rodadasFilhos, "child-rounds", 0, "Alias em inglês de --rodadas-filhos")
 	cmd.Flags().BoolVar(&filhosObrigatorios, "filhos-obrigatorios", false, "Falha (código 4, motivo \"filho falhou\") se algum agente filho terminou com código ≠ 0, sem FIM ou ainda rodando")
 	cmd.Flags().BoolVar(&filhosObrigatorios, "require-children", false, "Alias em inglês de --filhos-obrigatorios")
+	addMCPFlags(cmd, &semMCP, &mcpNomes)
 	addHarnessArgFlags(cmd, &harnessArgs)
 	return cmd
 }
@@ -861,10 +900,41 @@ func newMcpCmd() *cobra.Command {
 			fmt.Println("🔌 Servidores MCP Configurados:")
 			for _, s := range servers {
 				target := s.Command
-				if s.Type == "sse" {
+				if s.URL != "" {
 					target = s.URL
 				}
 				fmt.Printf("   • %-15s [%s] %s\n", s.Name, s.Type, target)
+			}
+			return nil
+		},
+	})
+
+	mcpCmd.AddCommand(&cobra.Command{
+		Use:     "efetivos",
+		Aliases: []string{"effective"},
+		Short:   "Lista os servidores que cada harness recebe nesta pasta (global + projeto; valores de env/headers ocultos)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, _ := os.Getwd()
+			servs, err := mcp.Efetivos(cwd)
+			if err != nil {
+				return err
+			}
+			if len(servs) == 0 {
+				fmt.Println("Nenhum servidor MCP em mcp.json (global ou do projeto).")
+				return nil
+			}
+			for _, name := range mcp.Nomes(servs) {
+				s := mcp.Mascarar(servs[name])
+				target := strings.TrimSpace(s.Command + " " + strings.Join(s.Args, " "))
+				if s.URL != "" {
+					target = s.URL
+				}
+				var env []string
+				for k := range s.Env {
+					env = append(env, k+"=***")
+				}
+				sort.Strings(env)
+				fmt.Printf("   • %-15s %s %s\n", name, target, strings.Join(env, " "))
 			}
 			return nil
 		},

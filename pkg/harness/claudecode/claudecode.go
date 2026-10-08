@@ -16,6 +16,7 @@ import (
 	"github.com/crom-org/openheinerss/pkg/config"
 	"github.com/crom-org/openheinerss/pkg/harness"
 	"github.com/crom-org/openheinerss/pkg/harness/process"
+	"github.com/crom-org/openheinerss/pkg/mcp"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 )
 
@@ -26,6 +27,7 @@ func init() {
 			DisplayName:        "Claude Code (Anthropic & Provedores Abertos)",
 			SupportedModes:     []string{"sdk", "cli"},
 			SupportedProtocols: []string{"anthropic"},
+			MCP:                "por execução: --mcp-config <arquivo temporário>",
 			DefaultProviders: []protocol.ProviderInfo{
 				{
 					ID:          "claude-native",
@@ -169,6 +171,23 @@ func (c *ClaudeCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig
 	}
 	c.env = env
 
+	// Servidores MCP do openheinerss: arquivo temporário por execução, via --mcp-config.
+	servs, err := harness.ServidoresMCP(cfg)
+	if err != nil {
+		return fmt.Errorf("MCP: %w", err)
+	}
+	if len(servs) > 0 {
+		data, err := mcp.ParaClaude(servs)
+		if err != nil {
+			return fmt.Errorf("MCP: %w", err)
+		}
+		path, err := harness.ArquivoTemporario(c.ctx, "mcp.json", data)
+		if err != nil {
+			return fmt.Errorf("MCP: %w", err)
+		}
+		c.cfg.Options = harness.WithOption(cfg.Options, "mcp_config", append(harness.OptionStrings(cfg.Options, "mcp_config"), path))
+	}
+
 	if c.mode == harness.ModeSDK {
 		cmd := exec.CommandContext(c.ctx, "node", "-e", NodeWorkerScript)
 		process.Configure(cmd)
@@ -216,7 +235,7 @@ func (c *ClaudeCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig
 		}
 		// O worker repassa ao SDK o que o SDK sabe receber (extraArgs cobre as flags nativas).
 		initParams := initPayload["params"].(map[string]interface{})
-		for k, v := range sdkExtras(cfg) {
+		for k, v := range sdkExtras(c.cfg) {
 			initParams[k] = v
 		}
 		data, _ := json.Marshal(initPayload)

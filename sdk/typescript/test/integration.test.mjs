@@ -146,3 +146,28 @@ test("SDK TypeScript lista, anota e confirma comandos do harness", async () => {
     if (antes === undefined) delete process.env.OPENHEINERSS_CONFIG; else process.env.OPENHEINERSS_CONFIG = antes;
   }
 });
+
+test("SDK TypeScript manda semMcp, mcp e classificarRisco no JSON-RPC", async () => {
+  const pasta = await mkdtemp(join(tmpdir(), "openheinerss-mcp-"));
+  const falso = join(pasta, "falso.mjs");
+  const registro = join(pasta, "reqs.jsonl");
+  await writeFile(falso, `#!/usr/bin/env node
+import { appendFileSync } from "node:fs";
+import { createInterface } from "node:readline";
+createInterface({ input: process.stdin }).on("line", (l) => {
+  const req = JSON.parse(l);
+  appendFileSync(${JSON.stringify(registro)}, l + "\\n");
+  if (req.method === "session.create") process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: req.id, result: { sessionId: "s1" } }) + "\\n");
+});
+`);
+  await chmod(falso, 0o755);
+  for (const opts of [{ mcp: ["fs"], classificarRisco: true }, { semMcp: true }]) {
+    const client = new Openheinerss({ binPath: falso, transport: "stdio" });
+    try { await client.start({ harness: "falso", ...opts }); } finally { client.close(); }
+  }
+  const { readFile } = await import("node:fs/promises");
+  const criar = (await readFile(registro, "utf8")).trim().split("\n").map((l) => JSON.parse(l)).filter((q) => q.method === "session.create");
+  assert.deepEqual(criar[0].params.options.mcp, ["fs"]);
+  assert.equal(criar[0].params.options.classificarRisco, true);
+  assert.equal(criar[1].params.options.semMcp, true);
+});

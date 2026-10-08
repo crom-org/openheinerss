@@ -23,6 +23,7 @@ func init() {
 		DisplayName:        "Aider (AI Pair Programming in Terminal)",
 		SupportedModes:     []string{"cli"},
 		SupportedProtocols: []string{"openai", "anthropic", "ollama", "openrouter"},
+		MCP:                "sem suporte: o aider não tem cliente MCP",
 		DefaultProviders: []protocol.ProviderInfo{
 			{
 				ID:          "openrouter",

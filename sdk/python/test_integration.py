@@ -241,4 +241,24 @@ def _request_eof(transporte):
         return erro
     return None
 
+class MCPRiscoTest(unittest.TestCase):
+    def test_sem_mcp_mcp_e_classificar_risco_no_jsonrpc(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            falso = os.path.join(pasta, "falso")
+            with open(falso, "w", encoding="utf-8") as arquivo:
+                arquivo.write(FALSO_PONTE)
+            os.chmod(falso, os.stat(falso).st_mode | stat.S_IXUSR)
+            registro = os.path.join(pasta, "reqs.jsonl")
+            os.environ["PONTE_LOG"] = registro
+            try:
+                Agent(harness="falso", bin_path=falso, mcp=["fs"], classificar_risco=True).close()
+                Agent(harness="falso", bin_path=falso, sem_mcp=True).close()
+            finally:
+                del os.environ["PONTE_LOG"]
+            with open(registro, encoding="utf-8") as arquivo:
+                criar = [json.loads(l) for l in arquivo if '"session.create"' in l]
+            self.assertEqual(criar[0]["params"]["options"], {"mcp": ["fs"], "classificarRisco": True})
+            self.assertEqual(criar[1]["params"]["options"], {"semMcp": True})
+
+
 if __name__ == "__main__": unittest.main()

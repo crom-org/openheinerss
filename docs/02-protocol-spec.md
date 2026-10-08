@@ -30,6 +30,12 @@ Inicia uma nova sessão de agente com o harness escolhido.
 
 `options.harnessArgs` (lista de strings) são argumentos nativos extras do harness: vão **intactos e na mesma ordem** ao processo, antes do prompt. Não há lista de permitidos; a ponte não filtra nada. O mesmo campo existe em `rodar.iniciar`/`run` (`harnessArgs`) e na CLI como `--harness-arg`/`--arg` (repetível, sem separar por vírgula).
 
+Outras opções de `options`:
+
+- `semMcp` (bool) — não entrega ao harness os servidores de `mcp.json`. Por padrão todos são entregues (veja [PONTE.md](PONTE.md#servidores-mcp)).
+- `mcp` (lista) — entrega só estes servidores de `mcp.json`; nome que não existe é erro na criação da sessão.
+- `classificarRisco` (bool) — liga (`true`) ou desliga (`false`) o classificador de risco opcional nesta sessão. Ausente segue o servidor: desligado, salvo `serve --classificar-risco`. Ligado, `agent.tool_call` e `agent.permission_request` ganham `risco` (`baixo`|`medio`|`alto`) e `motivoRisco`. Só informa; nunca bloqueia.
+
 ### `session.prompt`
 Envia uma instrução ou mensagem do usuário para a sessão ativa.
 
@@ -137,7 +143,9 @@ Notificação de chamada de ferramenta em andamento.
     "input": {
       "path": "main.go",
       "action": "replace"
-    }
+    },
+    "risco": "medio",                       // só com classificarRisco ligado
+    "motivoRisco": "escreve arquivo na worktree"
   }
 }
 ```
@@ -168,10 +176,14 @@ Quando uma ferramenta requer aprovação do usuário.
     "requestId": "perm_987",
     "tool": "Bash",
     "command": "rm -rf build/",
-    "risk": "high"
+    "risk": "high",                          // quando o próprio harness informa
+    "risco": "alto",                         // só com classificarRisco ligado
+    "motivoRisco": "remoção recursiva (rm -r/-rf)"
   }
 }
 ```
+
+`risk` vem do harness (quando ele informa). `risco`/`motivoRisco` vêm do classificador opcional do Openheinerss, descrito em [PONTE.md](PONTE.md#classificador-de-risco-opcional).
 
 ### `agent.raw`
 Linha original do harness que não virou outro evento (stdout sem mapeamento) e as linhas de stderr, exatamente como foram escritas. Chega no WebSocket e no stdio como as demais notificações; o `rodar` também a grava no log (`[raw stdout] ...`).
@@ -193,7 +205,7 @@ Linha original do harness que não virou outro evento (stdout sem mapeamento) e 
 ## 3. Comandos de Sistema e Catálogo
 
 ### `catalog.list`
-Lista os harnesses disponíveis, modos suportados (`sdk`, `cli`) e modelos compatíveis.
+Lista os harnesses disponíveis, modos suportados (`sdk`, `cli`) e modelos compatíveis. O campo `mcp` de cada item diz como os servidores de `mcp.json` chegam ao harness, ou por que não chegam (ex.: `"sem suporte: o aider não tem cliente MCP"`).
 ```json
 {
   "jsonrpc": "2.0",

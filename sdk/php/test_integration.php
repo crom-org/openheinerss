@@ -160,3 +160,26 @@ try {
     unlink($binEspaco);
     rmdir($pastaEspaco);
 }
+
+// MCP e risco: semMcp, mcp e classificarRisco saem em params.options.
+$pastaMcp = sys_get_temp_dir() . '/openheinerss-mcp-php-' . bin2hex(random_bytes(4));
+mkdir($pastaMcp);
+$regMcp = $pastaMcp . '/reqs.jsonl';
+$falsoMcp = $pastaMcp . '/falso.php';
+file_put_contents($falsoMcp, '#!/usr/bin/env php
+<?php
+while (($l = fgets(STDIN)) !== false) {
+    $r = json_decode($l, true);
+    file_put_contents(' . var_export($regMcp, true) . ', $l, FILE_APPEND);
+    if ($r["method"] === "session.create") echo json_encode(["jsonrpc" => "2.0", "id" => $r["id"], "result" => ["sessionId" => "s1"]]) . "\n";
+}
+');
+chmod($falsoMcp, 0755);
+$a1 = Openheinerss\Agent::session(['harness' => 'falso', 'mcp' => ['fs'], 'classificarRisco' => true], $falsoMcp);
+$a2 = Openheinerss\Agent::session(['harness' => 'falso', 'semMcp' => true], $falsoMcp);
+unset($a1, $a2);
+$criarMcp = array_map(fn($l) => json_decode($l, true)['params']['options'] ?? null, file($regMcp, FILE_IGNORE_NEW_LINES));
+if ($criarMcp[0] !== ['mcp' => ['fs'], 'classificarRisco' => true] || $criarMcp[1] !== ['semMcp' => true]) throw new RuntimeException('opções de MCP/risco fora do JSON-RPC: ' . json_encode($criarMcp));
+array_map('unlink', glob($pastaMcp . '/*'));
+rmdir($pastaMcp);
+echo "MCP e risco no JSON-RPC: ok\n";

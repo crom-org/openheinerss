@@ -31,9 +31,21 @@ class Agent:
         host: str = "127.0.0.1",
         port: Optional[int] = None,
         origin: Optional[str] = None,
+        sem_mcp: bool = False,
+        mcp: Optional[list] = None,
+        classificar_risco: Optional[bool] = None,
     ):
         """transport="stdio" (padrão) sobe `serve --stdio`; "websocket" (ou url=) conecta a um
         `serve --porta N` já rodando (host/port, padrão 127.0.0.1:OPENHEINERSS_PORTA|4820; origin opcional)."""
+        # sem_mcp/mcp: quais servidores de mcp.json o harness recebe; classificar_risco: risco
+        # opcional em tool_call/permission_request (desligado por padrão, só informa).
+        self._extras_sessao: Dict[str, Any] = {}
+        if sem_mcp:
+            self._extras_sessao["semMcp"] = True
+        if mcp:
+            self._extras_sessao["mcp"] = [str(n) for n in mcp]
+        if classificar_risco is not None:
+            self._extras_sessao["classificarRisco"] = bool(classificar_risco)
         # Teto de segurança sem nenhum evento durante um prompt (None/0 desliga).
         self.prompt_timeout = prompt_timeout
         if transport not in ("stdio", "websocket"):
@@ -73,6 +85,7 @@ class Agent:
         if harness_args:
             # Intactos e na ordem, sem filtro: a ponte não esconde nada do harness.
             options["harnessArgs"] = [str(a) for a in harness_args]
+        options.update(getattr(self, "_extras_sessao", {}))
         if options:
             params["options"] = options
 

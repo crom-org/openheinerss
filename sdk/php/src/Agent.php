@@ -70,12 +70,16 @@ class Agent
         throw new \RuntimeException("Servidor encerrou a conexão durante session.create");
     }
 
-    /** effort e harnessArgs (argumentos nativos extras, intactos e na ordem) vão em params.options. */
+    /** effort, harnessArgs (intactos e na ordem), semMcp, mcp e classificarRisco vão em params.options. */
     private function sessionExtras(array $options): array
     {
         $extra = [];
         if (!empty($options['effort'])) $extra['effort'] = $options['effort'];
         if (!empty($options['harnessArgs'])) $extra['harnessArgs'] = array_map('strval', array_values($options['harnessArgs']));
+        // semMcp/mcp: quais servidores de mcp.json o harness recebe; classificarRisco: risco opcional (só informa).
+        if (!empty($options['semMcp'])) $extra['semMcp'] = true;
+        if (!empty($options['mcp'])) $extra['mcp'] = array_map('strval', array_values($options['mcp']));
+        if (isset($options['classificarRisco'])) $extra['classificarRisco'] = (bool) $options['classificarRisco'];
         return $extra ? ['options' => $extra] : [];
     }
 

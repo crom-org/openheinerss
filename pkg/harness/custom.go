@@ -108,6 +108,13 @@ func RegisterCustom(spec CustomSpec) error {
 	if meta.DisplayName == "" {
 		meta.DisplayName = resolved.Name
 	}
+	if resolved.Base != "" && resolved.Command == "" {
+		defaultRegistry.mu.RLock()
+		meta.MCP = defaultRegistry.metadata[resolved.Base].MCP
+		defaultRegistry.mu.RUnlock()
+	} else {
+		meta.MCP = "sem suporte: harness custom por comando não recebe mcp.json (passe a config dele em args/env)"
+	}
 	Register(resolved.Name, meta, func(mode Mode) (Harness, error) {
 		if mode == "" || mode == ModeMock {
 			mode = ModeCLI

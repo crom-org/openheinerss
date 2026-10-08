@@ -21,6 +21,7 @@ func init() {
 		DisplayName:        "Google Antigravity (AGY Agent Suite)",
 		SupportedModes:     []string{"cli", "sdk"},
 		SupportedProtocols: []string{"antigravity", "gemini"},
+		MCP:                "sem equivalente por execução: o agy só tem \"agy mcp add\", que edita a config do usuário",
 		DefaultProviders: []protocol.ProviderInfo{
 			{
 				ID:          "google-deepmind",

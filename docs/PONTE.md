@@ -135,3 +135,44 @@ Ordem: `[--model] --dangerously-skip-permissions --output-format stream-json [--
 **custom** (`pkg/harness/custom.go`): argv = `args` do spec (com `{{prompt}}` substituído) **+ `harness_args`** (intactos, na ordem). Se o spec usa `{{prompt}}`, os extras vêm depois dele (o spec é dono da posição do prompt; para colocá-los antes, escreva-os em `args`); com `prompt: stdin` eles ficam antes do prompt. `/x` vai literal (argumento ou stdin). Cada linha de stderr e cada JSON de tipo desconhecido saem como evento `raw` (o `text` do JSON desconhecido continua).
 
 **mock** (`pkg/harness/mock`): grava os `harness_args` (`ReceivedArgs()`) e os prompts (`ReceivedPrompts()`). Se há args, o primeiro evento do turno é `raw` com `harness_args=<json>`. Prompt `/x ...` → `raw` e `text` com `comando /x recebido` e `complete` (sem a simulação de permissão).
+
+## Servidores MCP
+
+O openheinerss lê os servidores de `~/.openheinerss/mcp.json`, `~/.config/openheinerss/mcp.json` e `<projeto>/.openheinerss/mcp.json` (formato `{"mcpServers": {"nome": {"command", "args", "env"} | {"url", "type", "headers"}}}`; o projeto vence no mesmo nome) e **entrega a cada harness no formato dele, por execução**, sem editar a config pessoal do usuário:
+
+| Harness | Como chega | Segredos (`env`, `headers`) |
+|---|---|---|
+| claude-code (CLI e SDK) | `--mcp-config <arquivo temporário>` (somado aos `mcp_config` do usuário) | só no arquivo, 0600, apagado no fim da sessão |
+| codex | `-c mcp_servers.<nome>.command/args/url/env_vars/env_http_headers` | no ambiente do processo; o argv só tem os nomes das variáveis |
+| opencode | `OPENCODE_CONFIG_CONTENT` (mesclado por cima da config do usuário); se quem chama já definiu a variável, ela é respeitada | no ambiente do processo |
+| aider | **sem suporte**: o aider não tem cliente MCP | — |
+| agy | **sem equivalente por execução**: o agy só tem `agy mcp add`, que grava na config do usuário | — |
+| custom por comando | não recebe (passe a config em `args`/`env`); instância com `base:` herda da base | — |
+
+Escolha: `--sem-mcp` (desliga) e `--mcp a,b` (só esses) em `run` e `rodar`; `semMcp`/`mcp` em `session.create`; `OPENHEINERSS_MCP=nenhum|a,b` no ambiente. Nome que não existe é erro (o Start falha com a lista dos disponíveis). `openheinerss mcp efetivos` mostra o que será entregue nesta pasta, com os valores de env ocultos (`***`). Segredos nunca vão para o argv, o log nem o histórico da sessão (a resolução acontece dentro do adaptador).
+
+## Classificador de risco (opcional)
+
+Por padrão a ponte é **só túnel**: nenhum evento ganha classificação. Para quem precisa (ex.: a Central), ligue com `serve --classificar-risco` / `run --classificar-risco`, `classificarRisco: true` em `session.create` ou a opção dos SDKs. Aí cada `agent.tool_call` e `agent.permission_request` ganha `risco` (`baixo`|`medio`|`alto`) e `motivoRisco`. **Nunca bloqueia nada**; só informa.
+
+Regras embutidas (resumo): `rm -r/-rf`, `git push`, `git reset --hard`/`clean -f`, `curl|sh`, deploy/publicação (`deploy`, `kubectl apply`, `terraform apply`, `npm publish`, `docker push`, `git tag`…), `sudo`/`mkfs`/`dd`/`chmod 777`/`pkill` e **escrita fora da worktree** (ferramenta de escrita com caminho fora da pasta da sessão ou redirecionamento `>`/`tee` para fora) = alto; rede, instalação de dependências, `git commit/merge/checkout`, `rm` simples, escrita na worktree e shell sem regra = medio; leitura (`Read`, `Grep`, `Glob`, `ls`…) = baixo; ferramenta desconhecida = `padrao` (medio).
+
+Configurável por `risco.yaml` em `<projeto>/.openheinerss/`, `~/.config/openheinerss/` e `~/.openheinerss/` (nessa prioridade). As regras do usuário são avaliadas antes das embutidas; a primeira que casa vence:
+
+```yaml
+padrao: medio              # nível quando nada casa
+fora_da_worktree: alto     # nível de escrita fora da pasta da sessão
+fora_permitidos: [/tmp]    # pastas fora da worktree que não sobem o risco
+leitura: [minha_busca]     # ferramentas extras de leitura (baixo)
+escrita: [salvar]          # ferramentas extras de escrita (caminho checado)
+sem_embutidas: false       # true = só valem as regras deste arquivo
+regras:
+  - nivel: baixo
+    motivo: push no fork é rotina
+    padrao: 'git push fork'          # regex no comando
+  - nivel: alto
+    motivo: busca na web proibida aqui
+    ferramentas: [WebFetch]          # por nome de ferramenta
+```
+
+Arquivo inválido (nível desconhecido, regex quebrada) faz a criação da sessão falhar com a mensagem do erro, só quando o classificador está ligado. O `rodar` não classifica (não passa pelo gerenciador de sessões).

@@ -13,6 +13,7 @@ import (
 
 	"github.com/crom-org/openheinerss/pkg/harness"
 	"github.com/crom-org/openheinerss/pkg/harness/process"
+	"github.com/crom-org/openheinerss/pkg/mcp"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 )
 
@@ -22,6 +23,7 @@ func init() {
 		DisplayName:        "OpenCode Interpreter & Server",
 		SupportedModes:     []string{"cli", "api"},
 		SupportedProtocols: []string{"openai", "deepseek", "ollama", "groq"},
+		MCP:                "por execução: OPENCODE_CONFIG_CONTENT",
 		DefaultProviders: []protocol.ProviderInfo{
 			{
 				ID:          "deepseek",
@@ -135,6 +137,23 @@ func (o *OpenCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig) 
 	}
 	if cfg.CWD != "" {
 		env = harness.SetEnv(env, "PWD", cfg.CWD)
+	}
+	// Servidores MCP do openheinerss: OPENCODE_CONFIG_CONTENT, que o opencode mescla por cima
+	// da config do usuário só neste processo. Se quem chama já definiu a variável, ela é respeitada.
+	servs, err := harness.ServidoresMCP(cfg)
+	if err != nil {
+		return fmt.Errorf("MCP: %w", err)
+	}
+	_, definido := cfg.Env["OPENCODE_CONFIG_CONTENT"]
+	if _, noAmbiente := os.LookupEnv("OPENCODE_CONFIG_CONTENT"); noAmbiente {
+		definido = true
+	}
+	if len(servs) > 0 && !definido {
+		data, err := mcp.ParaOpenCode(servs)
+		if err != nil {
+			return fmt.Errorf("MCP: %w", err)
+		}
+		env = harness.SetEnv(env, "OPENCODE_CONFIG_CONTENT", string(data))
 	}
 	o.env = env
 
