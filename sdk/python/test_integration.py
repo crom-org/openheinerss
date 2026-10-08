@@ -7,6 +7,15 @@ import unittest
 from openheinerss import Agent
 from openheinerss.transport import StdioTransport, TransportError
 
+def repo_temporario():
+    """Repositório git descartável: o teste nunca cria worktrees no repositório real."""
+    import subprocess, tempfile
+    pasta = tempfile.mkdtemp(prefix="openheinerss-sdk-py-")
+    subprocess.run(["git", "init", "-q", "-b", "main", pasta], check=True)
+    subprocess.run(["git", "-C", pasta, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"], check=True)
+    return pasta
+
+
 class SDKIntegrationTest(unittest.TestCase):
     @staticmethod
     def _esperar(condicao, segundos):
@@ -34,7 +43,7 @@ class SDKIntegrationTest(unittest.TestCase):
                     terminou.set()
             agent.subscribeEvents(evento, projeto="teste-py")
             self.assertIn("instancias", agent.getLimits())
-            run = agent.run({"nome": "teste-py", "motor": "mock", "texto": "responda OK", "cwd": os.getcwd(), "projeto": "teste-py"})
+            run = agent.run({"nome": "teste-py", "motor": "mock", "texto": "responda OK", "cwd": repo_temporario(), "projeto": "teste-py"})
             self.assertTrue(run["id"].startswith("rodar-"))
             self.assertTrue(self._esperar(lambda: decisao, 3.0))
             self.assertTrue(decisao_enviada.wait(1.0))

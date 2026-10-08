@@ -5,8 +5,8 @@ dist/
 bin/
 
 # Sessões locais e checkpoints
-.openheinerss/sessions/
-.openheinerss/checkpoints/
+**/.openheinerss/sessions/
+**/.openheinerss/checkpoints/
 
 # IDEs e SO
 .vscode/

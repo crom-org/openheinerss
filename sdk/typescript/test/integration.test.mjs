@@ -26,7 +26,7 @@ test("SDK TypeScript conversa com o servidor real", async () => {
     });
     const limits = await client.getLimits();
     assert.ok(Array.isArray(limits.instancias));
-    const run = await client.run({ nome: "teste-ts", motor: "mock", texto: "responda OK", cwd: process.cwd(), projeto: "teste-ts" });
+    const run = await client.run({ nome: "teste-ts", motor: "mock", texto: "responda OK", cwd: await repoTemporario(), projeto: "teste-ts" });
     assert.match(run.id, /^rodar-/);
     await new Promise((resolve, reject) => { const t = setInterval(() => { if (decisao) { clearInterval(t); resolve(); } }, 10); setTimeout(() => { clearInterval(t); reject(new Error("timeout de decisão")); }, 3000); });
     await Promise.race([terminou, new Promise((_, reject) => setTimeout(() => reject(new Error("timeout de eventos")), 3000))]);
@@ -63,3 +63,12 @@ test("SDK TypeScript entrega thinking como thinking", async () => {
     assert.ok(thinking > 0);
   } finally { client.close(); }
 });
+
+// Repositório git descartável: o teste nunca cria worktrees no repositório real.
+async function repoTemporario() {
+  const { execFileSync } = await import("node:child_process");
+  const pasta = await mkdtemp(join(tmpdir(), "openheinerss-sdk-ts-"));
+  execFileSync("git", ["init", "-q", "-b", "main", pasta]);
+  execFileSync("git", ["-C", pasta, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"]);
+  return pasta;
+}

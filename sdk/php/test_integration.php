@@ -1,4 +1,12 @@
 <?php
+// Repositório git descartável: o teste nunca cria worktrees no repositório real.
+function repoTemporario(): string {
+    $pasta = sys_get_temp_dir() . '/openheinerss-sdk-php-' . bin2hex(random_bytes(4));
+    mkdir($pasta);
+    exec('git init -q -b main ' . escapeshellarg($pasta) . ' && git -C ' . escapeshellarg($pasta) . ' -c user.name=t -c user.email=t@t commit -q --allow-empty -m i', $saida, $codigo);
+    if ($codigo !== 0) throw new RuntimeException('git init falhou');
+    return $pasta;
+}
 require __DIR__ . '/src/Transport/StdioTransport.php';
 require __DIR__ . '/src/Types.php';
 require __DIR__ . '/src/Agent.php';
@@ -15,7 +23,7 @@ $agent->subscribeEvents(['projeto' => 'teste-php'], [
     'orq.precisa_decisao' => function (array $event) use (&$decisao): void { $decisao = $event; },
 ]);
 if (!isset($agent->getLimits()['instancias'])) throw new RuntimeException('limites ausentes');
-$run = $agent->run(['nome' => 'teste-php', 'motor' => 'mock', 'texto' => 'responda OK', 'cwd' => getcwd(), 'projeto' => 'teste-php']);
+$run = $agent->run(['nome' => 'teste-php', 'motor' => 'mock', 'texto' => 'responda OK', 'cwd' => repoTemporario(), 'projeto' => 'teste-php']);
 if (!str_starts_with($run['id'], 'rodar-')) throw new RuntimeException('rodar não iniciado');
 $fim = microtime(true) + 1.0;
 while ($decisao === null && microtime(true) < $fim) $agent->listen(0.05);
