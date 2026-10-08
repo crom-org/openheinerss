@@ -139,6 +139,8 @@ func resumoEvento(ev harness.Event, buf *string) string {
 		*buf = ""
 		in, _ := json.Marshal(p.Input)
 		return curto("ferramenta "+p.Tool+" "+string(in), 160)
+	case protocol.RawParams:
+		return curto("raw "+p.Stream+": "+p.Line, 160)
 	}
 	return ""
 }
@@ -719,6 +721,9 @@ func eventText(e harness.Event) string {
 	}
 	if e.Type == harness.EventComplete {
 		return "\n[completo]\n"
+	}
+	if p, ok := e.Payload.(protocol.RawParams); ok {
+		return fmt.Sprintf("\n[raw %s] %s\n", p.Stream, p.Line)
 	}
 	// O texto chega em pedaços sem quebra de linha; os outros eventos começam numa linha nova.
 	return fmt.Sprintf("\n[%s] %s\n", e.Type, b)

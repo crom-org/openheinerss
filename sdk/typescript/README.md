@@ -57,3 +57,12 @@ export function Chat() {
   );
 }
 ```
+
+## Repasse ao harness (ponte)
+`harnessArgs` vai intacto e na ordem ao processo do harness, sem lista de permitidos; texto que começa com `/` vai literalmente (ver `docs/02-protocol-spec.md`). `agent.raw` chega como evento `raw`.
+```ts
+const ia = new Openheinerss({ options: { harness: "codex", effort: "high", harnessArgs: ["--add-dir", "../x"] } });
+ia.on("raw", ({ stream, line }) => console.log(`[raw ${stream}]`, line));
+await ia.prompt("/compact");
+// run: await ia.run({ nome: "a", motor: "codex", harnessArgs: ["--x"] })
+```

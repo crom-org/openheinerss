@@ -43,7 +43,7 @@ class Agent
                 "provider" => $options['provider'] ?? null,
                 "model"    => $options['model'] ?? null,
                 "cwd"      => $options['cwd'] ?? getcwd(),
-            ]
+            ] + $this->sessionExtras($options)
         ]);
 
         while ($line = $this->transport->readLine()) {
@@ -57,6 +57,21 @@ class Agent
                 return;
             }
         }
+    }
+
+    /** effort e harnessArgs (argumentos nativos extras, intactos e na ordem) vão em params.options. */
+    private function sessionExtras(array $options): array
+    {
+        $extra = [];
+        if (!empty($options['effort'])) $extra['effort'] = $options['effort'];
+        if (!empty($options['harnessArgs'])) $extra['harnessArgs'] = array_map('strval', array_values($options['harnessArgs']));
+        return $extra ? ['options' => $extra] : [];
+    }
+
+    /** Registra um callback para uma notificação, ex.: on('agent.raw', fn(array $p) => ...). */
+    public function on(string $method, callable $callback): void
+    {
+        $this->callbacks[$method] = $callback;
     }
 
     public function prompt(string $text, ?callable $onEvent = null): string
@@ -146,7 +161,7 @@ class Agent
     public function getLimits(): array { return $this->request('limites.obter', []); }
     /** @param array<string, callable(array): void> $callbacks */
     public function subscribeEvents(array|EventFilter $filter = [], array $callbacks = []): void {
-        $this->callbacks = $callbacks;
+        $this->callbacks = array_merge($this->callbacks, $callbacks);
         $this->request('eventos.assinar', $filter instanceof EventFilter ? $filter->toArray() : $filter);
     }
 

@@ -214,6 +214,7 @@ Flags:
       --account string              Alias em inglês de --conta
       --agentes string              Alias de --pasta-agentes
       --agents-dir string           Alias em inglês de --pasta-agentes
+      --arg stringArray             Alias de --harness-arg (default [])
       --arquivo-chaves string       Arquivo opcional de variáveis secretas (não imprime valores)
       --base-branch string          Alias em inglês de --branch-base
       --branch-base string          Branch base da worktree (padrão: main, ou a branch atual se não houver main)
@@ -225,6 +226,7 @@ Flags:
       --esforco string              Esforço de raciocínio
       --eventos-log string          Acrescenta FIM ao arquivo de eventos (desligado por padrão)
       --events-log string           Alias em inglês de --eventos-log
+      --harness-arg stringArray     Argumento nativo extra para o harness, intacto e na ordem (repetível) (default [])
       --keys-file string            Alias em inglês de --arquivo-chaves
       --max-agentes int             Máximo de agentes simultâneos
       --max-agents int              Alias em inglês de --max-agentes
@@ -270,21 +272,25 @@ Aliases:
   run, executar
 
 Flags:
-      --effort string     Alias em inglês de --esforco
-      --engine string     Alias em inglês de --motor
-      --esforco string    Esforço de raciocínio do motor
-      --harness string    Nome do harness ('mock', 'claude-code', 'opencode') (default "mock")
-      --mode string       Modo do harness ('mock', 'sdk', 'cli') (default "mock")
-      --model string      Nome do modelo
-      --modelo string     Alias em português de --model
-      --modo string       Alias em português de --mode (default "mock")
-      --motor string      Harness base ou instância custom definida pelo usuário
-      --papel string      Papel definido em .openheinerss/motores.yaml
-      --provedor string   Alias em português de --provider
-      --provider string   Provedor do modelo
-      --resume string     Alias em inglês de --retomar
-      --retomar string    Retoma a sessão persistida pelo ID
-      --role string       Alias em inglês de --papel
+      --arg stringArray           Alias de --harness-arg (default [])
+      --effort string             Alias em inglês de --esforco
+      --engine string             Alias em inglês de --motor
+      --esforco string            Esforço de raciocínio do motor
+      --harness string            Nome do harness ('mock', 'claude-code', 'opencode') (default "mock")
+      --harness-arg stringArray   Argumento nativo extra para o harness, intacto e na ordem (repetível) (default [])
+      --interactive               Alias em inglês de --interativo
+  -i, --interativo                Sessão interativa: lê um prompt por linha; linhas com / vão literalmente ao harness
+      --mode string               Modo do harness ('mock', 'sdk', 'cli') (default "mock")
+      --model string              Nome do modelo
+      --modelo string             Alias em português de --model
+      --modo string               Alias em português de --mode (default "mock")
+      --motor string              Harness base ou instância custom definida pelo usuário
+      --papel string              Papel definido em .openheinerss/motores.yaml
+      --provedor string           Alias em português de --provider
+      --provider string           Provedor do modelo
+      --resume string             Alias em inglês de --retomar
+      --retomar string            Retoma a sessão persistida pelo ID
+      --role string               Alias em inglês de --papel
 
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
