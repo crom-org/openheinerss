@@ -429,12 +429,18 @@ func (c *customHarness) SendPrompt(ctx context.Context, text string, _ []protoco
 			args[i] = a
 		}
 	}
+	// harness_args vão depois dos args do spec (que podem conter o {{prompt}}); sem {{prompt}} o prompt
+	// segue por stdin, então ficam antes dele. Ver docs/ponte/custom-mock.md.
+	args = append(args, HarnessArgs(cfg.Options)...)
 	cmd := exec.CommandContext(base, spec.Command, args...)
 	process.Configure(cmd)
 	cmd.Dir = cfg.CWD
 	cmd.Env = mergedCustomEnv(spec.Env, cfg.Env, cfg.CWD)
 	stderr := &tailBuffer{max: 4096}
-	cmd.Stderr = stderr
+	stderrRaw := NewLineWriter(func(line string) {
+		c.emit(RawEvent(cfg.SessionID, c.spec.Name, "stderr", line))
+	})
+	cmd.Stderr = io.MultiWriter(stderr, stderrRaw)
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -456,7 +462,7 @@ func (c *customHarness) SendPrompt(ctx context.Context, text string, _ []protoco
 	} else {
 		_ = in.Close()
 	}
-	go c.read(cmd, out, stderr)
+	go func() { c.read(cmd, out, stderr); stderrRaw.Flush() }()
 	return nil
 }
 
@@ -589,6 +595,7 @@ func (c *customHarness) parseLine(line string) {
 		}
 		c.fimDeclarado(reason)
 	default:
+		c.emit(RawEvent(sid, c.spec.Name, "stdout", line))
 		if payload != nil {
 			b, _ := json.Marshal(payload)
 			c.emit(Event{Type: EventText, Payload: protocol.TextParams{SessionID: sid, Delta: string(b)}})

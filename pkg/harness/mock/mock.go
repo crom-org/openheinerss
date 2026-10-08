@@ -2,6 +2,7 @@ package mock
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -46,6 +47,22 @@ type MockHarness struct {
 	cancel    context.CancelFunc
 	stopped   bool
 	stepDelay time.Duration
+	args      []string
+	prompts   []string
+}
+
+// ReceivedArgs devolve os harness_args recebidos em Start (para testes de ponta a ponta).
+func (m *MockHarness) ReceivedArgs() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]string(nil), m.args...)
+}
+
+// ReceivedPrompts devolve os prompts recebidos por SendPrompt, na ordem.
+func (m *MockHarness) ReceivedPrompts() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]string(nil), m.prompts...)
 }
 
 // NewMockHarness cria uma nova instância de MockHarness
@@ -83,6 +100,7 @@ func (m *MockHarness) Start(ctx context.Context, cfg harness.SessionConfig) erro
 	defer m.mu.Unlock()
 
 	m.cfg = cfg
+	m.args = harness.HarnessArgs(cfg.Options)
 	m.ctx, m.cancel = context.WithCancel(ctx)
 	m.stopped = false
 
@@ -95,6 +113,7 @@ func (m *MockHarness) SendPrompt(ctx context.Context, text string, attachments [
 		m.mu.Unlock()
 		return fmt.Errorf("mock harness não está iniciado ou foi interrompido")
 	}
+	m.prompts = append(m.prompts, text)
 	m.mu.Unlock()
 
 	// Executa a simulação em uma goroutine assíncrona
@@ -105,6 +124,21 @@ func (m *MockHarness) SendPrompt(ctx context.Context, text string, attachments [
 
 func (m *MockHarness) runSimulation(text string) {
 	sessID := m.cfg.SessionID
+
+	// Ponte: os harness_args recebidos voltam num evento raw (harness_args=<json>).
+	if args := m.ReceivedArgs(); len(args) > 0 {
+		b, _ := json.Marshal(args)
+		m.emit(harness.RawEvent(sessID, "mock", "stdout", "harness_args="+string(b)))
+	}
+
+	// Um /comando chega literal: o mock confirma e encerra o turno.
+	if name, _, ok := harness.SlashCommand(text); ok {
+		line := "comando /" + name + " recebido"
+		m.emit(harness.RawEvent(sessID, "mock", "stdout", line))
+		m.emit(harness.Event{Type: harness.EventText, Payload: protocol.TextParams{SessionID: sessID, Delta: line}})
+		m.emit(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessID, Reason: "finished"}})
+		return
+	}
 
 	// 1. Thinking
 	m.emit(harness.Event{

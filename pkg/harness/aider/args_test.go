@@ -10,8 +10,8 @@ import (
 
 func TestArgsAiderTabela(t *testing.T) {
 	for _, prompt := range []string{"faça um arquivo", "--- prompt com hífen"} {
-		got := buildArgs(harness.SessionConfig{Model: "modelo-teste"}, prompt)
-		want := []string{"--yes-always", "--no-pretty", "--no-stream", "--no-check-update", "--no-analytics", "--no-show-model-warnings", "--no-browser", "--message=" + prompt, "--model", "modelo-teste"}
+		got := buildArgs(harness.SessionConfig{Model: "modelo-teste"}, "", nil, nil, prompt)
+		want := []string{"--yes-always", "--no-pretty", "--no-stream", "--no-check-update", "--no-analytics", "--no-show-model-warnings", "--no-browser", "--model", "modelo-teste", "--message=" + prompt}
 		if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
 			t.Fatalf("prompt %q: %#v", prompt, got)
 		}

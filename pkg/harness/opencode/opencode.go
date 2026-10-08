@@ -73,6 +73,15 @@ type OpenCodeHarness struct {
 	cancel   context.CancelFunc
 	resumeID string
 	stopped  bool
+
+	// Ajustes que valem para as próximas chamadas (começam nas options; /model, /effort, /agent, /new mexem neles).
+	model    string
+	variant  string
+	agent    string
+	cont     bool
+	fork     bool
+	share    bool
+	thinking bool
 }
 
 // NewOpenCodeHarness instancia o adaptador OpenCode
@@ -112,6 +121,13 @@ func (o *OpenCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig) 
 	o.ctx, o.cancel = context.WithCancel(ctx)
 	o.resumeID = optionString(cfg.Options, "opencode_session_id", "session_id")
 	o.stopped = false
+	o.model = cfg.Model
+	o.variant = harness.OpcaoTexto(cfg.Options, "variant", "effort")
+	o.agent = harness.OpcaoTexto(cfg.Options, "agent")
+	o.cont = harness.OpcaoBool(cfg.Options, "continue")
+	o.fork = harness.OpcaoBool(cfg.Options, "fork")
+	o.share = harness.OpcaoBool(cfg.Options, "share")
+	o.thinking = harness.OpcaoBool(cfg.Options, "thinking")
 
 	env := os.Environ()
 	for k, v := range cfg.Env {
@@ -134,8 +150,27 @@ func (o *OpenCodeHarness) SendPrompt(ctx context.Context, text string, attachmen
 	}
 
 	sessID := o.cfg.SessionID
-	resumeID := o.resumeID
+	command, text, handled, err := o.slash(text)
+	if err != nil {
+		return err
+	}
+	if handled {
+		o.emitLocal(sessID, text)
+		return nil
+	}
+	files := harness.OpcaoLista(o.cfg.Options, "files", "file")
+	extraFiles, cleanup, err := harness.AnexosEmArquivos(attachments)
+	if err != nil {
+		return err
+	}
+	call := callArgs{
+		resumeID: o.resumeID, model: o.model, variant: o.variant, agent: o.agent,
+		cont: o.cont, fork: o.fork, share: o.share, thinking: o.thinking,
+		files: append(files, extraFiles...), command: command,
+		extra: harness.HarnessArgs(o.cfg.Options), text: text,
+	}
 	go func() {
+		defer cleanup()
 		o.emit(harness.Event{
 			Type: harness.EventThinking,
 			Payload: protocol.ThinkingParams{
@@ -144,7 +179,7 @@ func (o *OpenCodeHarness) SendPrompt(ctx context.Context, text string, attachmen
 			},
 		})
 
-		args := buildArgs(o.cfg, resumeID, text)
+		args := buildArgs(call)
 
 		cmd := exec.CommandContext(o.ctx, "opencode", args...)
 		process.Configure(cmd)
@@ -170,8 +205,15 @@ func (o *OpenCodeHarness) SendPrompt(ctx context.Context, text string, attachmen
 		o.cmd = cmd
 		o.mu.Unlock()
 		var stderrBuf strings.Builder
+		stderrRaw := harness.NewLineWriter(func(line string) {
+			o.emit(harness.RawEvent(sessID, "opencode", "stderr", line))
+		})
 		stderrDone := make(chan struct{})
-		go func() { _, _ = io.Copy(&stderrBuf, stderr); close(stderrDone) }()
+		go func() {
+			_, _ = io.Copy(io.MultiWriter(&stderrBuf, stderrRaw), stderr)
+			stderrRaw.Flush()
+			close(stderrDone)
+		}()
 
 		scanner := bufio.NewScanner(stdout)
 		scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
@@ -215,15 +257,97 @@ func (o *OpenCodeHarness) SendPrompt(ctx context.Context, text string, attachmen
 	return nil
 }
 
-func buildArgs(cfg harness.SessionConfig, resumeID, text string) []string {
+// callArgs reúne tudo que muda a linha de comando de uma chamada do `opencode run`.
+type callArgs struct {
+	resumeID, model, variant, agent, command, text string
+	cont, fork, share, thinking                    bool
+	files, extra                                   []string
+}
+
+// buildArgs monta `opencode run`: opções tipadas, depois harness_args (intactos, na ordem) e,
+// por último, a mensagem. Com --command, a mensagem são os argumentos do comando.
+func buildArgs(c callArgs) []string {
 	args := []string{"run", "--format", "json"}
-	if resumeID != "" {
-		args = append(args, "--session", resumeID)
+	if c.resumeID != "" {
+		args = append(args, "--session", c.resumeID)
+	} else if c.cont {
+		args = append(args, "--continue")
 	}
-	if cfg.Model != "" {
-		args = append(args, "-m", cfg.Model)
+	if c.fork && (c.resumeID != "" || c.cont) {
+		args = append(args, "--fork")
 	}
-	return append(args, "--", text)
+	if c.model != "" {
+		args = append(args, "-m", c.model)
+	}
+	if c.variant != "" {
+		args = append(args, "--variant", c.variant)
+	}
+	if c.agent != "" {
+		args = append(args, "--agent", c.agent)
+	}
+	if c.share {
+		args = append(args, "--share")
+	}
+	if c.thinking {
+		args = append(args, "--thinking")
+	}
+	for _, f := range c.files {
+		args = append(args, "--file", f)
+	}
+	if c.command != "" {
+		args = append(args, "--command", c.command)
+	}
+	args = append(args, c.extra...)
+	if c.command != "" && c.text == "" {
+		return args
+	}
+	return append(args, "--", c.text)
+}
+
+// slash trata um prompt que começa com "/". Comandos do opencode viram `--command nome` (a mensagem
+// passa a ser o argumento); comandos que só existem na tela são traduzidos para ajustes das próximas
+// chamadas (handled=true, a mensagem de aviso volta em text) ou recusados com NoEquivalent.
+// Chamar com o.mu preso.
+func (o *OpenCodeHarness) slash(text string) (command, message string, handled bool, err error) {
+	name, rest, ok := harness.SlashCommand(text)
+	if !ok {
+		return "", text, false, nil
+	}
+	switch strings.ToLower(name) {
+	case "model", "models":
+		if rest == "" {
+			return "", "", false, harness.NoEquivalent("opencode", name, "informe o modelo no formato provedor/modelo, ex.: /model openai/gpt-4o")
+		}
+		o.model = rest
+		return "", "modelo das próximas chamadas: " + rest, true, nil
+	case "effort", "variant":
+		o.variant = rest
+		return "", "esforço (--variant) das próximas chamadas: " + rest, true, nil
+	case "agent":
+		if rest == "" {
+			return "", "", false, harness.NoEquivalent("opencode", name, "informe o agente, ex.: /agent build")
+		}
+		o.agent = rest
+		return "", "agente das próximas chamadas: " + rest, true, nil
+	case "new", "clear":
+		o.resumeID, o.cont, o.fork = "", false, false
+		return "", "sessão esquecida: a próxima chamada começa uma conversa nova", true, nil
+	case "share":
+		o.share = true
+		return "", "as próximas chamadas serão compartilhadas (--share)", true, nil
+	case "thinking":
+		o.thinking = true
+		return "", "as próximas chamadas mostram blocos de raciocínio (--thinking)", true, nil
+	case "exit", "quit", "q", "themes", "editor", "details", "help", "sessions", "agents":
+		return "", "", false, harness.NoEquivalent("opencode", name, "é um comando da tela (TUI); no `opencode run` só valem comandos definidos via --command e as opções da linha de comando")
+	}
+	return name, rest, false, nil
+}
+
+// emitLocal devolve o aviso de um comando traduzido pela ponte e encerra o turno.
+func (o *OpenCodeHarness) emitLocal(sessionID, message string) {
+	o.emitLocked(harness.Event{Type: harness.EventText, Payload: protocol.TextParams{SessionID: sessionID, Delta: message + "\n"}})
+	o.emitLocked(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessionID, Reason: "completed"}})
 }
 
 func (o *OpenCodeHarness) emitProcessError(sessionID string, err error) {
@@ -319,7 +443,12 @@ func (o *OpenCodeHarness) handleLine(line, sessionID string) {
 		o.resumeID = sid
 		o.mu.Unlock()
 	}
-	for _, event := range parseOpenCodeEvent(raw, sessionID) {
+	events := parseOpenCodeEvent(raw, sessionID)
+	if len(events) == 0 {
+		o.emit(harness.RawEvent(sessionID, "opencode", "stdout", line))
+		return
+	}
+	for _, event := range events {
 		o.emit(event)
 	}
 }
@@ -382,6 +511,14 @@ func (o *OpenCodeHarness) emit(evt harness.Event) {
 	if o.stopped {
 		return
 	}
+	select {
+	case o.events <- evt:
+	default:
+	}
+}
+
+// emitLocked é o emit para quem já está com o.mu preso (SendPrompt).
+func (o *OpenCodeHarness) emitLocked(evt harness.Event) {
 	select {
 	case o.events <- evt:
 	default:
