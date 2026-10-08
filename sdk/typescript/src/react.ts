@@ -24,7 +24,7 @@ export function useOpenheinerss(options: UseOpenheinerssOptions = {}) {
   useEffect(() => {
     const client = new Openheinerss({
       transport: "websocket",
-      wsEndpoint: options.wsEndpoint || "ws://127.0.0.1:4820",
+      wsEndpoint: options.wsEndpoint || `ws://127.0.0.1:${options.port || (typeof process !== "undefined" ? process.env.OPENHEINERSS_PORTA || "4820" : "4820")}`,
       options: options.options,
       ...options,
     });

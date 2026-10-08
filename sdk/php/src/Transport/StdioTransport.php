@@ -44,6 +44,7 @@ class StdioTransport
             fclose($this->pipes[0]);
             fclose($this->pipes[1]);
             proc_close($this->process);
+            $this->process = null;
         }
     }
 

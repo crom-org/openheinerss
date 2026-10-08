@@ -28,4 +28,10 @@ class StdioTransport:
     def close(self):
         if self.proc:
             self.proc.terminate()
-            self.proc.wait()
+            try:
+                self.proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                # É o processo filho criado pelo transporte; encerra somente ele.
+                self.proc.kill()
+                self.proc.wait()
+            self.proc = None

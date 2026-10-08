@@ -1,4 +1,4 @@
-# @openheinerss/sdk
+# @openheinerss/sdk 0.2.0
 
 SDK oficial em **TypeScript / JavaScript** para integração com o **Openheinerss** (crom-org).
 
@@ -11,7 +11,7 @@ npm install @openheinerss/sdk
 ## Uso no Backend / Node / Bun
 
 ```typescript
-import { Openheinerss } from "@openheinerss/sdk";
+import { Openheinerss, type RunOptions } from "@openheinerss/sdk";
 
 const agent = new Openheinerss({
   options: {
@@ -20,6 +20,13 @@ const agent = new Openheinerss({
     model: "anthropic/claude-3.7-sonnet"
   }
 });
+
+// A porta WebSocket padrão é 4820; OPENHEINERSS_PORTA ou port também funcionam.
+await agent.registerHarness({ name: "meu-harness", base: "mock" });
+await agent.subscribeEvents({}, { "orq.fim": (evento) => console.log("fim", evento) });
+const missão: RunOptions = { nome: "teste", motor: "mock", prompt: "responda OK", cwd: process.cwd() };
+const execução = await agent.run(missão);
+console.log(await agent.listRuns(), await agent.getLimits(), execução);
 
 agent.on("thinking", (delta) => console.log("Pensando:", delta));
 agent.on("text", (delta) => process.stdout.write(delta));
