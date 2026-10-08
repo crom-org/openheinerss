@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -59,16 +60,17 @@ func init() {
 
 // ClaudeCodeHarness implementa o conector para o Claude Code nos modos SDK e CLI
 type ClaudeCodeHarness struct {
-	mu      sync.Mutex
-	mode    harness.Mode
-	cfg     harness.SessionConfig
-	env     []string
-	events  chan harness.Event
-	cmd     *exec.Cmd
-	stdin   io.WriteCloser
-	ctx     context.Context
-	cancel  context.CancelFunc
-	stopped bool
+	mu       sync.Mutex
+	mode     harness.Mode
+	cfg      harness.SessionConfig
+	env      []string
+	events   chan harness.Event
+	cmd      *exec.Cmd
+	stdin    io.WriteCloser
+	ctx      context.Context
+	cancel   context.CancelFunc
+	stopped  bool
+	resumeID string
 }
 
 // NewClaudeCodeHarness instancia o adaptador Claude Code
@@ -115,6 +117,7 @@ func (c *ClaudeCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig
 	defer c.mu.Unlock()
 
 	c.cfg = cfg
+	c.resumeID = cfg.SessionID
 	c.ctx, c.cancel = context.WithCancel(ctx)
 	c.stopped = false
 
@@ -222,9 +225,15 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 			},
 		})
 
-		args := []string{"-p", text}
-		if resume, ok := c.cfg.Options["resume_session"].(string); ok && resume != "" {
-			args = []string{"--resume", resume, "-p", text}
+		args := []string{"-p", text, "--output-format", "stream-json", "--verbose"}
+		if c.cfg.Model != "" {
+			args = append(args, "--model", c.cfg.Model)
+		}
+		if resume := c.resumeOption(); resume != "" {
+			args = append([]string{"--resume", resume}, args...)
+		}
+		if permission := c.cliPermissionMode(); permission != "" {
+			args = append(args, "--permission-mode", permission)
 		}
 		cmd := exec.CommandContext(c.ctx, "claude", args...)
 		cmd.Dir = c.cfg.CWD
@@ -257,16 +266,12 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 		go c.readStderr(stderr)
 
 		scanner := bufio.NewScanner(stdout)
-		scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
+		scanner.Buffer(make([]byte, 64*1024), 64*1024*1024)
 		for scanner.Scan() {
-			line := scanner.Text()
-			c.emit(harness.Event{
-				Type: harness.EventText,
-				Payload: protocol.TextParams{
-					SessionID: sessID,
-					Delta:     line + "\n",
-				},
-			})
+			c.parseCLIEvent(scanner.Bytes(), sessID)
+		}
+		if scanErr := scanner.Err(); scanErr != nil {
+			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: "falha lendo stream do Claude: " + scanErr.Error()}})
 		}
 
 		err = cmd.Wait()
@@ -293,6 +298,133 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 	}()
 
 	return nil
+}
+
+func (c *ClaudeCodeHarness) resumeOption() string {
+	for _, key := range []string{"claude_session_id", "resume_session", "session_id"} {
+		if value, ok := c.cfg.Options[key].(string); ok && value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func (c *ClaudeCodeHarness) cliPermissionMode() string {
+	value, _ := c.cfg.Options["permissoes"].(string)
+	if value == "" {
+		value = c.cfg.PermissionMode
+	}
+	switch strings.ToLower(value) {
+	case "pular", "bypass", "bypasspermissions", "always_allow":
+		return "bypassPermissions"
+	case "perguntar", "ask", "manual":
+		return "manual"
+	}
+	if rodar, ok := c.cfg.Options["rodar"].(bool); ok && rodar {
+		return "bypassPermissions"
+	}
+	return ""
+}
+
+// ResumeID permite ao orquestrador retomar a conversa retornada pelo Claude.
+func (c *ClaudeCodeHarness) ResumeID() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.resumeID
+}
+
+func (c *ClaudeCodeHarness) parseCLIEvent(data []byte, fallbackSession string) {
+	var msg map[string]interface{}
+	if err := json.Unmarshal(data, &msg); err != nil {
+		c.emit(harness.Event{Type: harness.EventText, Payload: protocol.TextParams{SessionID: fallbackSession, Delta: string(data) + "\n"}})
+		return
+	}
+	sessionID := stringField(msg, "session_id")
+	if sessionID == "" {
+		sessionID = fallbackSession
+	}
+	if sessionID != "" {
+		c.mu.Lock()
+		c.resumeID = sessionID
+		c.mu.Unlock()
+	}
+	switch stringField(msg, "type") {
+	case "system":
+		// init só estabelece o ID; post_turn_summary não é texto para a Central.
+	case "assistant":
+		message, _ := msg["message"].(map[string]interface{})
+		c.parseContentBlocks(message["content"], sessionID)
+	case "user":
+		message, _ := msg["message"].(map[string]interface{})
+		c.parseContentBlocks(message["content"], sessionID)
+	case "result":
+		usage, _ := msg["usage"].(map[string]interface{})
+		if usage != nil {
+			c.emit(harness.Event{Type: harness.EventUsage, Payload: protocol.UsageParams{SessionID: sessionID, InputTokens: int64(number(usage, "input_tokens")), OutputTokens: int64(number(usage, "output_tokens")), TotalTokens: int64(number(usage, "input_tokens") + number(usage, "output_tokens")), CostUSD: number(msg, "total_cost_usd")}})
+		}
+		isError := boolField(msg, "is_error")
+		reason := stringField(msg, "subtype")
+		if reason == "" {
+			reason = stringField(msg, "stop_reason")
+		}
+		if quotaMessage(msg) {
+			isError = true
+			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessionID, Message: "limite de cota do Claude Code atingido"}})
+		}
+		if isError {
+			message := stringField(msg, "result")
+			if message == "" {
+				message = "Claude Code encerrou com erro"
+			}
+			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessionID, Message: message}})
+		}
+		c.emit(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessionID, Reason: reason}})
+	case "rate_limit_event":
+		info, _ := msg["rate_limit_info"].(map[string]interface{})
+		if stringField(msg, "status") == "rejected" || stringField(msg, "overage_status") == "rejected" || stringField(info, "status") == "rejected" || stringField(info, "overageStatus") == "rejected" {
+			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessionID, Message: "limite de cota do Claude Code atingido"}})
+		}
+	}
+}
+
+func (c *ClaudeCodeHarness) parseContentBlocks(value interface{}, sessionID string) {
+	blocks, _ := value.([]interface{})
+	for _, raw := range blocks {
+		block, _ := raw.(map[string]interface{})
+		switch stringField(block, "type") {
+		case "text":
+			c.emit(harness.Event{Type: harness.EventText, Payload: protocol.TextParams{SessionID: sessionID, Delta: stringField(block, "text")}})
+		case "thinking":
+			c.emit(harness.Event{Type: harness.EventThinking, Payload: protocol.ThinkingParams{SessionID: sessionID, Delta: stringField(block, "thinking")}})
+		case "tool_use":
+			c.emit(harness.Event{Type: harness.EventToolCall, Payload: protocol.ToolCallParams{SessionID: sessionID, CallID: stringField(block, "id"), Tool: stringField(block, "name"), Input: block["input"]}})
+		case "tool_result":
+			status := "success"
+			if boolField(block, "is_error") {
+				status = "error"
+			}
+			output := block["content"]
+			out, _ := json.Marshal(output)
+			if text, ok := output.(string); ok {
+				out = []byte(text)
+			}
+			c.emit(harness.Event{Type: harness.EventToolResult, Payload: protocol.ToolResultParams{SessionID: sessionID, CallID: stringField(block, "tool_use_id"), Status: status, Output: string(out)}})
+		}
+	}
+}
+
+func stringField(m map[string]interface{}, key string) string { v, _ := m[key].(string); return v }
+func boolField(m map[string]interface{}, key string) bool     { v, _ := m[key].(bool); return v }
+func number(m map[string]interface{}, key string) float64     { v, _ := m[key].(float64); return v }
+func quotaMessage(m map[string]interface{}) bool {
+	data, _ := json.Marshal(m)
+	s := strings.ToLower(string(data))
+	for _, marker := range []string{"usage limit", "rate limit", "rate_limit", "quota", "limite de uso", "limite de cota", "out of credits"} {
+		if strings.Contains(s, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *ClaudeCodeHarness) RespondPermission(ctx context.Context, reqID string, allow bool, message string) error {

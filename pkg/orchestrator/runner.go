@@ -278,8 +278,10 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		}
 		hctx, cancel := context.WithCancel(ctx)
 		options := map[string]interface{}{"effort": effort}
+		options["rodar"] = true
 		if resumeID != "" && resumeMotor == candidate {
 			options["codex_session_id"] = resumeID
+			options["claude_session_id"] = resumeID
 		}
 		cfg := harness.SessionConfig{SessionID: fmt.Sprintf("rodar-%s-%d", o.Name, attempts), CWD: work, Model: modelName, Options: options}
 		if e = h.Start(hctx, cfg); e == nil {
