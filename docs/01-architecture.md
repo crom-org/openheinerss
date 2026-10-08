@@ -20,7 +20,7 @@ A arquitetura do Openheinerss foi pensada em camadas independentes para desacopl
 │                                                                        │
 │  ┌───────────────────────┐  ┌───────────────────────────────────────┐  │
 │  │   RPC & Transport     │  │          Session Coordinator          │  │
-│  │ (STDIO, TCP, WS, IPC) │  │  - Identificador de Sessão            │  │
+│  │ (STDIO, WebSocket)    │  │  - Identificador de Sessão            │  │
 │  └───────────────────────┘  │  - Context / CWD Manager              │  │
 │                             │  - Fila de Mensagens & Cancelamento   │  │
 │  ┌───────────────────────┐  └───────────────────────────────────────┘  │
@@ -59,10 +59,10 @@ Qualquer cliente comunica-se com o Openheinerss através do mesmo protocolo JSON
 
 ### B. Go Core (O Maestro)
 Escrito em Go por ser altamente concorrente (goroutines), produzir binários únicos estáticos e ter baixíssimo consumo de memória e latência:
-1. **Transport Layer**: Escuta requisições do cliente por STDIO, WebSocket ou Unix Domain Socket.
+1. **Transport Layer**: Escuta requisições do cliente por STDIO ou WebSocket.
 2. **Session Coordinator**: Mantém as sessões ativas, lida com timeout, interrupções (SIGINT / cancelamentos limpos) e filas de input.
 3. **Permission Interceptor**: Bloqueia ferramentas sensíveis (ex: `rm -rf`, `git push`, comandos bash perigosos) e emite eventos para o cliente aprovar ou rejeitar.
-4. **Storage & Rollback**: Padroniza a gravação do histórico da conversa e pontos de restauração (checkpoints) de código.
+4. **Storage & Rollback**: Há pacotes experimentais de transcript e checkpoint, mas eles não estão conectados ao fluxo de sessões; não são anunciados como recurso pronto.
 
 ### C. Camada de Adaptadores de Harness
 Cada motor de IA possui peculiaridades. O adaptador é responsável por:
@@ -87,9 +87,9 @@ Localizado na raiz do repositório/workspace do projeto:
 .openheinerss/
 ├── config.yaml          # Configurações do projeto (harness padrão, permissões, provedores)
 ├── mcp.json             # Servidores MCP ativos especificamente para este projeto
-├── sessions/            # Transcripts e histórico unificado (.jsonl)
+├── sessions/            # Reservado para histórico futuro; não é preenchido automaticamente hoje
 │   └── sess_abc123.jsonl
-└── checkpoints/         # Snapshots de código para rollback antes de ferramentas de risco
+└── checkpoints/         # Reservado para checkpoints futuros
 ```
 
 ### B. Diretório Global do Usuário (`~/.openheinerss/`)
@@ -109,13 +109,11 @@ Localizado na pasta home do usuário:
 
 O Openheinerss inclui um motor de diagnóstico (`openheinerss doctor`):
 - **Diagnóstico Proativo**: Analisa o ambiente antes da execução e detecta a presença de Node.js, binários de CLI (`claude`, `opencode`), Docker e chaves de API válidas.
-- **Resolução Guiada de Erros**: Se um pré-requisito faltar, o protocolo JSON-RPC emite um erro enriquecido com a chave `suggestedFix` e comando de resolução automática (`openheinerss setup <harness>`).
+- **Resolução de Erros**: Se um pré-requisito faltar, o protocolo pode emitir `suggestedFix`. Não existe comando automático `openheinerss setup`.
 
 ---
 
 ## 4. Hub Centralizado de Model Context Protocol (MCP)
 
-Em vez de delegar a configuração de MCP para cada CLI separadamente:
-- O Openheinerss Go Core atua como o **Host MCP Central**.
-- Ele lê `.openheinerss/mcp.json`, instancia os servidores MCP locais (via subprocesso stdio) ou remotos (via SSE).
+O Openheinerss mantém uma configuração central em `.openheinerss/mcp.json`, editada por `mcp list` e `mcp add`. Hoje ele não atua como host MCP, não instancia servidores e não injeta ferramentas nos harnesses.
 - As ferramentas descobertas são convertidas e injetadas no harness em execução, garantindo que qualquer motor (Claude Code, OpenCode, Codex) tenha acesso às mesmas ferramentas sem duplicar configurações.

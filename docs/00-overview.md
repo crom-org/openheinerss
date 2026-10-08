@@ -33,8 +33,9 @@ Um único binário Go compilado nativamente, sem dependências pesadas de runtim
 ### 2. SDK Universal Multilinguagem (Agnóstico)
 Você não precisa reescrever sua interface se mudar a linguagem da sua aplicação. O Openheinerss se comunica via:
 - **STDIO (JSON-RPC 2.0)**: Ideal para plugins de IDE, CLIs e wrappers rápidos.
-- **IPC / Unix Sockets**: Comunicação ultrarrápida local entre processos.
 - **WebSocket / Server**: Perfeito para interfaces Web, Tauri, Electron e aplicativos mobile.
+
+O transporte local implementado é STDIO; o transporte de rede implementado é WebSocket. IPC/Unix socket não faz parte do produto atual.
 
 Qualquer linguagem (Node.js, TypeScript, Python, Rust, Go, C#, PHP) pode consumir o SDK do Openheinerss em minutos.
 

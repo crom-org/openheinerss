@@ -4,6 +4,18 @@ Pedido: "Eu quero o Open Harness completo" — comparar o que README.md, `docs/`
 
 Método: leitura de toda a documentação (2.659 linhas), greps em `cmd/`, `pkg/`, `sdk/`, e execução do binário compilado (`go build -o /tmp/oh-lacunas ./cmd/openheinerss`), com `--help` da raiz e de todos os subcomandos. Nenhum arquivo de código foi alterado. Nenhum segredo impresso.
 
+## Atualização da etapa 4b — resolvido pela documentação
+
+Marcados como resolvidos documentalmente em 08/10/2026:
+
+- [x] `documentacao/` deixou de duplicar o conteúdo: os capítulos antigos foram removidos e o README aponta para `docs/`.
+- [x] A especificação oficial é `docs/02-protocol-spec.md`; os nomes incorretos (`session.start`, `session.permission`, `doctor.run`, `session.resume`, `severity`) não são mais publicados.
+- [x] O manual único [`docs/09-cli.md`](09-cli.md) é gerado de `--help` por `openheinerss docs` e o teste `TestManualCLIAtualizado` falha quando diverge.
+- [x] README e docs agora dizem explicitamente que cache Anthropic, transcript automático, checkpoints/rollback, IPC, host MCP, OpenCode HTTP API e classificador universal de permissões não estão implementados.
+- [x] README e docs registram a implementação real: Codex via `codex exec --json`, permissões emitidas por `claude-code`/`mock`, cotas locais, `rodar` e instâncias custom.
+
+Os itens de implementação que continuam parciais ou ausentes permanecem registrados como tal em [`docs/05-roadmap.md`](05-roadmap.md); não são promessas do produto.
+
 Comandos reais do binário (`/tmp/oh-lacunas --help`, `cmd/openheinerss/main.go:53-62`):
 `completion`, `doctor`, `harness {add,list,test}`, `init`, `limites`, `mcp {add,list}`, `motores`, `rodar`, `run`, `serve`, `version`.
 
