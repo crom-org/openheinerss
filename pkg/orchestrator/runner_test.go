@@ -212,3 +212,24 @@ func TestMissaoExecutaNaRaizDoProjeto(t *testing.T) {
 		t.Fatalf("CWD da missão: %q; esperado %q", strings.TrimSpace(string(b)), root)
 	}
 }
+
+func TestTextoDoAgenteFalandoDeCotaNaoTrocaDeMotor(t *testing.T) {
+	root := t.TempDir()
+	for _, a := range [][]string{{"init", "-q", "-b", "main"}, {"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"}} {
+		if out, err := exec.Command("git", append([]string{"-C", root}, a...)...).CombinedOutput(); err != nil {
+			t.Fatal(string(out))
+		}
+	}
+	agents := filepath.Join(root, ".claude", "agentes")
+	os.MkdirAll(filepath.Join(agents, "prompts"), 0755)
+	os.WriteFile(filepath.Join(agents, "prompts", "texto.md"), []byte("x"), 0644)
+	script := filepath.Join(root, "texto.sh")
+	os.WriteFile(script, []byte("#!/bin/sh\nread p\nprintf '%s\\n' '{\"type\":\"text\",\"text\":\"implementei a parada por SEM COTA e quota exceeded\"}'\nprintf '%s\\n' '{\"type\":\"end\"}'\n"), 0755)
+	if err := harness.RegisterCustom(harness.CustomSpec{Name: "texto-teste", Command: script}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Run(context.Background(), root, Options{Name: "texto", Motor: "texto-teste", AgentsDir: agents, MaxAgents: 99})
+	if err != nil || res.Code != 0 || res.Attempts != 1 {
+		t.Fatalf("texto sobre cota virou falta de cota: err=%v código=%d tentativas=%d", err, res.Code, res.Attempts)
+	}
+}

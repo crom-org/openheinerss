@@ -314,8 +314,8 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				if line != "" {
 					write(line)
 				}
-				// Cota: só em erros e texto do agente; saídas de ferramentas (arquivos lidos) não contam.
-				if (ev.Type == harness.EventError || ev.Type == harness.EventText) && quota != nil && quota.MatchString(line) {
+				// Cota só em eventos de erro: o texto do agente pode falar de "cota" sem estar sem cota (achado real na etapa 6).
+				if ev.Type == harness.EventError && quota != nil && quota.MatchString(line) {
 					quotaHit = true
 					if quotaNotice == "" {
 						quotaNotice = quotaResetNotice(line)
