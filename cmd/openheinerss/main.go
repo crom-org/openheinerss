@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/crom-org/openheinerss/pkg/harness/process"
 	"net"
 	"os"
 	"os/signal"
@@ -44,6 +45,13 @@ var (
 )
 
 func main() {
+	// Subcomando oculto: supervisiona um motor (grupo de processos, Pdeathsig). Sem cobra nem instâncias.
+	if len(os.Args) > 1 && os.Args[1] == process.SupervisorArg {
+		os.Exit(process.RunSupervisor(os.Args[2:]))
+	}
+	if exe, err := os.Executable(); err == nil {
+		process.UseSupervisor(exe)
+	}
 	if cwd, err := os.Getwd(); err == nil {
 		if err := carregarInstancias(cwd); err != nil {
 			fmt.Fprintf(os.Stderr, "Aviso: %v\n", err)

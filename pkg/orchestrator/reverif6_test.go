@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -57,5 +58,28 @@ func TestSextaVerificacaoNomeLongoTemErroClaro(t *testing.T) {
 	_, err := Run(context.Background(), root, Options{Name: strings.Repeat("a", 81), Motor: "mock", AgentsDir: agents, PromptText: "x"})
 	if err == nil || !strings.Contains(err.Error(), "longo demais") {
 		t.Fatalf("esperava erro de nome longo, veio %v", err)
+	}
+}
+
+func TestSetimaVerificacaoPastaAgentesSymlinkComDoisNiveisInexistentes(t *testing.T) {
+	root, _ := repoFixture(t)
+	fora := t.TempDir()
+	link := filepath.Join(root, "link-r7")
+	if err := os.Symlink(fora, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ValidateAgentsDir(root, filepath.Join("link-r7", "inexistente", "agentes")); err == nil || !strings.Contains(err.Error(), "fora do repositório") {
+		t.Fatalf("symlink para fora com dois níveis inexistentes foi aceito: %v", err)
+	}
+	if _, err := ValidateAgentsDir(root, filepath.Join("novo", "a", "b")); err != nil {
+		t.Fatalf("caminho novo dentro do repositório deveria valer: %v", err)
+	}
+}
+
+func TestSetimaVerificacaoPromptVazioEhFalha(t *testing.T) {
+	root, agents := repoFixture(t)
+	res, err := Run(context.Background(), root, Options{Name: "vazio-r7", Motor: "mock", AgentsDir: agents, PromptText: "   ", SemRegras: true, MaxAgents: 9})
+	if err == nil && res.Code == 0 {
+		t.Fatal("prompt vazio deveria falhar")
 	}
 }

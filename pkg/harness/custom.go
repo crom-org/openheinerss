@@ -400,6 +400,9 @@ func (c *customHarness) Start(ctx context.Context, cfg SessionConfig) error {
 	return nil
 }
 func (c *customHarness) SendPrompt(ctx context.Context, text string, _ []protocol.Attachment) error {
+	if strings.TrimSpace(text) == "" {
+		return fmt.Errorf("harness custom '%s': prompt vazio recebido", c.Name())
+	}
 	c.mu.Lock()
 	if c.stopped {
 		c.mu.Unlock()
