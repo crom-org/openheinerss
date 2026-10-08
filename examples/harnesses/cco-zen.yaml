@@ -1,0 +1,7 @@
+name: cco-zen
+displayName: CCO via OpenCode Zen (exemplo)
+base: claude-code
+env:
+  ANTHROPIC_BASE_URL: https://opencode.ai/zen/v1
+model: anthropic/claude-sonnet-4
+prompt: argument

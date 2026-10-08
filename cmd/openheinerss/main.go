@@ -178,7 +178,6 @@ func newDocsCmd() *cobra.Command {
 				if !bytes.Equal(existing, data) {
 					return fmt.Errorf("%s está desatualizado; execute 'openheinerss docs'", path)
 				}
-				fmt.Printf("Manual atualizado: %s\n", path)
 				return nil
 			}
 			if err := os.WriteFile(path, data, 0644); err != nil {
@@ -498,8 +497,8 @@ func newRunCmd() *cobra.Command {
 }
 
 func newRodarCmd() *cobra.Command {
-	var modelo, esforco, prompt, texto, pasta, branchBase string
-	var retomar bool
+	var modelo, esforco, prompt, texto, pasta, branchBase, conta, regras, arquivoChaves string
+	var retomar, semRegras, seco bool
 	var carga, cargaAbaixo float64
 	var maxAgentes, tentativas int
 	var cotaMax float64
@@ -521,7 +520,7 @@ func newRodarCmd() *cobra.Command {
 			if cargaAbaixo > 0 {
 				carga = cargaAbaixo
 			}
-			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, PromptFile: prompt, PromptText: texto, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog})
+			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog})
 			if err != nil && res.Name == "" {
 				return err
 			}
@@ -539,6 +538,8 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().StringVar(&modelo, "model", "", "Alias em inglês de --modelo")
 	cmd.Flags().StringVar(&esforco, "esforco", "", "Esforço de raciocínio")
 	cmd.Flags().StringVar(&esforco, "effort", "", "Alias em inglês de --esforco")
+	cmd.Flags().StringVar(&conta, "conta", "", "Conta/provedor da instância")
+	cmd.Flags().StringVar(&conta, "account", "", "Alias em inglês de --conta")
 	cmd.Flags().StringVar(&prompt, "prompt", "", "Arquivo de prompt alternativo")
 	cmd.Flags().StringVar(&texto, "texto", "", "Prompt em texto, no lugar do arquivo prompts/<nome>.md")
 	cmd.Flags().StringVar(&texto, "text", "", "Alias em inglês de --texto")
@@ -561,6 +562,16 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().Float64Var(&cotaMax, "quota-max", 0, "Alias em inglês de --cota-max")
 	cmd.Flags().StringVar(&eventosLog, "eventos-log", "", "Acrescenta FIM ao arquivo de eventos (desligado por padrão)")
 	cmd.Flags().StringVar(&eventosLog, "events-log", "", "Alias em inglês de --eventos-log")
+	cmd.Flags().BoolVar(&seco, "seco", false, "Mostra o comando sem executá-lo")
+	cmd.Flags().BoolVar(&seco, "dry-run", false, "Alias em inglês de --seco")
+	cmd.Flags().StringVar(&regras, "regras", "", "Arquivo de regras do prompt")
+	cmd.Flags().StringVar(&regras, "rules", "", "Alias em inglês de --regras")
+	cmd.Flags().BoolVar(&semRegras, "sem-regras", false, "Não acrescenta regras padrão ao prompt")
+	cmd.Flags().BoolVar(&semRegras, "no-rules", false, "Alias em inglês de --sem-regras")
+	cmd.Flags().BoolVar(&semRegras, "sem-regras-padrao", false, "Desliga as regras padrão do prompt")
+	cmd.Flags().BoolVar(&semRegras, "no-default-rules", false, "Alias em inglês de --sem-regras-padrao")
+	cmd.Flags().StringVar(&arquivoChaves, "arquivo-chaves", "", "Arquivo opcional de variáveis secretas (não imprime valores)")
+	cmd.Flags().StringVar(&arquivoChaves, "keys-file", "", "Alias em inglês de --arquivo-chaves")
 	return cmd
 }
 

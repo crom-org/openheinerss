@@ -23,6 +23,10 @@ type ProjectConfig struct {
 	DefaultMode    string `json:"default_mode" yaml:"default_mode"`
 	PermissionMode string `json:"permission_mode" yaml:"permission_mode"`
 	EventosLog     string `json:"eventos_log" yaml:"eventos_log"`
+	// RegrasPadrao permite substituir o arquivo de regras padrão do runner.
+	// SemRegrasPadrao desliga as regras curtas embutidas e o arquivo configurado.
+	RegrasPadrao    string `json:"regras_padroes" yaml:"regras_padroes"`
+	SemRegrasPadrao bool   `json:"sem_regras_padroes" yaml:"sem_regras_padroes"`
 }
 
 // LoadProject lê a configuração opcional do projeto. Arquivo ausente não é erro.

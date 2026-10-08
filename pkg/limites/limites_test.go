@@ -51,10 +51,10 @@ func TestObterLêCodexEClaudePorInstancia(t *testing.T) {
 			claude = &r.Instancias[i]
 		}
 	}
-	if codex == nil || len(codex.Janelas) != 2 || codex.Janelas[0].Percentual != 42.5 {
+	if codex == nil || len(codex.Janelas) != 1 || codex.Janelas[0].Percentual != 81 {
 		t.Fatalf("codex inesperado: %+v", codex)
 	}
-	if claude == nil || len(claude.Janelas) != 2 || claude.Janelas[0].Percentual != 12 {
+	if claude == nil || len(claude.Janelas) != 1 || claude.Janelas[0].Percentual != 34 {
 		t.Fatalf("claude inesperado: %+v", claude)
 	}
 	if strings.Contains(status, "token") {
@@ -87,5 +87,16 @@ func TestMaiorPercentualIgnoraJanelaJaRenovada(t *testing.T) {
 	}
 	if _, ok := maiorPercentual(Instancia{Janelas: i.Janelas[:1]}, agora); ok {
 		t.Fatal("só janela vencida não deve contar como leitura")
+	}
+}
+
+func TestObterRemoveJanelaVencidaDaExibicao(t *testing.T) {
+	agora := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
+	janelas := janelasVigentes([]Janela{
+		{Nome: "vencida", Percentual: 99, ReiniciaEm: agora.Add(-time.Minute).Format(time.RFC3339)},
+		{Nome: "vigente", Percentual: 12, ReiniciaEm: agora.Add(time.Hour).Format(time.RFC3339)},
+	}, agora)
+	if len(janelas) != 1 || janelas[0].Nome != "vigente" || janelas[0].Percentual != 12 {
+		t.Fatalf("janelas exibidas: %+v", janelas)
 	}
 }

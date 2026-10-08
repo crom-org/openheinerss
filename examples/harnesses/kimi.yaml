@@ -1,0 +1,5 @@
+name: kimi
+displayName: Kimi (exemplo)
+command: kimi
+args: [--auto, -p, "{{prompt}}"]
+prompt: argument

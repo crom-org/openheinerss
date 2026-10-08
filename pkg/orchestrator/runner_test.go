@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -299,11 +300,61 @@ func TestRunComPromptEmTextoNaoPrecisaDeArquivo(t *testing.T) {
 		t.Fatal(err)
 	}
 	p, err := readPrompt(agents, "x", "", "faça isso")
-	if err != nil || p != "REGRAS-DO-PROJETO\n\nfaça isso" {
+	if err != nil || !strings.Contains(p, defaultPromptRules) || !strings.Contains(p, "REGRAS-DO-PROJETO") || !strings.HasSuffix(p, "faça isso") {
 		t.Fatalf("prompt = %q, err = %v", p, err)
+	}
+	sem, err := readPromptOptions(agents, "x", "", "faça isso", "", "", true)
+	if err != nil || strings.Contains(sem, defaultPromptRules) {
+		t.Fatalf("regras padrão não foram desligadas: %q (err=%v)", sem, err)
 	}
 	res, err := Run(context.Background(), root, Options{Name: "texto-inline", Motor: "mock", AgentsDir: agents, PromptText: "responda OK", Attempts: 1})
 	if err != nil || res.Code != 0 {
 		t.Fatalf("err=%v código=%d", err, res.Code)
+	}
+}
+
+func TestPromptRegrasPadraoConfiguraveis(t *testing.T) {
+	_, agents := repoFixture(t)
+	rules := filepath.Join(t.TempDir(), "regras.txt")
+	if err := os.WriteFile(rules, []byte("REGRA CONFIGURADA"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	p, err := readPromptOptions(agents, "x", "", "prompt", "", rules, false)
+	if err != nil || !strings.Contains(p, "REGRA CONFIGURADA") || strings.Contains(p, defaultPromptRules) {
+		t.Fatalf("regras configuráveis: %q (err=%v)", p, err)
+	}
+}
+
+func TestWriteMetaConcorrenteNaoUsaTemporarioCompartilhado(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agente.meta.json")
+	const n = 32
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			if err := writeMeta(path, meta{Motor: "teste", Tentativa: i + 1, PID: i + 1}); err != nil {
+				t.Errorf("escrita %d: %v", i, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	var got meta
+	if err := json.Unmarshal([]byte(mustRead(t, path)), &got); err != nil {
+		t.Fatalf("meta final inválido: %v", err)
+	}
+	if got.Motor != "teste" || got.Tentativa < 1 || got.Tentativa > n {
+		t.Fatalf("meta final inesperado: %+v", got)
+	}
+}
+
+func TestRunSecoNaoCriaWorktree(t *testing.T) {
+	root, agents := repoFixture(t)
+	res, err := Run(context.Background(), root, Options{Name: "seco", Motor: "codex", AgentsDir: agents, PromptText: "não executar", Seco: true})
+	if err != nil || res.Code != 0 {
+		t.Fatalf("seco: resultado=%+v erro=%v", res, err)
+	}
+	if _, err := os.Stat(filepath.Join(agents, "seco")); !os.IsNotExist(err) {
+		t.Fatalf("modo seco criou worktree: %v", err)
 	}
 }
