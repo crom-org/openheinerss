@@ -31,16 +31,20 @@ const continuation = "\n\n--- CONTINUAÇÃO ---\nUma execução anterior desta M
 
 type Options struct {
 	Name, Motor, Model, Effort, PromptFile string
-	Retomar                                bool
-	AgentsDir, BranchBase                  string
-	MaxLoad                                float64
-	MaxAgents, Attempts                    int
-	QuotaMax                               float64
-	Load                                   func() (float64, error)
-	Sleep                                  func(time.Duration)
-	Now                                    func() time.Time
+	// PromptText é o prompt em texto; quando preenchido, vale no lugar de PromptFile e de prompts/<nome>.md.
+	PromptText            string
+	Retomar               bool
+	AgentsDir, BranchBase string
+	MaxLoad               float64
+	MaxAgents, Attempts   int
+	QuotaMax              float64
+	Load                  func() (float64, error)
+	Sleep                 func(time.Duration)
+	Now                   func() time.Time
 	// OnEvent recebe os eventos de orquestração (opcional; o CLI não usa).
 	OnEvent func(Evento)
+	// ViaServidor marca execuções lançadas por `serve`: o PID do meta.json é o do servidor.
+	ViaServidor bool
 	// Decidir responde pedidos de permissão do agente; nil aprova sempre.
 	Decidir func(ctx context.Context, q Pergunta) (allow bool, msg string)
 }
@@ -93,9 +97,13 @@ type meta struct {
 	Tentativa int    `json:"tentativa"`
 	Inicio    string `json:"inicio"`
 	PID       int    `json:"pid"`
+	Servidor  bool   `json:"servidor,omitempty"`
 	Fim       string `json:"fim,omitempty"`
 	Codigo    *int   `json:"codigo,omitempty"`
 }
+
+// nomeValido impede que o nome do agente saia da pasta de agentes (worktree, log e meta usam o nome em caminhos).
+var nomeValido = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 func (o Options) emit(e Evento) {
 	if o.OnEvent != nil {
@@ -169,6 +177,9 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	if o.Name == "" || o.Motor == "" {
 		return Result{}, fmt.Errorf("rodar exige nome e instância/harness")
 	}
+	if !nomeValido.MatchString(o.Name) {
+		return Result{}, fmt.Errorf("nome de agente inválido %q: use letras, números, '.', '_' ou '-' (sem barras)", o.Name)
+	}
 	if o.MaxLoad == 0 {
 		o.MaxLoad = envFloat("OPENHEINERSS_CARGA_MAXIMA", 0)
 	}
@@ -191,11 +202,12 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	if err := waitLimits(ctx, agents, o); err != nil {
 		return Result{}, err
 	}
-	work, err := prepareWorktree(ctx, repo, agents, o.Name, o.BranchBase)
+	// O prompt é lido antes: sem ele não vale criar worktree e branch que ninguém vai usar.
+	prompt, err := readPrompt(agents, o.Name, o.PromptFile, o.PromptText)
 	if err != nil {
 		return Result{}, err
 	}
-	prompt, err := readPrompt(agents, o.Name, o.PromptFile)
+	work, err := prepareWorktree(ctx, repo, agents, o.Name, o.BranchBase)
 	if err != nil {
 		return Result{}, err
 	}
@@ -209,8 +221,10 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	// Quem acompanha o log (tail, agentes, servidor) lê pelo cache do sistema. Nada de fsync:
+	// com o disco ocupado ele levava segundos por chamada e atrasava até o fim do processo.
 	defer lf.Close()
-	write := func(s string) { _, _ = lf.WriteString(s); _ = lf.Sync() }
+	write := func(s string) { _, _ = lf.WriteString(s) }
 
 	profile, err := motor.Resolve(o.Motor, o.Model, o.Effort)
 	if err != nil {
@@ -230,11 +244,13 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	var lastErr error
 	finalCode := 1
 	attempts := 0
+	quotaSkipped, ran := false, false
 	resumeID, resumeMotor := "", ""
 	for i, candidate := range candidates {
 		attempts = i + 1
 		if o.QuotaMax > 0 {
 			if percentual, ok := limites.Percentual(candidate); ok && percentual >= o.QuotaMax {
+				quotaSkipped = true
 				lastErr = fmt.Errorf("cota de %s em %.1f%% (limite %.1f%%)", candidate, percentual, o.QuotaMax)
 				write(fmt.Sprintf("pulando %s: %v\n", candidate, lastErr))
 				o.emit(Evento{Tipo: EvErro, Motor: candidate, Mensagem: lastErr.Error(), Cota: true})
@@ -263,11 +279,12 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		if modeloMeta == "" {
 			modeloMeta = "padrão"
 		}
-		m := meta{Projeto: filepath.Base(repo), Motor: candidate, Modelo: modeloMeta, Esforco: effort, Conta: candidate, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid()}
+		m := meta{Projeto: filepath.Base(repo), Motor: candidate, Modelo: modeloMeta, Esforco: effort, Conta: candidate, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid(), Servidor: o.ViaServidor}
 		metaPath := filepath.Join(agents, "logs", o.Name+".meta.json")
 		if err := writeMeta(metaPath, m); err != nil {
 			return Result{}, err
 		}
+		ran = true
 		write(fmt.Sprintf("### tentativa %d (%s) motor %s\n", attempts, o.Now().Format("15:04"), candidate))
 		o.emit(Evento{Tipo: EvInicio, Motor: candidate, Modelo: modeloMeta, Tentativa: attempts, Worktree: work})
 		h, e := harness.Create(candidate, harness.ModeCLI)
@@ -360,7 +377,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				parado := 130
 				m.Fim, m.Codigo = o.Now().Format(time.RFC3339), &parado
 				_ = writeMeta(metaPath, m)
-				write(fmt.Sprintf("FIM %s código %d\n", o.Now().Format("15:04"), parado))
+				write(fmt.Sprintf("\nFIM %s código %d\n", o.Now().Format("15:04"), parado))
 				o.emit(Evento{Tipo: EvFim, Motor: candidate, Codigo: parado, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: relatorio(work)})
 				return Result{o.Name, work, logPath, metaPath, attempts, parado}, ctx.Err()
 			}
@@ -391,12 +408,15 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		write("saiu com erro; tentando continuar...\n")
 		o.emit(Evento{Tipo: EvErro, Motor: candidate, Mensagem: lastErr.Error(), Cota: quotaHit})
 	}
+	if quotaSkipped && !ran {
+		finalCode = 2 // todos os motores acima do limite de cota: mesmo código de "sem cota"
+	}
 	if lastErr == nil {
 		if finalCode != 2 {
 			lastErr = fmt.Errorf("nenhuma tentativa executada")
 		}
 	}
-	m := meta{Projeto: filepath.Base(repo), Motor: o.Motor, Conta: o.Motor, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid()}
+	m := meta{Projeto: filepath.Base(repo), Motor: o.Motor, Conta: o.Motor, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid(), Servidor: o.ViaServidor}
 	code := finalCode
 	if quotaHitAtEnd(lastErr) {
 		code = 2
@@ -477,14 +497,17 @@ func gitRoot(cwd string) (string, error) {
 	}
 	return strings.TrimSpace(string(out)), nil
 }
-func readPrompt(agents, name, explicit string) (string, error) {
-	prompt := explicit
-	if prompt == "" {
-		prompt = filepath.Join(agents, "prompts", name+".md")
-	}
-	b, err := os.ReadFile(prompt)
-	if err != nil {
-		return "", fmt.Errorf("abrir prompt %s: %w", prompt, err)
+func readPrompt(agents, name, explicit, text string) (string, error) {
+	b := []byte(text)
+	if text == "" {
+		prompt := explicit
+		if prompt == "" {
+			prompt = filepath.Join(agents, "prompts", name+".md")
+		}
+		var err error
+		if b, err = os.ReadFile(prompt); err != nil {
+			return "", fmt.Errorf("abrir prompt %s: %w", prompt, err)
+		}
 	}
 	rules := "_regras.md"
 	if strings.HasPrefix(name, "missao-") {
@@ -598,6 +621,9 @@ func activeAgents(agents string) (int, error) {
 }
 func load1() (float64, error) {
 	b, err := os.ReadFile("/proc/loadavg")
+	if os.IsNotExist(err) {
+		return 0, nil // sem /proc (macOS, Windows): o limite de carga não pode ser medido
+	}
 	if err != nil {
 		return 0, err
 	}

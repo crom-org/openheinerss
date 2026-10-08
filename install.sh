@@ -3,14 +3,16 @@ set -euo pipefail
 
 repo="crom-org/openheinerss"
 versao=""
+local=0
 base_url="${OPENHEINERSS_BASE_URL:-}"
 destino="${OPENHEINERSS_INSTALL_DIR:-${HOME}/.local/bin}"
 
 uso() {
   cat <<'EOF'
-Uso: install.sh [--versao VERSAO]
+Uso: install.sh [--versao VERSAO] [--local]
 
-Instala o binário Openheinerss em ~/.local/bin. A versão pode ser informada
+Instala o binário Openheinerss em ~/.local/bin. Com --local, compila o clone
+atual (go build) em vez de baixar o release. A versão pode ser informada
 com ou sem o prefixo v. OPENHEINERSS_BASE_URL permite testar um diretório de
 artefatos local (por exemplo, um snapshot servido por HTTP).
 EOF
@@ -22,6 +24,10 @@ while [[ $# -gt 0 ]]; do
       [[ $# -ge 2 ]] || { echo "Erro: --versao exige um valor." >&2; exit 2; }
       versao="$2"
       shift 2
+      ;;
+    --local)
+      local=1
+      shift
       ;;
     -h|--help)
       uso
@@ -60,7 +66,7 @@ fi
 
 fallback_local() {
   if [[ -f go.mod && -d cmd/openheinerss ]]; then
-    echo "Release indisponível; compilando o Openheinerss no repositório atual..." >&2
+    [[ "$local" -eq 1 ]] || echo "Release indisponível; compilando o Openheinerss no repositório atual..." >&2
     mkdir -p "$destino"
     go build -o "$destino/openheinerss" ./cmd/openheinerss
     chmod 0755 "$destino/openheinerss"
@@ -69,6 +75,10 @@ fallback_local() {
   fi
   return 1
 }
+
+if [[ "$local" -eq 1 ]]; then
+  fallback_local || { echo "Erro: --local exige executar o script na raiz do clone (go.mod e cmd/openheinerss)." >&2; exit 1; }
+fi
 
 if [[ "$tem_baixador" -eq 0 ]]; then
   fallback_local || { echo "Erro: curl/wget não encontrado e não há repositório Go para fallback." >&2; exit 1; }

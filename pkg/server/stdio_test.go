@@ -89,3 +89,21 @@ func TestStdioServerProtocol(t *testing.T) {
 
 	_ = inW.Close()
 }
+
+func TestStdioServerEncerraComSinalMesmoSemEntrada(t *testing.T) {
+	entrada, _ := io.Pipe() // nunca recebe linha nem EOF
+	srv := server.NewStdioServer(session.NewManager(), entrada, io.Discard)
+	ctx, cancel := context.WithCancel(context.Background())
+	feito := make(chan error, 1)
+	go func() { feito <- srv.Run(ctx) }()
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	select {
+	case err := <-feito:
+		if err == nil {
+			t.Fatal("esperava o erro do contexto cancelado")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("o servidor STDIO ignorou o cancelamento (SIGTERM não encerrava o serve --stdio)")
+	}
+}

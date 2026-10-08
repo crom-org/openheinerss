@@ -233,3 +233,37 @@ func TestTextoDoAgenteFalandoDeCotaNaoTrocaDeMotor(t *testing.T) {
 		t.Fatalf("texto sobre cota virou falta de cota: err=%v código=%d tentativas=%d", err, res.Code, res.Attempts)
 	}
 }
+
+func TestRunRejeitaNomeQueSaiDaPasta(t *testing.T) {
+	root, agents := repoFixture(t)
+	for _, nome := range []string{"../fora", "a/b", ".oculto", "com espaço"} {
+		if _, err := Run(context.Background(), root, Options{Name: nome, Motor: "mock", AgentsDir: agents}); err == nil {
+			t.Errorf("nome %q deveria ser recusado", nome)
+		}
+	}
+}
+
+func TestRunSemPromptNaoCriaWorktree(t *testing.T) {
+	root, agents := repoFixture(t)
+	if _, err := Run(context.Background(), root, Options{Name: "sem-prompt", Motor: "mock", AgentsDir: agents}); err == nil {
+		t.Fatal("esperava erro por falta do prompt")
+	}
+	if _, err := os.Stat(filepath.Join(agents, "sem-prompt")); err == nil {
+		t.Error("worktree criada mesmo sem prompt")
+	}
+}
+
+func TestRunComPromptEmTextoNaoPrecisaDeArquivo(t *testing.T) {
+	root, agents := repoFixture(t)
+	if err := os.WriteFile(filepath.Join(agents, "prompts", "_regras.md"), []byte("REGRAS-DO-PROJETO"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	p, err := readPrompt(agents, "x", "", "faça isso")
+	if err != nil || p != "REGRAS-DO-PROJETO\n\nfaça isso" {
+		t.Fatalf("prompt = %q, err = %v", p, err)
+	}
+	res, err := Run(context.Background(), root, Options{Name: "texto-inline", Motor: "mock", AgentsDir: agents, PromptText: "responda OK", Attempts: 1})
+	if err != nil || res.Code != 0 {
+		t.Fatalf("err=%v código=%d", err, res.Code)
+	}
+}

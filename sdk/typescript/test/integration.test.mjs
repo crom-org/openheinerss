@@ -11,7 +11,7 @@ test("SDK TypeScript conversa com o servidor real", async () => {
     await client.subscribeEvents({ projeto: "teste-ts" }, { "orq.fim": () => {} });
     const limits = await client.getLimits();
     assert.ok(Array.isArray(limits.instancias));
-    const run = await client.run({ nome: "teste-ts", motor: "mock", prompt: "responda OK", cwd: process.cwd(), projeto: "teste-ts" });
+    const run = await client.run({ nome: "teste-ts", motor: "mock", texto: "responda OK", cwd: process.cwd(), projeto: "teste-ts" });
     assert.match(run.id, /^rodar-/);
     await client.stopRun({ id: run.id });
     assert.ok(Array.isArray((await client.listRuns({ projeto: "teste-ts" })).agentes));

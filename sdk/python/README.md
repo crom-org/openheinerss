@@ -17,7 +17,7 @@ from openheinerss import Agent
 agent = Agent(harness="mock")  # OPENHEINERSS_PORTA é respeitada pelo servidor; padrão: 4820
 agent.registerHarness({"name": "meu-harness", "base": "mock"})
 agent.subscribeEvents(lambda evento: print("orq:", evento))
-execucao = agent.run({"nome": "teste", "motor": "mock", "prompt": "responda OK", "cwd": "."})
+execucao = agent.run({"nome": "teste", "motor": "mock", "texto": "responda OK", "cwd": "."})
 print(agent.listHarnesses(), agent.getLimits(), execucao)
 
 # Streaming de pensamentos e texto

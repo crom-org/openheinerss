@@ -24,7 +24,7 @@ const agent = new Openheinerss({
 // A porta WebSocket padrão é 4820; OPENHEINERSS_PORTA ou port também funcionam.
 await agent.registerHarness({ name: "meu-harness", base: "mock" });
 await agent.subscribeEvents({}, { "orq.fim": (evento) => console.log("fim", evento) });
-const missão: RunOptions = { nome: "teste", motor: "mock", prompt: "responda OK", cwd: process.cwd() };
+const missão: RunOptions = { nome: "teste", motor: "mock", texto: "responda OK", cwd: process.cwd() };
 const execução = await agent.run(missão);
 console.log(await agent.listRuns(), await agent.getLimits(), execução);
 

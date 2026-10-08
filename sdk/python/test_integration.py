@@ -11,7 +11,7 @@ class SDKIntegrationTest(unittest.TestCase):
             eventos = []
             agent.subscribeEvents(eventos.append, projeto="teste-py")
             self.assertIn("instancias", agent.getLimits())
-            run = agent.run({"nome": "teste-py", "motor": "mock", "prompt": "responda OK", "cwd": os.getcwd(), "projeto": "teste-py"})
+            run = agent.run({"nome": "teste-py", "motor": "mock", "texto": "responda OK", "cwd": os.getcwd(), "projeto": "teste-py"})
             self.assertTrue(run["id"].startswith("rodar-"))
             agent.stopRun(id=run["id"])
             self.assertIn("agentes", agent.listRuns(projeto="teste-py"))

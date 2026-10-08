@@ -85,19 +85,26 @@ func runHarnessTodos(cmd *cobra.Command, prompt string, jsonOutput bool, skip st
 		}
 		results = append(results, runHarnessTest(cmd.Context(), tc, prompt, timeout))
 	}
+	// Código de saída 1 quando algum teste não deu OK; a matriz sai completa de qualquer jeito.
+	var saida error
+	for _, r := range results {
+		if r.Resultado != "OK" {
+			saida = codigoSaida(1)
+		}
+	}
 	if jsonOutput {
 		data, err := json.MarshalIndent(results, "", "  ")
 		if err != nil {
 			return err
 		}
 		fmt.Println(string(data))
-		return nil
+		return saida
 	}
 	fmt.Println("nome | base | modo | resultado | tempo | tokens | motivo")
 	for _, r := range results {
 		fmt.Printf("%s | %s | %s | %s | %s | %d | %s\n", r.Nome, r.Base, r.Modo, r.Resultado, formatDuration(r.TempoMS), r.Tokens, r.Motivo)
 	}
-	return nil
+	return saida
 }
 
 func runHarnessTest(parent context.Context, tc harnessTestCase, prompt string, timeout time.Duration) harnessTestResult {
@@ -156,6 +163,10 @@ func runHarnessTest(parent context.Context, tc harnessTestCase, prompt string, t
 					} else {
 						failure = fmt.Sprint(event.Payload)
 					}
+				}
+			case harness.EventPermission:
+				if p, ok := event.Payload.(protocol.PermissionRequestParams); ok {
+					_ = h.RespondPermission(ctx, p.RequestID, false, "harness test não autoriza ferramentas")
 				}
 			case harness.EventComplete:
 				gotComplete = true

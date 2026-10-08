@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,7 +41,15 @@ func (s *Storage) RecordEvent(cwd, sessionID, entryType string, notification *pr
 	return s.Record(cwd, sessionID, entryType, notification, prompt, nil)
 }
 
+// idValido recusa IDs que saem da pasta de sessões (o ID vem do cliente em session.resume).
+func idValido(id string) bool {
+	return id != "" && id != "." && id != ".." && !strings.ContainsAny(id, `/\`+"\x00")
+}
+
 func (s *Storage) Record(cwd, sessionID, entryType string, notification *protocol.Notification, prompt string, sessionConfig interface{}) error {
+	if !idValido(sessionID) {
+		return fmt.Errorf("id de sessão inválido: %q", sessionID)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -76,6 +85,9 @@ func (s *Storage) Record(cwd, sessionID, entryType string, notification *protoco
 
 // LoadSession lê o histórico completo de uma sessão gravada
 func (s *Storage) LoadSession(cwd, sessionID string) ([]TranscriptEntry, error) {
+	if !idValido(sessionID) {
+		return nil, fmt.Errorf("id de sessão inválido: %q", sessionID)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

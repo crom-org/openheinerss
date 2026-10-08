@@ -26,3 +26,5 @@ build/
 .claude/crom-painel/
 .claude/agentes/
 RELATORIO-AGENTE.md
+__pycache__/
+.aider*

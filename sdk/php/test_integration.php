@@ -8,7 +8,7 @@ $names = array_map(fn($h) => $h['id'], $agent->listHarnesses());
 if (!in_array('php-test-harness', $names, true)) throw new RuntimeException('harness não registrado');
 $agent->subscribeEvents(['projeto' => 'teste-php'], ['orq.fim' => fn(array $event) => null]);
 if (!isset($agent->getLimits()['instancias'])) throw new RuntimeException('limites ausentes');
-$run = $agent->run(['nome' => 'teste-php', 'motor' => 'mock', 'prompt' => 'responda OK', 'cwd' => getcwd(), 'projeto' => 'teste-php']);
+$run = $agent->run(['nome' => 'teste-php', 'motor' => 'mock', 'texto' => 'responda OK', 'cwd' => getcwd(), 'projeto' => 'teste-php']);
 if (!str_starts_with($run['id'], 'rodar-')) throw new RuntimeException('rodar não iniciado');
 $agent->stopRun($run['id']);
 if (!isset($agent->listRuns(['projeto' => 'teste-php'])['agentes'])) throw new RuntimeException('lista ausente');

@@ -7,17 +7,17 @@ const JSONRPCVersion = "2.0"
 
 // Standard e Custom Error Codes
 const (
-	CodeParseError                = -32700
-	CodeInvalidRequest            = -32600
-	CodeMethodNotFound            = -32601
-	CodeInvalidParams             = -32602
-	CodeInternalError             = -32603
-	CodeSessionNotFound           = 4001
-	CodeHarnessNotFound           = 4002
-	CodeHarnessDependencyMissing  = 4010
-	CodeAuthTokenMissing          = 4011
-	CodePermissionRejected        = 4020
-	CodeProcessCrashed            = 4030
+	CodeParseError               = -32700
+	CodeInvalidRequest           = -32600
+	CodeMethodNotFound           = -32601
+	CodeInvalidParams            = -32602
+	CodeInternalError            = -32603
+	CodeSessionNotFound          = 4001
+	CodeHarnessNotFound          = 4002
+	CodeHarnessDependencyMissing = 4010
+	CodeAuthTokenMissing         = 4011
+	CodePermissionRejected       = 4020
+	CodeProcessCrashed           = 4030
 )
 
 // Request representa uma chamada RPC cliente -> servidor

@@ -137,9 +137,9 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 		Options:        params.Options.Extra,
 	}
 	// O snapshot é feito antes de o motor receber o primeiro prompt.
+	// Sem checkpoint (pasta somente leitura, por exemplo) a sessão continua, mas o aviso não se perde.
 	if _, err := checkpoint.GetManager().CreateCheckpoint(params.CWD, sessID, "antes do primeiro prompt"); err != nil {
-		cancel()
-		return nil, &protocol.RPCError{Code: protocol.CodeInternalError, Message: fmt.Sprintf("falha ao criar checkpoint: %v", err)}
+		fmt.Fprintf(os.Stderr, "aviso: checkpoint inicial não criado em %s: %v\n", params.CWD, err)
 	}
 
 	if err := h.Start(sessCtx, cfg); err != nil {
@@ -218,10 +218,12 @@ func (m *Manager) ResumeSession(ctx context.Context, params protocol.SessionResu
 	if p := h.ValidatePrerequisites(ctx); !p.Satisfied {
 		return nil, &protocol.RPCError{Code: protocol.CodeHarnessDependencyMissing, Message: strings.Join(p.MissingItems, ", "), Data: protocol.ErrorData{SuggestedFix: p.SuggestedFix}}
 	}
-	if err := h.Start(ctx, cfg); err != nil {
+	// A sessão vive além da requisição que a retomou: o harness usa o contexto da própria sessão.
+	sessCtx, cancel := context.WithCancel(context.Background())
+	if err := h.Start(sessCtx, cfg); err != nil {
+		cancel()
 		return nil, &protocol.RPCError{Code: protocol.CodeInternalError, Message: err.Error()}
 	}
-	sessCtx, cancel := context.WithCancel(context.Background())
 	s := &Session{ID: params.SessionID, Harness: h, Config: cfg, CreatedAt: time.Now(), ctx: sessCtx, cancel: cancel, startedAt: time.Now()}
 	m.mu.Lock()
 	m.sessions[s.ID] = s
@@ -336,8 +338,34 @@ func (m *Manager) ListSessions() []protocol.SessionInfo {
 	return list
 }
 
+// Close encerra todas as sessões abertas (para os processos dos harnesses ao desligar o servidor).
+func (m *Manager) Close() {
+	m.mu.Lock()
+	sessions := make([]*Session, 0, len(m.sessions))
+	for _, s := range m.sessions {
+		sessions = append(sessions, s)
+	}
+	m.mu.Unlock()
+	for _, s := range sessions {
+		s.mu.Lock()
+		s.Running = false
+		if s.cancel != nil {
+			s.cancel()
+		}
+		s.mu.Unlock()
+		_ = s.Harness.Stop()
+	}
+}
+
 func (m *Manager) forwardEvents(s *Session) {
-	for evt := range s.Harness.Events() {
+	events := s.Harness.Events()
+	for {
+		var evt harness.Event
+		select {
+		case evt = <-events:
+		case <-s.ctx.Done():
+			return // sessão abortada: não deixa a goroutine presa num canal que ninguém fecha
+		}
 		var method string
 		switch evt.Type {
 		case harness.EventThinking:

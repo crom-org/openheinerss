@@ -10,11 +10,13 @@ Todo comando e flag do CLI aceita o nome padrão em português e em inglês; `ro
 go build -o openheinerss ./cmd/openheinerss
 ./openheinerss doctor
 ./openheinerss init
-./openheinerss run --harness mock "Analise o repositório"
-./openheinerss harness test mock --prompt "responda OK"
+./openheinerss run --harness mock "Analise o repositório"   # o mock pede permissão: responda s ou N
+./openheinerss harness test mock --prompt "responda OK"     # nega a permissão sozinho e termina em segundos
+./openheinerss rodar demo mock --texto "responda OK"         # missão com worktree, log e meta.json (exige repositório git)
+./openheinerss agentes
 ```
 
-O `mock` é determinístico, offline e não consome tokens. Para conferir todos os comandos e flags do binário instalado, use `./openheinerss docs` ou leia [docs/09-cli.md](docs/09-cli.md). O manual é gerado automaticamente e tem teste de consistência.
+O `mock` é determinístico, offline e não consome tokens. O roteiro completo, passo a passo e com o resultado esperado de cada comando, está em [docs/VERIFICACAO.md](docs/VERIFICACAO.md). Para conferir todos os comandos e flags do binário instalado, use `./openheinerss docs` ou leia [docs/09-cli.md](docs/09-cli.md). O manual é gerado automaticamente e tem teste de consistência.
 
 ## Instalação
 
@@ -41,7 +43,9 @@ Ou baixe manualmente o arquivo `openheinerss_<versão>_<sistema>_<arquitetura>.t
 - Modelos locais são possíveis quando o CLI correspondente os suporta, por exemplo `opencode --model ollama/...` e `aider --model ollama/...`; o Openheinerss não gerencia o KV-cache.
 - `agent.permission_request` é emitido atualmente por `claude-code` e `mock`. O campo `risk` é informativo; não há classificador universal por criticidade. O Codex é executado com bypass de aprovações.
 - O hub MCP mantém a configuração em `.openheinerss/mcp.json`; ele não hospeda servidores nem injeta ferramentas automaticamente nos harnesses.
-- `limites` lê dados locais de cotas de Codex e Claude. `rodar` oferece worktree, log, metadados, retomada, reservas e limites de carga/cota.
+- `limites` lê dados locais de cotas de Codex e Claude. `rodar` oferece worktree, log, metadados, retomada, reservas e limites de carga/cota, e termina com o código do `FIM` (0 ok, 1 erro, 2 sem cota, 130 parado). `agentes` lista, mostra e para os agentes pelos logs.
+- Cada sessão grava o transcript em `.openheinerss/sessions/<id>.jsonl` (base do `session.resume` e de `run --retomar`) e um checkpoint por cópia de arquivos antes do primeiro prompt. Não há rollback automático antes de cada ferramenta.
+- O servidor WebSocket só aceita conexões sem `Origin` ou de origens locais; outras precisam de `OPENHEINERSS_ORIGENS`.
 
 ## Comandos úteis
 
@@ -50,14 +54,16 @@ Ou baixe manualmente o arquivo `openheinerss_<versão>_<sistema>_<arquitetura>.t
 ./openheinerss serve --port 4820
 ./openheinerss run --harness opencode --mode cli --model ollama/qwen2.5-coder:32b "Escreva testes"
 ./openheinerss limites --json
+./openheinerss harness list
+./openheinerss agentes ver <nome>
 ./openheinerss mcp list
 ```
 
-`motores` lista perfis e papéis definidos em `.openheinerss/motores.yaml`, no formato `papel: motor/modelo` e opcionalmente `esforco=low|medium|high`. O arquivo é necessário para o comando; sem ele, use `run` sem `--papel` ou `--motor`.
+`motores` lista perfis e papéis definidos em `.openheinerss/motores.yaml`, no formato `papel: motor/modelo` e opcionalmente `esforco=low|medium|high`. O arquivo é opcional: sem ele o comando lista só os perfis e informa `Nenhum papel`.
 
 ## Protocolo e SDKs
 
-O protocolo oficial está em [docs/02-protocol-spec.md](docs/02-protocol-spec.md). Os nomes corretos incluem `session.create`, `session.prompt`, `session.permission_respond`, `session.abort`, `session.list`, `catalog.list` e `doctor.check`. Não existe `session.resume`.
+O protocolo oficial está em [docs/02-protocol-spec.md](docs/02-protocol-spec.md). Os nomes corretos incluem `session.create`, `session.prompt`, `session.permission_respond`, `session.abort`, `session.list`, `session.resume`, `catalog.list`, `harness.register` e `doctor.check`, além dos métodos de orquestração `rodar.*`, `limites.obter` e `eventos.assinar` (eventos `orq.*`).
 
 Os SDKs disponíveis estão em [sdk/typescript/](sdk/typescript), [sdk/python/](sdk/python) e [sdk/php/](sdk/php). Consulte [docs/04-sdk-any-language.md](docs/04-sdk-any-language.md) para os recursos realmente expostos por cada um.
 
@@ -68,7 +74,8 @@ Os SDKs disponíveis estão em [sdk/typescript/](sdk/typescript), [sdk/python/](
 - [Visão geral](docs/00-overview.md) e [arquitetura](docs/01-architecture.md)
 - [Protocolo](docs/02-protocol-spec.md), [harnesses](docs/03-harness-adapters.md) e [SDKs](docs/04-sdk-any-language.md)
 - [Roadmap](docs/05-roadmap.md), [harness custom](docs/06-harness-custom.md), [missões](docs/07-rodar.md) e [manual do CLI](docs/09-cli.md)
-- [Instalação](docs/08-instalacao.md), [testes reais](docs/TESTES-REAIS.md) e [auditoria de lacunas](docs/LACUNAS.md)
+- [Instalação](docs/08-instalacao.md), [roteiro de verificação](docs/VERIFICACAO.md), [testes reais](docs/TESTES-REAIS.md) e [auditoria de lacunas](docs/LACUNAS.md)
+- [Como desenvolvemos com o próprio Openheinerss](docs/COMO-DESENVOLVEMOS.md) e [CHANGELOG](CHANGELOG.md)
 
 ## Desenvolvimento
 

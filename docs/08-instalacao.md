@@ -14,11 +14,11 @@ Uma versão específica pode ser fixada (com ou sem `v`):
 curl -fsSL https://raw.githubusercontent.com/crom-org/openheinerss/main/install.sh | bash -s -- --versao 0.1.0
 ```
 
-Se não houver rede ou release disponível, o script compila `./cmd/openheinerss` quando executado dentro do clone do projeto. O destino pode ser alterado para testes com `OPENHEINERSS_INSTALL_DIR`.
+Dentro de um clone, `./install.sh --local` ignora o release e compila o código do clone (o release v1.0.0 já publicado é anterior a `rodar`, `agentes` e ao servidor de orquestração: baixe-o só se quiser exatamente essa versão). Se não houver rede ou release disponível, o script compila `./cmd/openheinerss` quando executado dentro do clone do projeto. O destino pode ser alterado para testes com `OPENHEINERSS_INSTALL_DIR`.
 
 ## Go
 
-Quem já usa o toolchain Go pode instalar a versão publicada do módulo:
+Quem já usa o toolchain Go pode instalar a versão publicada do módulo (enquanto a próxima versão não for publicada, `@latest` é a v1.0.0, sem as novidades do `CHANGELOG.md`):
 
 ```bash
 go install github.com/crom-org/openheinerss/cmd/openheinerss@latest

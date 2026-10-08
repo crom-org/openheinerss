@@ -82,3 +82,24 @@ Como resolver: usar a instância `aider-gratis` (`.openheinerss/harnesses/aider-
 | opencode-gratis | opencode | cli | OK | 13,2 s | 13.649 |
 
 Tempos altos com a máquina em carga ~20. Corrigido: a lista do `--todos` era fixa no código (instâncias embutidas) e o `--pular` pulava também as instâncias da mesma base.
+
+## Rodada da etapa 7 (08/10 11:08) — 8/8 OK
+
+Binário compilado do código da revisão final; máquina com carga ~5. Comando: `openheinerss harness test --todos --pular aider --timeout 150s` (lista lida do catálogo; só as contas de teste, nunca a principal do Claude). Total: 86,9 s, código de saída 0.
+
+| nome | base | modo | resultado | tempo | tokens |
+|---|---|---|---|---:|---:|
+| agy | agy | cli | OK | 18,4 s | — |
+| aider-gratis | aider | cli | OK | 15,2 s | — |
+| claude-conta2 | claude-code | cli | OK | 3,0 s | 6 |
+| claude-conta2 | claude-code | sdk | OK | 8,2 s | 6 |
+| codex | codex | cli | OK | 22,3 s | 13.277 |
+| codex2 | codex | cli | OK | 4,0 s | 12.451 |
+| opencode | opencode | cli | OK | 10,6 s | 13.886 |
+| opencode-gratis | opencode | cli | OK | 5,2 s | 13.553 |
+
+**`rodar` real com o Codex num repositório temporário** (`git init`, um commit vazio): `openheinerss rodar real-codex codex --texto "Crie o arquivo REAL-OK.txt contendo apenas OK e faça um commit git com essa alteração. Não faça mais nada." --tentativas 1 --pasta-agentes <tmp>/agentes`. Resultado: `FIM real-codex código 0` em 48,6 s, worktree `agente/real-codex` com o commit `Add REAL-OK marker` e `REAL-OK.txt` contendo `OK`; `meta.json` com `"motor":"codex"`, `"tentativa":1`, `"codigo":0`; log terminado em `[completo]` e `FIM 11:08 código 0`. O repositório temporário foi apagado depois.
+
+**O que a revisão mudou nestes testes.** Na primeira tentativa desta rodada o `claude-conta2` no modo SDK deu `sem CLI`: o caminho do `@anthropic-ai/claude-agent-sdk` estava escrito no código do adaptador (uma pasta desta máquina) e foi removido. O caminho agora é configuração da instância: `.openheinerss/harnesses/claude-conta2.yaml` declara `OPENHEINERSS_CLAUDE_SDK_PATH` no `env`, e a checagem de pré-requisitos passou a enxergar o `env` da instância. Com isso o SDK voltou a dar OK (8,2 s). Outra correção que apareceu aqui: o `rodar` fazia `fsync` a cada linha do log, o que com o disco ocupado levava segundos por escrita; foi removido.
+
+**Ainda não provado com conta real.** A troca automática por `reserva` quando a cota acaba de verdade (no uso real de 08/10 ela foi feita à mão). Está provada com harness custom falso (roteiro em [VERIFICACAO.md](VERIFICACAO.md), passo 7, e testes do pacote `orchestrator`) e fica para a próxima vez que uma conta esgotar.

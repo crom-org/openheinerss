@@ -2,8 +2,12 @@ package harness
 
 import (
 	"context"
+	"fmt"
+	"github.com/crom-org/openheinerss/pkg/protocol"
 	"os"
 	"path/filepath"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -108,4 +112,143 @@ func TestExpandHomeNoEnv(t *testing.T) {
 	if got := expandHome("/abs/~x"); got != "/abs/~x" {
 		t.Fatalf("expandHome mexeu em caminho absoluto: %s", got)
 	}
+}
+
+// coletaFim lê eventos até o fim e devolve o motivo e as mensagens de erro.
+func coletaFim(t *testing.T, h Harness) (string, []string) {
+	t.Helper()
+	var erros []string
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case e := <-h.Events():
+			switch p := e.Payload.(type) {
+			case protocol.ErrorParams:
+				erros = append(erros, p.Message)
+			case protocol.CompleteParams:
+				return p.Reason, erros
+			}
+		case <-deadline:
+			t.Fatal("sem evento de fim")
+		}
+	}
+}
+
+func rodaScript(t *testing.T, corpo string, spec CustomSpec) (string, []string) {
+	t.Helper()
+	dir := t.TempDir()
+	script := filepath.Join(dir, "fake.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\n"+corpo), 0755); err != nil {
+		t.Fatal(err)
+	}
+	spec.Name = "fake-" + strings.ReplaceAll(t.Name(), "/", "-")
+	spec.Command = script
+	if err := RegisterCustom(spec); err != nil {
+		t.Fatal(err)
+	}
+	h, _ := Create(spec.Name, ModeCLI)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := h.Start(ctx, SessionConfig{SessionID: "s", CWD: dir}); err != nil {
+		t.Fatal(err)
+	}
+	defer h.Stop()
+	if err := h.SendPrompt(ctx, "oi", nil); err != nil {
+		t.Fatal(err)
+	}
+	return coletaFim(t, h)
+}
+
+func TestCustomSaidaComErroNaoEhSucesso(t *testing.T) {
+	motivo, erros := rodaScript(t, "echo falhou feio >&2\nexit 3\n", CustomSpec{})
+	if motivo != "process_error" {
+		t.Fatalf("motivo = %q", motivo)
+	}
+	if len(erros) != 1 || !strings.Contains(erros[0], "falhou feio") {
+		t.Fatalf("erros = %v", erros)
+	}
+}
+
+func TestCustomCotaNoStderr(t *testing.T) {
+	motivo, erros := rodaScript(t, "echo 'You hit the limit, resets 9am' >&2\nexit 1\n", CustomSpec{QuotaRegex: "hit the limit"})
+	if motivo != "process_error" || len(erros) != 1 || !strings.HasPrefix(erros[0], "limite de cota detectado") {
+		t.Fatalf("motivo %q erros %v", motivo, erros)
+	}
+}
+
+func TestCustomEnvExpandeHomeSemBase(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("sem HOME")
+	}
+	if err := RegisterCustom(CustomSpec{Name: "env-home-teste", Command: "sh", Env: map[string]string{"CONFIG": "~/conta"}}); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := CustomSpecFor("env-home-teste")
+	if s.Env["CONFIG"] != home+"/conta" {
+		t.Fatalf("env = %v", s.Env)
+	}
+}
+
+func TestCustomNaoDeixaZumbi(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "fake.sh")
+	_ = os.WriteFile(script, []byte("#!/bin/sh\necho '{\"type\":\"end\"}'\n"), 0755)
+	if err := RegisterCustom(CustomSpec{Name: "zumbi-teste", Command: script}); err != nil {
+		t.Fatal(err)
+	}
+	h, _ := Create("zumbi-teste", ModeCLI)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_ = h.Start(ctx, SessionConfig{SessionID: "s", CWD: dir})
+	_ = h.SendPrompt(ctx, "oi", nil)
+	coletaFim(t, h)
+	c := h.(*customHarness)
+	time.Sleep(100 * time.Millisecond)
+	c.mu.Lock()
+	state := c.cmd.ProcessState
+	c.mu.Unlock()
+	if state == nil {
+		t.Fatal("processo não foi colhido (Wait não chamado)")
+	}
+}
+
+func TestCustomStopMataOsFilhosDoProcesso(t *testing.T) {
+	dir := t.TempDir()
+	pidFile := filepath.Join(dir, "filho.pid")
+	script := filepath.Join(dir, "pai.sh")
+	body := "#!/bin/sh\ncat >/dev/null\nsleep 60 &\necho $! > " + pidFile + "\nwait\n"
+	if err := os.WriteFile(script, []byte(body), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := RegisterCustom(CustomSpec{Name: "pai-filho-teste", Command: script}); err != nil {
+		t.Fatal(err)
+	}
+	h, _ := Create("pai-filho-teste", ModeCLI)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_ = h.Start(ctx, SessionConfig{SessionID: "s", CWD: dir})
+	if err := h.SendPrompt(ctx, "oi", nil); err != nil {
+		t.Fatal(err)
+	}
+	var pid int
+	for i := 0; i < 50 && pid == 0; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if b, err := os.ReadFile(pidFile); err == nil {
+			fmt.Sscanf(strings.TrimSpace(string(b)), "%d", &pid)
+		}
+	}
+	if pid == 0 {
+		t.Fatal("o filho não registrou o PID")
+	}
+	cancel() // mesmo caminho do timeout do rodar
+	_ = h.Stop()
+	for i := 0; i < 50; i++ {
+		if err := syscall.Kill(pid, 0); err != nil {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	_ = syscall.Kill(pid, syscall.SIGKILL)
+	t.Fatalf("o filho %d sobrou depois do Stop", pid)
 }

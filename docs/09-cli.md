@@ -196,6 +196,8 @@ Flags:
       --retomar                     Acrescenta o texto de continuação e preserva o log
       --retries int                 Alias em inglês de --tentativas
       --tentativas int              Máximo de tentativas
+      --text string                 Alias em inglês de --texto
+      --texto string                Prompt em texto, no lugar do arquivo prompts/<nome>.md
       --when-load-below float       Alias em inglês de --quando-carga-abaixo
 
 ```

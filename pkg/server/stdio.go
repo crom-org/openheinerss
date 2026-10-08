@@ -56,14 +56,32 @@ func (s *StdioServer) Run(ctx context.Context) error {
 	buf := make([]byte, 1024*1024)
 	scanner.Buffer(buf, 64*1024*1024)
 
-	for scanner.Scan() {
+	// A leitura fica numa goroutine para que SIGTERM/Ctrl-C encerrem o servidor mesmo com o stdin parado.
+	linhas := make(chan string)
+	go func() {
+		defer close(linhas)
+		for scanner.Scan() {
+			select {
+			case linhas <- scanner.Text():
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	for {
+		var bruta string
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
+		case l, ok := <-linhas:
+			if !ok {
+				return scanner.Err()
+			}
+			bruta = l
 		}
 
-		line := strings.TrimSpace(scanner.Text())
+		line := strings.TrimSpace(bruta)
 		if line == "" {
 			continue
 		}
@@ -79,8 +97,6 @@ func (s *StdioServer) Run(ctx context.Context) error {
 		resp := s.router.HandleRequest(ctx, req)
 		s.writeMessage(resp)
 	}
-
-	return scanner.Err()
 }
 
 func (s *StdioServer) writeMessage(v interface{}) {

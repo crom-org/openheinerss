@@ -75,6 +75,18 @@ Interrompe imediatamente o processamento atual do agente.
 }
 ```
 
+### `session.resume`
+Reabre uma sessão gravada em `.openheinerss/sessions/<id>.jsonl` (no `cwd` informado) e entrega ao motor o ID nativo da conversa, para continuar sem reprocessar. Devolve o mesmo resultado de `session.create`. Erros: `SESSION_NOT_FOUND` (sem transcript ou ID com `/`/`..`) e `INVALID_PARAMS` (transcript sem configuração).
+```json
+{"jsonrpc":"2.0","id":3,"method":"session.resume","params":{"sessionId":"sess_abc123","cwd":"/home/user/projeto"}}
+```
+
+### `harness.register`
+Registra um harness ou instância em tempo de execução, sem gravar arquivo. Os campos são os de um arquivo de harness custom (`name`, `base`, `command`, `args`, `env`, `model`, `prompt`, `finishRegex`, `quotaRegex`, `reserva`; veja [06-harness-custom.md](06-harness-custom.md)). Resposta: `{"name":"...","status":"registered"}`.
+```json
+{"jsonrpc":"2.0","id":4,"method":"harness.register","params":{"name":"meu-claude","base":"claude-code","env":{"CLAUDE_CONFIG_DIR":"~/.claude-conta2"}}}
+```
+
 ---
 
 ## 2. Eventos do Openheinerss -> Cliente (Notifications / Streams)
@@ -221,7 +233,7 @@ Quando ocorre um erro de execução ou dependência ausente, a resposta de erro 
 
 ## 5. Orquestração (`rodar`, limites e eventos `orq.*`)
 
-Os mesmos métodos valem no STDIO (NDJSON) e no WebSocket (`ws://127.0.0.1:4820/ws`). O `crom-central` (ou qualquer cliente) lança agentes pelo servidor e acompanha tudo por eventos. Os eventos `agent.*` continuam como na seção 2; os `orq.*` descrevem a **missão** (um agente do `rodar`), não a conversa.
+Os mesmos métodos valem no STDIO (NDJSON) e no WebSocket (`ws://127.0.0.1:4820/ws`). **Segurança do WebSocket:** o servidor executa agentes na máquina, então só aceita conexões sem cabeçalho `Origin` (SDKs e scripts) ou de origens locais (`localhost`, `127.0.0.1`, `[::1]`, Tauri). Para liberar a página de um painel remoto, defina `OPENHEINERSS_ORIGENS` com as origens separadas por vírgula (ou `*` para liberar todas, por sua conta e risco); qualquer outra recebe `403`. O `crom-central` (ou qualquer cliente) lança agentes pelo servidor e acompanha tudo por eventos. Os eventos `agent.*` continuam como na seção 2; os `orq.*` descrevem a **missão** (um agente do `rodar`), não a conversa.
 
 ### `eventos.assinar`
 Registra a conexão para receber os eventos `orq.*`. Sem assinar, nenhum `orq.*` chega. Uma nova chamada na mesma conexão troca o filtro. Todos os campos são opcionais.
@@ -237,7 +249,7 @@ Registra a conexão para receber os eventos `orq.*`. Sem assinar, nenhum `orq.*`
 - `cwd` / `pasta` dizem qual pasta de agentes observar (padrão: raiz git do servidor + `.claude/agentes`, ou `$AGENTES`). Veja "Agentes lançados pelo CLI" abaixo.
 
 ### `rodar.iniciar`
-Mesmas opções do `openheinerss rodar` (nomes em português, como em `run`), mais `projeto`. Não bloqueia: devolve o `id` e os eventos informam o andamento.
+Mesmas opções do `openheinerss rodar` (nomes em português, como em `run`), mais `projeto`. O prompt vem de `texto` (texto direto), de `prompt` (caminho de um arquivo) ou, na falta dos dois, de `<pasta>/prompts/<nome>.md`; o nome do agente só aceita letras, números, `.`, `_` e `-`. Não bloqueia: devolve o `id` e os eventos informam o andamento.
 
 ```json
 {"jsonrpc":"2.0","id":2,"method":"rodar.iniciar","params":{"nome":"etapa-1","motor":"codex2","modelo":"","esforco":"high","prompt":"","retomar":false,"pasta":"","branchBase":"main","cargaMax":0,"maxAgentes":4,"tentativas":4,"cotaMax":0,"cwd":"/home/j/projetos/crom-tv","projeto":"crom-tv"}}

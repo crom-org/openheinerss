@@ -125,7 +125,7 @@ func (m *MockHarness) runSimulation(text string) {
 		Type: harness.EventText,
 		Payload: protocol.TextParams{
 			SessionID: sessID,
-			Delta:     fmt.Sprintf("Entendido. Para atender ao seu pedido, preciso executar uma checagem no ambiente."),
+			Delta:     "Entendido. Para atender ao seu pedido, preciso executar uma checagem no ambiente.",
 		},
 	})
 	m.sleep()
