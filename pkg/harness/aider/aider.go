@@ -131,10 +131,7 @@ func (a *AiderHarness) SendPrompt(ctx context.Context, text string, attachments 
 		// --yes-always responde "sim" a toda pergunta e --no-pretty/--no-stream evitam
 		// controle de terminal; sem isso o aider pode ficar esperando entrada.
 		// O git fica habilitado para que uma missão possa criar o commit pedido.
-		args := []string{"--yes-always", "--no-pretty", "--no-stream", "--no-check-update", "--no-analytics", "--no-show-model-warnings", "--no-browser", "--message=" + text}
-		if a.cfg.Model != "" {
-			args = append(args, "--model", a.cfg.Model)
-		}
+		args := buildArgs(a.cfg, text)
 
 		runCtx, stopRun := context.WithCancel(a.ctx)
 		defer stopRun()
@@ -242,6 +239,14 @@ func (a *AiderHarness) SendPrompt(ctx context.Context, text string, attachments 
 	}()
 
 	return nil
+}
+
+func buildArgs(cfg harness.SessionConfig, text string) []string {
+	args := []string{"--yes-always", "--no-pretty", "--no-stream", "--no-check-update", "--no-analytics", "--no-show-model-warnings", "--no-browser", "--message=" + text}
+	if cfg.Model != "" {
+		args = append(args, "--model", cfg.Model)
+	}
+	return args
 }
 
 const modelFix = "Informe um modelo (--model ou campo model da instância) e exporte a chave do provedor (ex.: OPENROUTER_API_KEY, ANTHROPIC_API_KEY), ou use um modelo local 'ollama/...'."

@@ -483,7 +483,7 @@ func (c *customHarness) read(cmd *exec.Cmd, r io.Reader, stderr *tailBuffer) {
 			c.emit(Event{Type: EventError, Payload: protocol.ErrorParams{SessionID: c.cfg.SessionID, Message: fmt.Sprintf("harness custom '%s' terminou com erro: %v %s", c.spec.Name, err, tail)}})
 		}
 		if pending != "" {
-			c.complete(pending)
+			c.complete("process_error")
 			return
 		}
 		c.complete("process_error")

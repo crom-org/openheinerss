@@ -192,6 +192,44 @@ func TestCustomSaidaComErroNaoEhSucesso(t *testing.T) {
 	}
 }
 
+func TestCustomFimAntesDoCodigoDeSaidaFalho(t *testing.T) {
+	motivo, erros := rodaScript(t, "printf '%s\\n' '{\"type\":\"end\"}'\nexit 3\n", CustomSpec{})
+	if motivo != "process_error" || len(erros) == 0 {
+		t.Fatalf("fim seguido de código 3: motivo=%q erros=%v", motivo, erros)
+	}
+}
+
+func TestCustomTabelaSubstituiPromptExato(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "args.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nprintf '%s\\n' \"$1\"\nprintf '%s\\n' '{\\\"type\\\":\\\"end\\\"}'\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	name := "args-custom-" + filepath.Base(dir)
+	if err := RegisterCustom(CustomSpec{Name: name, Command: script, Prompt: "argument", Args: []string{"--prompt={{prompt}}"}}); err != nil {
+		t.Fatal(err)
+	}
+	h, _ := Create(name, ModeCLI)
+	if err := h.Start(context.Background(), SessionConfig{SessionID: "args", CWD: dir}); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.SendPrompt(context.Background(), "--- prompt exato", nil); err != nil {
+		t.Fatal(err)
+	}
+	var seen bool
+	for deadline := time.After(2 * time.Second); !seen; {
+		select {
+		case e := <-h.Events():
+			if p, ok := e.Payload.(protocol.TextParams); ok && strings.Contains(p.Delta, "--prompt=--- prompt exato") {
+				seen = true
+			}
+		case <-deadline:
+			t.Fatal("prompt custom não chegou nos args")
+		}
+	}
+	_ = h.Stop()
+}
+
 func TestCustomCotaNoStderr(t *testing.T) {
 	motivo, erros := rodaScript(t, "echo 'You hit the limit, resets 9am' >&2\nexit 1\n", CustomSpec{QuotaRegex: "hit the limit"})
 	if motivo != "process_error" || len(erros) != 1 || !strings.HasPrefix(erros[0], "limite de cota detectado") {

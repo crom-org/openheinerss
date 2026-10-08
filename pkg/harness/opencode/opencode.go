@@ -144,14 +144,7 @@ func (o *OpenCodeHarness) SendPrompt(ctx context.Context, text string, attachmen
 			},
 		})
 
-		args := []string{"run", "--format", "json"}
-		if resumeID != "" {
-			args = append(args, "--session", resumeID)
-		}
-		if o.cfg.Model != "" {
-			args = append(args, "-m", o.cfg.Model)
-		}
-		args = append(args, "--", text)
+		args := buildArgs(o.cfg, resumeID, text)
 
 		cmd := exec.CommandContext(o.ctx, "opencode", args...)
 		process.Configure(cmd)
@@ -220,6 +213,17 @@ func (o *OpenCodeHarness) SendPrompt(ctx context.Context, text string, attachmen
 	}()
 
 	return nil
+}
+
+func buildArgs(cfg harness.SessionConfig, resumeID, text string) []string {
+	args := []string{"run", "--format", "json"}
+	if resumeID != "" {
+		args = append(args, "--session", resumeID)
+	}
+	if cfg.Model != "" {
+		args = append(args, "-m", cfg.Model)
+	}
+	return append(args, "--", text)
 }
 
 func (o *OpenCodeHarness) emitProcessError(sessionID string, err error) {
