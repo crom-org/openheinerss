@@ -107,6 +107,28 @@ func TestRunRetomarPreservaLogEUsaReserva(t *testing.T) {
 	}
 }
 
+func TestRunCotaSemReservaParaSemRepetir(t *testing.T) {
+	root, agents := repoFixture(t)
+	script := filepath.Join(root, "cota-sem-reserva.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nread p\nprintf '%s\\n' '{\"type\":\"text\",\"text\":\"SEM COTA resets 9am\"}'\nprintf '%s\\n' '{\"type\":\"end\"}'\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := harness.RegisterCustom(harness.CustomSpec{Name: "cota-sem-reserva", Command: script, QuotaRegex: "SEM COTA"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(agents, "prompts", "cota.md"), []byte("prompt"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Run(context.Background(), root, Options{Name: "cota", Motor: "cota-sem-reserva", AgentsDir: agents, Attempts: 4, MaxAgents: 99})
+	if err != nil || res.Code != 2 || res.Attempts != 1 {
+		t.Fatalf("cota sem reserva: err=%v código=%d tentativas=%d", err, res.Code, res.Attempts)
+	}
+	log := mustRead(t, res.LogFile)
+	if !strings.Contains(log, "FIM ") || !strings.Contains(log, "resets 9am") {
+		t.Fatalf("log sem encerramento ou aviso de retorno: %s", log)
+	}
+}
+
 func TestRunBloqueiaCargaEAgentes(t *testing.T) {
 	root, agents := repoFixture(t)
 	if err := os.WriteFile(filepath.Join(agents, "prompts", "limite.md"), []byte("p"), 0644); err != nil {
