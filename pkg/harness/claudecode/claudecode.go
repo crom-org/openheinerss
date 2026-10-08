@@ -257,6 +257,7 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 		go c.readStderr(stderr)
 
 		scanner := bufio.NewScanner(stdout)
+		scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
 		for scanner.Scan() {
 			line := scanner.Text()
 			c.emit(harness.Event{
@@ -356,6 +357,7 @@ func (c *ClaudeCodeHarness) Stop() error {
 
 func (c *ClaudeCodeHarness) readEvents(r io.Reader) {
 	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	sessID := c.cfg.SessionID
 
 	for scanner.Scan() {
@@ -450,6 +452,7 @@ func (c *ClaudeCodeHarness) handleSDKMessage(method string, params map[string]in
 
 func (c *ClaudeCodeHarness) readStderr(r io.Reader) {
 	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	for scanner.Scan() {
 		// Stderr do processo pode ser logado ou monitorado
 	}

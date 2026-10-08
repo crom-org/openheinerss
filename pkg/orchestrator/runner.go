@@ -298,7 +298,8 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 func prepareWorktree(ctx context.Context, repo, agents, name, base string) (string, error) {
 	target := filepath.Join(agents, name)
 	if strings.HasPrefix(name, "missao-") {
-		return target, os.MkdirAll(target, 0755)
+		// Missões são somente leitura e os prompts esperam enxergar o projeto inteiro.
+		return repo, nil
 	}
 	if _, err := os.Stat(target); err == nil {
 		return target, nil
