@@ -22,8 +22,10 @@ virar essa camada, mas ainda não está pronto.
    - worktree por agente;
    - limite de carga e de agentes simultâneos;
    - `logs/<nome>.log` com `FIM HH:MM código N`, mais o `meta.json`.
-6. Método `limites` com as cotas de Codex e Claude, para a Central de Tarefas.
-7. Testes: processo, streaming, retomar e cada adaptador com `mock`; depois 1–2 tarefas reais curtas.
+6. [x] Método `limites` com as cotas de Codex e Claude, para a Central de Tarefas.
+   CLI (`limites`/`--json`), JSON-RPC, idade do dado e `cota_max` no `rodar`.
+7. [x] Testes de processo, streaming, retomada, adaptadores com binário falso e
+   fixtures anonimizados de limites; verificação com `-race` concluída nesta etapa.
 
 ## Primeiro uso real previsto
 O "estúdio" de vídeos do crom-videos (papéis roteirista, montador, revisor e finalizador, cada um com motor configurável).

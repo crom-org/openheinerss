@@ -4,6 +4,10 @@ O Openheinerss adota estritamente o padrão **JSON-RPC 2.0** com transporte em l
 
 Toda mensagem trafegada é um objeto JSON válido em uma única linha.
 
+Além dos métodos abaixo, `limites` retorna `{agora, instancias}`. Cada instância
+traz suas janelas de `5 h`/`semanal`, percentual, `reiniciaEm` e `idadeSegundos`.
+O servidor só lê arquivos locais de cotas; credenciais e tokens nunca são lidos.
+
 ---
 
 ## 1. Métodos de Entrada (Client ➔ Server)

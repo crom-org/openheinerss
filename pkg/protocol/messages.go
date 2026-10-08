@@ -13,6 +13,7 @@ const (
 	MethodMCPAdd                   = "mcp.add"
 	MethodHarnessRegister          = "harness.register"
 	MethodRun                      = "run"
+	MethodLimits                   = "limites"
 )
 
 // MCPListParams parâmetros para mcp.list
@@ -193,8 +194,11 @@ type RunParams struct {
 	CargaMax   float64 `json:"cargaMax,omitempty"`
 	MaxAgentes int     `json:"maxAgentes,omitempty"`
 	Tentativas int     `json:"tentativas,omitempty"`
+	CotaMax    float64 `json:"cotaMax,omitempty"`
 	CWD        string  `json:"cwd,omitempty"`
 }
+
+type LimitsParams struct{}
 
 type RunResult struct {
 	Nome       string `json:"nome"`

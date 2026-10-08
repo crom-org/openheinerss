@@ -8,6 +8,7 @@ import (
 
 	"github.com/crom-org/openheinerss/pkg/doctor"
 	"github.com/crom-org/openheinerss/pkg/harness"
+	"github.com/crom-org/openheinerss/pkg/limites"
 	"github.com/crom-org/openheinerss/pkg/mcp"
 	"github.com/crom-org/openheinerss/pkg/orchestrator"
 	"github.com/crom-org/openheinerss/pkg/protocol"
@@ -99,11 +100,14 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) protoc
 		if cwd == "" {
 			cwd, _ = os.Getwd()
 		}
-		res, err := orchestrator.Run(ctx, cwd, orchestrator.Options{Name: p.Nome, Motor: p.Motor, Model: p.Modelo, Effort: p.Esforco, PromptFile: p.Prompt, Retomar: p.Retomar, AgentsDir: p.Pasta, BranchBase: p.BranchBase, MaxLoad: p.CargaMax, MaxAgents: p.MaxAgentes, Attempts: p.Tentativas})
+		res, err := orchestrator.Run(ctx, cwd, orchestrator.Options{Name: p.Nome, Motor: p.Motor, Model: p.Modelo, Effort: p.Esforco, PromptFile: p.Prompt, Retomar: p.Retomar, AgentsDir: p.Pasta, BranchBase: p.BranchBase, MaxLoad: p.CargaMax, MaxAgents: p.MaxAgentes, Attempts: p.Tentativas, QuotaMax: p.CotaMax})
 		if err != nil {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), res)
 		}
 		return protocol.NewResponse(req.ID, protocol.RunResult{Nome: res.Name, WorkDir: res.WorkDir, Log: res.LogFile, Meta: res.MetaFile, Tentativas: res.Attempts, Codigo: res.Code})
+
+	case protocol.MethodLimits:
+		return protocol.NewResponse(req.ID, limites.Obter())
 
 	case protocol.MethodDoctorCheck:
 		var params protocol.DoctorCheckParams
