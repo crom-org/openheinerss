@@ -186,10 +186,12 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				modelName, effort = s.Model, s.Effort
 			}
 		}
-		if modelName == "" {
-			modelName = "padrão"
+		// "padrão" só aparece no meta.json; o harness recebe vazio e usa o próprio padrão.
+		modeloMeta := modelName
+		if modeloMeta == "" {
+			modeloMeta = "padrão"
 		}
-		m := meta{Motor: candidate, Modelo: modelName, Esforco: effort, Conta: candidate, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid()}
+		m := meta{Motor: candidate, Modelo: modeloMeta, Esforco: effort, Conta: candidate, Tentativa: attempts, Inicio: start.Format(time.RFC3339), PID: os.Getpid()}
 		metaPath := filepath.Join(agents, "logs", o.Name+".meta.json")
 		if err := writeMeta(metaPath, m); err != nil {
 			return Result{}, err
