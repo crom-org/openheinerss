@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -116,7 +117,7 @@ func pastaAgentes(dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return orchestrator.ResolveAgentsDir(cwd, dir), nil
+	return orchestrator.ValidateAgentsDir(cwd, dir)
 }
 
 func newAgentesCmd() *cobra.Command {
@@ -263,7 +264,10 @@ func newServeCmd() *cobra.Command {
 
 			addr := fmt.Sprintf("%s:%d", host, port)
 			wsServer := server.NewWSServer(manager)
-
+			listener, err := net.Listen("tcp", addr)
+			if err != nil {
+				return fmt.Errorf("abrir porta %s: %w", addr, err)
+			}
 			fmt.Fprintf(os.Stderr, "🎼 Openheinerss escutando em ws://%s (pressione Ctrl+C para parar)\n", addr)
 
 			go func() {
@@ -278,7 +282,7 @@ func newServeCmd() *cobra.Command {
 				_ = wsServer.Shutdown(shutdownCtx)
 			}()
 
-			if err := wsServer.ListenAndServe(addr); err != nil && err.Error() != "http: Server closed" {
+			if err := wsServer.Serve(listener); err != nil && err.Error() != "http: Server closed" {
 				return err
 			}
 			return nil
@@ -551,6 +555,9 @@ func newRodarCmd() *cobra.Command {
 			fmt.Println(fim)
 			if res.LogFile != "" {
 				fmt.Printf("log: %s\n", res.LogFile)
+			}
+			if res.Resumo != "" {
+				fmt.Printf("resumo: %s\n", res.Resumo)
 			}
 			if err != nil {
 				return err // interrompido ou falha: o log já tem o FIM; o main escolhe o código de saída

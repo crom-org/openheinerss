@@ -207,7 +207,7 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) protoc
 		return protocol.NewResponse(req.ID, map[string]interface{}{"status": "success", "name": params.Name})
 
 	default:
-		return protocol.NewErrorResponse(req.ID, protocol.CodeMethodNotFound, fmt.Sprintf("Método '%s' não encontrado", req.Method), nil)
+		return protocol.NewErrorResponse(req.ID, protocol.CodeMethodNotFound, fmt.Sprintf("Método '%s' não encontrado", methodResumo(req.Method)), nil)
 	}
 }
 
@@ -216,4 +216,12 @@ func errorToResponse(id interface{}, err error) protocol.Response {
 		return protocol.NewErrorResponse(id, rpcErr.Code, rpcErr.Message, rpcErr.Data)
 	}
 	return protocol.NewErrorResponse(id, protocol.CodeInternalError, err.Error(), nil)
+}
+
+func methodResumo(method string) string {
+	r := []rune(method)
+	if len(r) > 160 {
+		return string(r[:160]) + "…"
+	}
+	return method
 }

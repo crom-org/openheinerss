@@ -160,6 +160,17 @@ func StopAgent(agentsDir, name string, now time.Time) error {
 	metaPath := filepath.Join(agentsDir, "logs", name+".meta.json")
 	b, err := os.ReadFile(metaPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(filepath.Dir(metaPath), 0755); err != nil {
+				return err
+			}
+			// A fila/inicialização ainda não tem meta. A marca é consumida
+			// pelo Run sob a trava de vagas antes de criar a worktree.
+			if err := os.WriteFile(filepath.Join(agentsDir, "logs", name+".cancelado"), []byte(now.Format(time.RFC3339)+"\n"), 0600); err != nil {
+				return err
+			}
+			return nil
+		}
 		return err
 	}
 	var m meta

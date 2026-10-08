@@ -95,7 +95,8 @@ type Result struct {
 	Attempts                         int
 	Code                             int
 	// Causa é a razão curta de um Code ≠ 0 (vazia no sucesso); o detalhe fica no log.
-	Causa string
+	Causa  string
+	Resumo string
 	// Relatorio é o RELATORIO-AGENTE.md do agente (nas missões, a cópia em relatorios/<nome>.md); vazio se não houver.
 	Relatorio string
 }
@@ -198,6 +199,9 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	if !nomeValido.MatchString(o.Name) {
 		return Result{}, fmt.Errorf("nome de agente inválido %q: use letras, números, '.', '_' ou '-' (sem barras)", o.Name)
 	}
+	if len([]rune(o.Name)) > 80 {
+		return Result{}, fmt.Errorf("nome de agente longo demais (%d caracteres; máximo 80)", len([]rune(o.Name)))
+	}
 	if o.MaxLoad == 0 {
 		o.MaxLoad = envFloat("OPENHEINERSS_CARGA_MAXIMA", 0)
 	}
@@ -232,8 +236,9 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	if agents == "" {
 		agents = ".claude/agentes"
 	}
-	if !filepath.IsAbs(agents) {
-		agents = filepath.Join(repo, agents)
+	agents, err = ValidateAgentsDir(repo, agents)
+	if err != nil {
+		return Result{}, err
 	}
 	// O prompt é lido antes: sem ele não vale criar worktree e branch que ninguém vai usar.
 	prompt, err := readPromptOptions(agents, o.Name, o.PromptFile, o.PromptText, o.Regras, o.RegrasPadrao, o.SemRegras)
@@ -256,6 +261,11 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	if err := rejectLiveMeta(agents, o.Name); err != nil {
 		return Result{}, err
 	}
+	cancelMarker := filepath.Join(agents, "logs", o.Name+".cancelado")
+	if _, err := os.Stat(cancelMarker); err == nil {
+		_ = os.Remove(cancelMarker)
+		return Result{}, fmt.Errorf("agente %s foi cancelado antes de começar", o.Name)
+	}
 	start := o.Now()
 	metaPath := filepath.Join(agents, "logs", o.Name+".meta.json")
 	conta := o.Conta
@@ -266,6 +276,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	// Respeita os limites antes de criar uma worktree (operação cara). Contar as vagas e registrar o
 	// meta.json acontecem sob a mesma trava: assim o limite vale mesmo com agentes entrando juntos.
 	if err := reserveSlot(ctx, agents, o, cur); err != nil {
+		_ = os.Remove(cancelMarker)
 		return Result{}, err
 	}
 	finalized := false
@@ -290,6 +301,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	// com o disco ocupado ele levava segundos por chamada e atrasava até o fim do processo.
 	defer lf.Close()
 	write := func(s string) { _, _ = lf.WriteString(s) }
+	ultimoResumo := ""
 	work := ""
 	attempts := 0
 	// finish fecha meta, log, evento e resultado; é o único caminho de saída depois da reserva da vaga.
@@ -313,7 +325,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		}
 		o.emit(Evento{Tipo: EvFim, Motor: motorName, Codigo: code, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: rel})
 		finalized = true
-		return Result{Name: o.Name, WorkDir: work, LogFile: logPath, MetaFile: metaPath, Attempts: attempts, Code: code, Causa: causa, Relatorio: rel}
+		return Result{Name: o.Name, WorkDir: work, LogFile: logPath, MetaFile: metaPath, Attempts: attempts, Code: code, Causa: causa, Resumo: curto(ultimoResumo, 240), Relatorio: rel}
 	}
 	// abort registra no log e no FIM um erro de preparação: nada de sair mudo.
 	abort := func(e error) (Result, error) {
@@ -471,6 +483,12 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 						providerNotice = strings.TrimSpace(line)
 					}
 				}
+				if ev.Type == harness.EventError && unknownOptionPattern.MatchString(line) {
+					failed = true
+					if errMsg == "" {
+						errMsg = curto(line, 200)
+					}
+				}
 				// Harness custom já detecta a cota pelo próprio regex e avisa com este erro.
 				if e, ok := ev.Payload.(protocol.ErrorParams); ok && strings.HasPrefix(e.Message, "limite de cota detectado") {
 					quotaHit = true
@@ -479,6 +497,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 					}
 				}
 				if resumo := resumoEvento(ev, &textBuf); resumo != "" {
+					ultimoResumo = resumo
 					o.emit(Evento{Tipo: EvProgresso, Motor: candidate, Resumo: resumo})
 				}
 				if ev.Type == harness.EventPermission {
@@ -713,6 +732,8 @@ func providerPattern(name string) *regexp.Regexp {
 	return regexp.MustCompile(`(?i)(upstream error|serviceunavailableerror|service temporarily overloaded|temporarily unavailable|too many requests|\b429\b|\b5\d\d\b|bad gateway|gateway timeout|internal server error|overloaded)`)
 }
 
+var unknownOptionPattern = regexp.MustCompile(`(?i)(unknown option|error:\s*unknown)`)
+
 func acquireNameLock(agents, name string) (*os.File, error) {
 	path := filepath.Join(agents, "logs", name+".lock")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
@@ -807,17 +828,19 @@ func loadKeys(path string) (map[string]string, error) {
 		return nil, fmt.Errorf("abrir arquivo de chaves: %w", err)
 	}
 	values := make(map[string]string)
-	for _, line := range strings.Split(string(b), "\n") {
+	for numero, line := range strings.Split(string(b), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 		line = strings.TrimSpace(strings.TrimPrefix(line, "export "))
 		key, value, ok := strings.Cut(line, "=")
-		if !ok || strings.TrimSpace(key) == "" {
+		key = strings.TrimSpace(key)
+		if !ok || key == "" || !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(key) {
+			fmt.Fprintf(os.Stderr, "Aviso: linha inválida %d no arquivo de chaves (ignorada)\n", numero+1)
 			continue
 		}
-		values[strings.TrimSpace(key)] = strings.Trim(strings.TrimSpace(value), "\"'")
+		values[key] = strings.Trim(strings.TrimSpace(value), "\"'")
 	}
 	return values, nil
 }
