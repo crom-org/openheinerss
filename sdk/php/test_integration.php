@@ -30,3 +30,23 @@ $agent->prompt('responda OK', function (string $metodo, array $params) use (&$pe
 if (!$pensamentos) throw new RuntimeException('agent.thinking não recebido');
 if (!isset($agent->listRuns(['projeto' => 'teste-php'])['agentes'])) throw new RuntimeException('lista ausente');
 echo "PHP SDK integração OK\n";
+
+// O caminho do executável pode conter espaços; proc_open recebe argv, não shell.
+$bin = getenv('OPENHEINERSS_BIN') ?: 'openheinerss';
+$binReal = realpath($bin);
+if ($binReal === false) {
+    $binReal = trim((string) shell_exec('command -v ' . escapeshellarg($bin)));
+}
+if ($binReal === '') throw new RuntimeException('binário do teste não encontrado');
+$pastaEspaco = sys_get_temp_dir() . '/openheinerss teste espaço ' . getmypid();
+if (!mkdir($pastaEspaco) && !is_dir($pastaEspaco)) throw new RuntimeException('falha ao criar pasta de teste');
+$binEspaco = $pastaEspaco . '/openheinerss';
+if (!symlink($binReal, $binEspaco)) throw new RuntimeException('falha ao criar caminho com espaço');
+try {
+    $comCaminhoEspaco = Openheinerss\Agent::session(['harness' => 'mock'], $binEspaco);
+    if (!isset($comCaminhoEspaco->getLimits()['instancias'])) throw new RuntimeException('caminho com espaço falhou');
+} finally {
+    unset($comCaminhoEspaco);
+    unlink($binEspaco);
+    rmdir($pastaEspaco);
+}

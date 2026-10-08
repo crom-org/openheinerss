@@ -156,9 +156,16 @@ export class Openheinerss extends EventEmitter {
         } catch (_) {}
       }
     });
+    this.proc.stdin?.on("error", () => {
+      this.rejectPending(new Error("Servidor openheinerss encerrou a conexão (falha ao escrever no STDIO)"));
+    });
 
     this.proc.on("error", (err: Error) => {
+      this.rejectPending(new Error(`Falha ao iniciar binário openheinerss: ${err.message}`));
       this.emit("error", { message: `Falha ao iniciar binário openheinerss: ${err.message}` });
+    });
+    this.proc.on("close", (code, signal) => {
+      this.rejectPending(new Error(`Servidor openheinerss encerrou a conexão (código ${code ?? "desconhecido"}${signal ? `, sinal ${signal}` : ""})`));
     });
   }
 
@@ -172,6 +179,7 @@ export class Openheinerss extends EventEmitter {
 
       this.ws.onopen = () => resolve();
       this.ws.onerror = (err: any) => reject(new Error(`Falha ao conectar no WebSocket: ${err}`));
+      this.ws.onclose = () => this.rejectPending(new Error("Servidor openheinerss encerrou a conexão WebSocket"));
 
       this.ws.onmessage = (event: any) => {
         try {
@@ -235,6 +243,11 @@ export class Openheinerss extends EventEmitter {
           break;
       }
     }
+  }
+
+  private rejectPending(error: Error): void {
+    for (const [, cb] of this.pendingCallbacks) cb.reject(error);
+    this.pendingCallbacks.clear();
   }
 
   private sendRPC(method: string, params: Record<string, unknown>): Promise<any> {

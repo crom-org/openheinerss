@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { chmod, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Openheinerss } from "../dist/index.js";
 
 const bin = process.env.OPENHEINERSS_BIN || "openheinerss";
@@ -16,18 +19,34 @@ test("SDK TypeScript conversa com o servidor real", async () => {
       "orq.inicio": () => eventos.push("orq.inicio"),
       "orq.progresso": () => eventos.push("orq.progresso"),
       "orq.fim": () => { eventos.push("orq.fim"); fim(); },
-      "orq.precisa_decisao": (p) => { decisao = p; },
+      "orq.precisa_decisao": (p) => {
+        decisao = p;
+        void client.decideRun(p.id, "permitir");
+      },
     });
     const limits = await client.getLimits();
     assert.ok(Array.isArray(limits.instancias));
     const run = await client.run({ nome: "teste-ts", motor: "mock", texto: "responda OK", cwd: process.cwd(), projeto: "teste-ts" });
     assert.match(run.id, /^rodar-/);
-    await new Promise((resolve, reject) => { const t = setInterval(() => { if (decisao) { clearInterval(t); resolve(); } }, 10); setTimeout(() => { clearInterval(t); reject(new Error("timeout de decisão")); }, 1000); });
-    await client.decideRun(decisao.id, "permitir");
+    await new Promise((resolve, reject) => { const t = setInterval(() => { if (decisao) { clearInterval(t); resolve(); } }, 10); setTimeout(() => { clearInterval(t); reject(new Error("timeout de decisão")); }, 3000); });
     await Promise.race([terminou, new Promise((_, reject) => setTimeout(() => reject(new Error("timeout de eventos")), 3000))]);
     assert.deepEqual(eventos.slice(0, 3), ["orq.inicio", "orq.progresso", "orq.fim"]);
     assert.ok(Array.isArray((await client.listRuns({ projeto: "teste-ts" })).agentes));
   } finally { client.close(); }
+});
+
+test("SDK TypeScript falha pendências quando o servidor chega ao EOF", async () => {
+  const pasta = await mkdtemp(join(tmpdir(), "openheinerss caminho com espaco-"));
+  const falso = join(pasta, "servidor falso.mjs");
+  await writeFile(falso, "process.stdin.once('data', () => setTimeout(() => {}, 30000));\n");
+  await chmod(falso, 0o755);
+  const client = new Openheinerss({ binPath: falso, transport: "stdio" });
+  const pendente = client.getLimits();
+  const rejeicao = assert.rejects(() => pendente, /encerrou a conexão/);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  client.proc.kill();
+  await rejeicao;
+  client.close();
 });
 
 test("SDK TypeScript entrega thinking como thinking", async () => {
