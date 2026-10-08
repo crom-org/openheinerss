@@ -44,3 +44,4 @@ Hoje só dá para adicionar harness escrevendo Go e chamando `harness.Register` 
 
 ## Ideias (não implementar)
 - **Passar o bastão entre motores** (pedido do usuário, 08/10 10:30): quando trocar de motor/conta por cota, o motor novo recebe um resumo do que o anterior fez. Inspirado no ai-memory 2.6 do Akita (github.com/akitaonrails/ai-memory; análise em ~/Documentos/Central/analises/08-akita-post.md). Cuidado: memória grava prompts; excluir pastas sensíveis.
+- **Avisar/limitar contexto grande por agente** (dado da Central, 08/10): 63% do uso da conta2 nas últimas 24 h foi com contexto acima de 150k. Ideia: o openheinerss avisar ou limitar o contexto por agente (missões menores; retomar em sessão nova com resumo em vez de continuar a mesma sessão).
