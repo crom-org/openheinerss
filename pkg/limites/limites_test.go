@@ -100,3 +100,34 @@ func TestObterRemoveJanelaVencidaDaExibicao(t *testing.T) {
 		t.Fatalf("janelas exibidas: %+v", janelas)
 	}
 }
+
+func TestObterDescobreContasLocaisSemDadoEOrdenaEstavelmente(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for _, nome := range []string{".claude-conta12", ".claude-conta2", ".claude"} {
+		if err := os.Mkdir(filepath.Join(home, nome), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	primeira := Obter()
+	segunda := Obter()
+	if len(primeira.Instancias) != len(segunda.Instancias) {
+		t.Fatalf("quantidade instável: %d e %d", len(primeira.Instancias), len(segunda.Instancias))
+	}
+	for i := range primeira.Instancias {
+		if primeira.Instancias[i].Nome != segunda.Instancias[i].Nome {
+			t.Fatalf("ordem instável: %+v e %+v", primeira.Instancias, segunda.Instancias)
+		}
+	}
+	porNome := map[string]Instancia{}
+	for _, instancia := range primeira.Instancias {
+		porNome[instancia.Nome] = instancia
+	}
+	for _, nome := range []string{"claude-code", "claude-conta2", "claude-conta12"} {
+		i, ok := porNome[nome]
+		if !ok || i.Nota == "" {
+			t.Fatalf("conta %q sem nota de dado ausente: %+v", nome, i)
+		}
+	}
+}

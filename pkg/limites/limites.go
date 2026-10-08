@@ -68,16 +68,17 @@ func Obter() Resultado {
 		}
 	}
 	addCodex := func(nome, home string) {
-		if home == "" {
+		if home == "" || seen[nome] {
 			return
 		}
 		if i, ok := lerCodex(nome, home, agora); ok {
 			add(i)
 		}
 	}
-	// A instância base usa o ambiente corrente; instâncias custom podem apontar
-	// para outro CODEX_HOME ou CLAUDE_CONFIG_DIR.
+	// As instâncias base são independentes do diretório atual. O ambiente ainda
+	// pode escolher outro diretório para a instância principal.
 	addCodex("codex", expandHome(os.Getenv("CODEX_HOME"), filepath.Join(userHome(), ".codex")))
+	addCodex("codex2", filepath.Join(userHome(), ".codex-compartilhado"))
 	for _, nome := range nomesCustom() {
 		spec, _ := harness.CustomSpecFor(nome)
 		base := spec.Base
@@ -90,13 +91,48 @@ func Obter() Resultado {
 			}
 		}
 	}
+	// Descobre contas locais sem nomes fixos no código: a conta principal e
+	// todas as pastas ~/.claude-contaN. A existência da pasta é suficiente para
+	// listá-la; a ausência do statusline vira uma nota "sem dado".
 	if !seen["claude-code"] {
-		if i, ok := lerClaude("claude-code", expandHome(os.Getenv("CLAUDE_CONFIG_DIR"), filepath.Join(userHome(), ".claude")), agora); ok {
-			add(i)
-		}
+		addClaude("claude-code", expandHome(os.Getenv("CLAUDE_CONFIG_DIR"), filepath.Join(userHome(), ".claude")), agora, add)
+	}
+	for _, conta := range contasClaudeLocais() {
+		addClaude(conta.nome, conta.dir, agora, add)
 	}
 	sort.Slice(instancias, func(i, j int) bool { return instancias[i].Nome < instancias[j].Nome })
 	return Resultado{Agora: agora.Format(time.RFC3339), Instancias: instancias}
+}
+
+type contaLocal struct {
+	nome string
+	dir  string
+}
+
+func addClaude(nome, dir string, agora time.Time, add func(Instancia)) {
+	if nome == "" || dir == "" {
+		return
+	}
+	if i, ok := lerClaude(nome, dir, agora); ok {
+		add(i)
+	}
+}
+
+func contasClaudeLocais() []contaLocal {
+	home := userHome()
+	result := make([]contaLocal, 0)
+	entries, err := os.ReadDir(home)
+	if err != nil {
+		return result
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || !reContaClaude.MatchString(entry.Name()) {
+			continue
+		}
+		result = append(result, contaLocal{nome: strings.TrimPrefix(entry.Name(), "."), dir: filepath.Join(home, entry.Name())})
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].nome < result[j].nome })
+	return result
 }
 
 // Percentual devolve o maior percentual conhecido da instância. Sem leitura,
@@ -170,7 +206,12 @@ func lerCodex(nome, home string, agora time.Time) (Instancia, bool) {
 			datas[p] = st.ModTime()
 		}
 	}
-	sort.Slice(paths, func(i, j int) bool { return datas[paths[i]].After(datas[paths[j]]) })
+	sort.Slice(paths, func(i, j int) bool {
+		if datas[paths[i]].Equal(datas[paths[j]]) {
+			return paths[i] < paths[j]
+		}
+		return datas[paths[i]].After(datas[paths[j]])
+	})
 	if len(paths) > 14 {
 		paths = paths[:14]
 	}
@@ -200,7 +241,7 @@ func lerCodex(nome, home string, agora time.Time) (Instancia, bool) {
 		_ = f.Close()
 	}
 	if best == nil {
-		return Instancia{Nome: nome, Base: "codex", Nota: "sem leitura de limite nos arquivos de sessão"}, true
+		return Instancia{Nome: nome, Base: "codex", Nota: "sem dado: sem leitura de limite nos arquivos de sessão"}, true
 	}
 	em := parseTime(best.Timestamp, agora)
 	i := Instancia{Nome: nome, Base: "codex", DadoEm: em.Format(time.RFC3339), IdadeSegundos: int64(agora.Sub(em).Seconds())}
@@ -228,7 +269,7 @@ func lerClaude(nome, dir string, agora time.Time) (Instancia, bool) {
 	statusPath := filepath.Join(userHome(), ".config", "crom-painel", "statusline-"+contaClaude(nome, dir)+".json")
 	b, err := os.ReadFile(statusPath)
 	if err != nil {
-		return Instancia{Nome: nome, Base: "claude-code", Nota: "statusline não encontrado"}, true
+		return Instancia{Nome: nome, Base: "claude-code", Nota: "sem dado: statusline não encontrado"}, true
 	}
 	var v struct {
 		Em         float64 `json:"em"`
@@ -238,7 +279,7 @@ func lerClaude(nome, dir string, agora time.Time) (Instancia, bool) {
 		} `json:"rate_limits"`
 	}
 	if json.Unmarshal(b, &v) != nil {
-		return Instancia{Nome: nome, Base: "claude-code", Nota: "statusline inválido"}, true
+		return Instancia{Nome: nome, Base: "claude-code", Nota: "sem dado: statusline inválido"}, true
 	}
 	em := time.UnixMilli(int64(v.Em))
 	if v.Em < 1e12 {

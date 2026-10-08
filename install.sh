@@ -68,7 +68,10 @@ fallback_local() {
   if [[ -f go.mod && -d cmd/openheinerss ]]; then
     [[ "$local" -eq 1 ]] || echo "Release indisponível; compilando o Openheinerss no repositório atual..." >&2
     mkdir -p "$destino"
-    go build -o "$destino/openheinerss" ./cmd/openheinerss
+    build_version="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
+    build_commit="$(git rev-parse HEAD 2>/dev/null || echo desconhecido)"
+    build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    go build -ldflags "-X main.Version=${build_version} -X main.Commit=${build_commit} -X main.Date=${build_date}" -o "$destino/openheinerss" ./cmd/openheinerss
     chmod 0755 "$destino/openheinerss"
     echo "Instalado em $destino/openheinerss (build local)."
     exit 0
