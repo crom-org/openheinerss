@@ -28,3 +28,5 @@ Ordem e paralelismo: 0 e 2 juntos; depois 1 e 3; depois 4, 5 e 6; por fim 7. No 
 - `rodar` sem `reserva`: ao detectar falta de cota, não repetir as 4 tentativas na mesma instância; parar logo com `FIM código 2` e a hora de volta da cota (o Claude informa "resets 9am").
 - Instâncias do projeto com reserva: `claude-conta2` → `codex`.
 - 08/10 08:48–08:49: a detecção de cota do Claude funcionou ("You've hit your session limit"), mas a troca para o Codex foi feita À MÃO (a instância não tinha `reserva`). A troca automática por `reserva` só foi provada em teste com mock; falta prova real.
+- 08/10 12:42: agentes rodando `openheinerss rodar` de dentro da própria worktree criaram worktrees aninhadas e branches `agente/*` de teste no repositório real (limpas à mão). Ideia: testes reais do `rodar` sempre em repositório temporário; avisar quando o `rodar` for chamado de dentro de uma worktree de agente.
+- 08/10 12:42: uma alteração apareceu sem commit na `main` (cópia da correção de limites feita na worktree do agente) — provável efeito do PWD velho, corrigido nesta rodada.
