@@ -279,17 +279,7 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 			},
 		})
 
-		args := []string{"--print", "--output-format", "stream-json", "--verbose"}
-		if c.cfg.Model != "" {
-			args = append(args, "--model", c.cfg.Model)
-		}
-		if resume := c.resumeOption(); resume != "" {
-			args = append([]string{"--resume", resume}, args...)
-		}
-		if permission := c.cliPermissionMode(); permission != "" {
-			args = append(args, "--permission-mode", permission)
-		}
-		args = append(args, "--", text)
+		args := buildCLIArgs(c.cfg, c.resumeOption(), c.cliPermissionMode(), text)
 		cmd := exec.CommandContext(c.ctx, "claude", args...)
 		process.Configure(cmd)
 		cmd.Dir = c.cfg.CWD
@@ -348,6 +338,14 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 		// O evento "result" do stream já encerrou o turno; um segundo complete aqui
 		// faria o turno seguinte parecer terminado sem texto.
 		if turn.completed {
+			if err != nil {
+				message := err.Error()
+				if tail != "" {
+					message += ": " + tail
+				}
+				c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: message}})
+				c.emit(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessID, Reason: "process_error"}})
+			}
 			return
 		}
 		if err != nil {
@@ -414,6 +412,20 @@ func (c *ClaudeCodeHarness) ResumeID() string {
 
 // cliTurn guarda o estado de um único `claude -p`.
 type cliTurn struct{ completed bool }
+
+func buildCLIArgs(cfg harness.SessionConfig, resume, permission, text string) []string {
+	args := []string{"--print", "--output-format", "stream-json", "--verbose"}
+	if cfg.Model != "" {
+		args = append(args, "--model", cfg.Model)
+	}
+	if resume != "" {
+		args = append([]string{"--resume", resume}, args...)
+	}
+	if permission != "" {
+		args = append(args, "--permission-mode", permission)
+	}
+	return append(args, "--", text)
+}
 
 func (c *ClaudeCodeHarness) parseCLIEvent(data []byte, fallbackSession string, turn *cliTurn) {
 	var msg map[string]interface{}

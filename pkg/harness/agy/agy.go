@@ -122,11 +122,7 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 
 		// O modo headless precisa autorizar ferramentas e emitir eventos para que
 		// o agente consiga editar/commitar na worktree sem pedir interação.
-		args := []string{"--dangerously-skip-permissions", "--output-format", "stream-json"}
-		if a.cfg.Model != "" {
-			args = append([]string{"--model", a.cfg.Model}, args...)
-		}
-		args = append(args, "-p", "--", text)
+		args := buildArgs(a.cfg, text)
 
 		cmd := exec.CommandContext(a.ctx, "agy", args...)
 		process.Configure(cmd)
@@ -246,6 +242,17 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 	}()
 
 	return nil
+}
+
+// buildArgs monta a invocação não-interativa documentada pelo agy. O prompt é
+// um valor da opção -p; separá-lo com "--" faz o agy interpretar prompts que
+// começam por hífen como sintaxe inválida.
+func buildArgs(cfg harness.SessionConfig, text string) []string {
+	args := []string{"--dangerously-skip-permissions", "--output-format", "stream-json"}
+	if cfg.Model != "" {
+		args = append([]string{"--model", cfg.Model}, args...)
+	}
+	return append(args, "-p="+text)
 }
 
 func (a *AGYHarness) RespondPermission(ctx context.Context, reqID string, allow bool, message string) error {

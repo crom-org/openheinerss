@@ -195,6 +195,43 @@ func TestClaudeCodeErroDeProcesso(t *testing.T) {
 	}
 }
 
+func TestClaudeCodeCodigoFalhoDepoisDoFim(t *testing.T) {
+	d := t.TempDir()
+	root, _ := os.Getwd()
+	if err := os.Symlink(filepath.Join(root, "testdata", "fake-claude.sh"), filepath.Join(d, "claude")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", d+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("FAKE_FAIL", "1")
+	c := NewClaudeCodeHarness(harness.ModeCLI)
+	if err := c.Start(context.Background(), harness.SessionConfig{SessionID: "post-fim", CWD: t.TempDir()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SendPrompt(context.Background(), "--- prompt", nil); err != nil {
+		t.Fatal(err)
+	}
+	var erro, falha bool
+	deadline := time.After(3 * time.Second)
+	for !falha {
+		select {
+		case ev := <-c.Events():
+			if ev.Type == harness.EventError {
+				erro = true
+			}
+			if ev.Type == harness.EventComplete {
+				if p, ok := ev.Payload.(protocol.CompleteParams); ok && p.Reason == "process_error" {
+					falha = true
+				}
+			}
+		case <-deadline:
+			t.Fatal("código de saída após FIM não virou falha")
+		}
+	}
+	if !erro {
+		t.Fatal("faltou EventError para código de saída 13")
+	}
+}
+
 func hasEnv(env []string, prefix string) bool {
 	for _, v := range env {
 		if strings.HasPrefix(v, prefix) {
