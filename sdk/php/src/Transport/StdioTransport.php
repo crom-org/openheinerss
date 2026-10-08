@@ -17,7 +17,8 @@ class StdioTransport
             2 => STDERR
         ];
 
-        $this->process = proc_open("{$binPath} serve --stdio", $descriptors, $this->pipes);
+        // Array evita interpretação pelo shell e preserva caminhos com espaços.
+        $this->process = proc_open([$binPath, "serve", "--stdio"], $descriptors, $this->pipes);
 
         if (!is_resource($this->process)) {
             throw new \RuntimeException("Falha ao iniciar o processo openheinerss.");

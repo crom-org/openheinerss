@@ -1,8 +1,11 @@
 import os
+import stat
 import threading
 import time
+import tempfile
 import unittest
 from openheinerss import Agent
+from openheinerss.transport import StdioTransport, TransportError
 
 class SDKIntegrationTest(unittest.TestCase):
     @staticmethod
@@ -20,18 +23,21 @@ class SDKIntegrationTest(unittest.TestCase):
             eventos = []
             terminou = threading.Event()
             decisao = []
+            decisao_enviada = threading.Event()
             def evento(payload):
                 eventos.append(payload)
                 if payload.get("opcoes"):
                     decisao.append(payload)
+                    agent.decide_run(payload["id"], "permitir")
+                    decisao_enviada.set()
                 if "codigo" in payload:
                     terminou.set()
             agent.subscribeEvents(evento, projeto="teste-py")
             self.assertIn("instancias", agent.getLimits())
             run = agent.run({"nome": "teste-py", "motor": "mock", "texto": "responda OK", "cwd": os.getcwd(), "projeto": "teste-py"})
             self.assertTrue(run["id"].startswith("rodar-"))
-            self.assertTrue(self._esperar(lambda: decisao, 1.0))
-            agent.decide_run(decisao[0]["id"], "permitir")
+            self.assertTrue(self._esperar(lambda: decisao, 3.0))
+            self.assertTrue(decisao_enviada.wait(1.0))
             self.assertTrue(terminou.wait(1.5))
             self.assertGreaterEqual(len(eventos), 3)
             sessao = list(agent.stream("responda OK"))
@@ -39,5 +45,31 @@ class SDKIntegrationTest(unittest.TestCase):
             self.assertIn("agentes", agent.listRuns(projeto="teste-py"))
         finally:
             agent.close()
+
+    def test_eof_falha_requisicao_pendente(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            falso = os.path.join(pasta, "servidor falso")
+            with open(falso, "w", encoding="utf-8") as arquivo:
+                arquivo.write("#!/usr/bin/env python3\nimport sys\nimport time\nsys.stdin.readline()\ntime.sleep(30)\n")
+            os.chmod(falso, os.stat(falso).st_mode | stat.S_IXUSR)
+            transporte = StdioTransport(bin_path=falso)
+            resultado = []
+            espera = threading.Thread(target=lambda: resultado.append(_request_eof(transporte)))
+            espera.start()
+            time.sleep(0.05)
+            transporte.proc.terminate()
+            espera.join(1.0)
+            self.assertFalse(espera.is_alive())
+            self.assertIsInstance(resultado[0], TransportError)
+            self.assertIn("conexão", str(resultado[0]))
+            transporte.close()
+
+
+def _request_eof(transporte):
+    try:
+        transporte.request({"jsonrpc": "2.0", "id": 99, "method": "teste", "params": {}})
+    except Exception as erro:  # noqa: BLE001 - a asserção verifica o erro de transporte
+        return erro
+    return None
 
 if __name__ == "__main__": unittest.main()

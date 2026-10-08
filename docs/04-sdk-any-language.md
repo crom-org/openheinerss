@@ -31,9 +31,13 @@ for event in agent.stream("responda OK"):
 
 O transporte mantém um leitor em thread: depois de `subscribe_events()` os callbacks de `orq.*` são chamados continuamente, inclusive enquanto o programa faz outra coisa, sem precisar chamar `list_runs()` para liberar eventos. `close()` encerra somente o processo filho criado pelo SDK.
 
+Os callbacks Python são executados por uma fila e uma thread de despacho separadas do leitor. Portanto, é seguro chamar `decide_run()` dentro do callback; o leitor continua recebendo a resposta RPC. Se o servidor fechar o STDIO, todas as requisições pendentes terminam com um erro `TransportError` indicando EOF/conexão encerrada.
+
 ## PHP
 
 `sdk/php/` oferece `Agent::session()`, `prompt()` (devolve uma string e aceita callback opcional de eventos), `respondPermission()` e `listen()`, além dos métodos de orquestração. Como PHP não tem uma thread portátil para esse caso, `listen($segundos)` mantém um loop de leitura com `stream_select`; use-o no processo que precisa observar eventos continuamente. Os métodos que aguardam respostas também bombeiam eventos durante a espera.
+
+O transporte PHP inicia o processo com argumentos separados (sem shell), assim binários em caminhos com espaços funcionam. O transporte TypeScript usa `spawn` com argv pelo mesmo motivo e rejeita as RPCs pendentes quando o processo ou WebSocket chega ao EOF. No TypeScript, callbacks podem chamar métodos assíncronos como `decideRun()` sem bloquear o processamento da resposta.
 
 ## RPC mínimo em qualquer linguagem
 
