@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -192,12 +193,9 @@ func lerCodex(nome, home string, agora time.Time) (Instancia, bool) {
 }
 
 func lerClaude(nome, dir string, agora time.Time) (Instancia, bool) {
-	_ = dir // O diretório identifica a instância; o statusline usa o id dela no nome do arquivo.
-	statusPath := filepath.Join(userHome(), ".config", "crom-painel", "statusline-"+nome+".json")
+	// O statusline do crom-painel usa o id da conta: ~/.claude → conta1, ~/.claude-contaN → contaN.
+	statusPath := filepath.Join(userHome(), ".config", "crom-painel", "statusline-"+contaClaude(nome, dir)+".json")
 	b, err := os.ReadFile(statusPath)
-	if err != nil && nome == "claude-code" {
-		b, err = os.ReadFile(filepath.Join(userHome(), ".config", "crom-painel", "statusline-conta1.json"))
-	}
 	if err != nil {
 		return Instancia{Nome: nome, Base: "claude-code", Nota: "statusline não encontrado"}, true
 	}
@@ -256,4 +254,18 @@ func parseTime(value string, fallback time.Time) time.Time {
 		return fallback
 	}
 	return t
+}
+
+var reContaClaude = regexp.MustCompile(`^\.claude-(conta\d+)$`)
+
+// contaClaude acha o id da conta do Claude a partir do CLAUDE_CONFIG_DIR da instância.
+func contaClaude(nome, dir string) string {
+	base := filepath.Base(filepath.Clean(dir))
+	if dir == "" || base == ".claude" {
+		return "conta1"
+	}
+	if m := reContaClaude.FindStringSubmatch(base); m != nil {
+		return m[1]
+	}
+	return nome
 }

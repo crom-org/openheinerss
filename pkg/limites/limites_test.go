@@ -60,3 +60,17 @@ func TestObterLêCodexEClaudePorInstancia(t *testing.T) {
 		t.Fatal("fixture de statusline contém token")
 	}
 }
+
+func TestContaClaudePelaPasta(t *testing.T) {
+	casos := map[[2]string]string{
+		{"claude-code", ""}:                         "conta1",
+		{"x", "/home/u/.claude"}:                    "conta1",
+		{"claude-conta2", "/home/u/.claude-conta2"}: "conta2",
+		{"outra", "/srv/claude-custom"}:             "outra",
+	}
+	for in, want := range casos {
+		if got := contaClaude(in[0], in[1]); got != want {
+			t.Fatalf("contaClaude(%q,%q)=%q, quero %q", in[0], in[1], got, want)
+		}
+	}
+}
