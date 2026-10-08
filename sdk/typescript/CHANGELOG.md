@@ -1,6 +1,7 @@
 # Changelog
 
-## Não lançado
+## 1.2.0 (não publicada)
+- `filhosObrigatorios` em `run` (o pai termina com código 4, motivo "filho falhou") e o evento `orq.filhos_orfaos` em `subscribeEvents`; `orq.fim` traz `filhos`.
 - Adiciona `listCommands`, `annotateCommand`, `confirmCommand` (`harness.comandos*`) e os tipos `HarnessCommand`/`HarnessCommandList`.
 - Adiciona `harnessArgs` e `effort` nas opções de sessão, `harnessArgs` em `run` e o evento `raw` (`agent.raw`).
 

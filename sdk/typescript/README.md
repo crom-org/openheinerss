@@ -1,4 +1,4 @@
-# @openheinerss/sdk 1.1.0
+# @openheinerss/sdk 1.2.0
 
 SDK oficial em **TypeScript / JavaScript** para integração com o **Openheinerss** (crom-org).
 
