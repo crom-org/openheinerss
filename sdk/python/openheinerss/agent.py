@@ -7,7 +7,7 @@ from .transport import StdioTransport, WebSocketTransport
 
 class RunOptions(TypedDict, total=False):
     nome: str; motor: str; modelo: str; esforco: str; prompt: str; texto: str; retomar: bool
-    pasta: str; branchBase: str; cargaMax: float; maxAgentes: int; tentativas: int; cotaMax: float; cwd: str; projeto: str
+    pasta: str; branchBase: str; cargaMax: float; maxAgentes: int; tentativas: int; cotaMax: float; filhosObrigatorios: bool; cwd: str; projeto: str
     harnessArgs: list
 
 class OrchestrationEvent(TypedDict):
@@ -220,7 +220,7 @@ class Agent:
 
     def subscribe_events(self, callback: Optional[Callable[[Dict[str, Any]], None]] = None, **filter: str) -> None:
         if callback:
-            for name in ("orq.inicio", "orq.progresso", "orq.fim", "orq.erro", "orq.precisa_decisao"):
+            for name in ("orq.inicio", "orq.progresso", "orq.fim", "orq.erro", "orq.precisa_decisao", "orq.filhos_orfaos"):
                 self.callbacks[name] = callback
         self._request("eventos.assinar", filter)
 
