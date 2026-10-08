@@ -45,6 +45,7 @@ func NewStdioServerWithMaxAgents(m *session.Manager, in io.Reader, out io.Writer
 
 	// Inscreve para repassar eventos assíncronos direto para o stdout
 	m.SubscribeEvents(func(notification protocol.Notification) {
+		notification.Geracao = s.router.geracao
 		s.writeMessage(notification)
 	})
 

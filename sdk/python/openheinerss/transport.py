@@ -41,6 +41,22 @@ class StdioTransport:
             self._fail_pending(f"Servidor openheinerss encerrou a conexão: {exc}")
             raise self._eof_error from exc
 
+    def start_request(self, payload: dict) -> "queue.Queue[dict[str, Any]]":
+        """Envia sem bloquear; a resposta chega na fila devolvida (encerre com end_request)."""
+        response_queue: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=1)
+        with self._lock:
+            self._responses[payload["id"]] = response_queue
+        try:
+            self.send(payload)
+        except BaseException:
+            self.end_request(payload["id"])
+            raise
+        return response_queue
+
+    def end_request(self, req_id: Any) -> None:
+        with self._lock:
+            self._responses.pop(req_id, None)
+
     def request(self, payload: dict) -> dict[str, Any]:
         response_queue: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=1)
         with self._lock:

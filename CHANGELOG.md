@@ -6,6 +6,14 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 
 ## [Não lançado]
 
+### Corrigido (aceitação das novidades — análise 26 da Central)
+
+- `comandos.yaml` não perde anotações entre processos: trava `comandos.yaml.lock` (flock; Windows: arquivo exclusivo) em volta de ler+alterar+gravar, temporário único (`CreateTemp` na mesma pasta) e erro real se a gravação falhar. Teste com 2 processos × 25 anotações: 50/50 (antes 23/50).
+- SDKs Python e PHP: erro RPC de `session.prompt` (ex.: `/compact` no codex) vira exceção em vez de esperar `agent.complete` para sempre; teto de segurança sem eventos (`prompt_timeout`/`$promptTimeout`, 3600 s; `timeout` por chamada).
+- `geracao` no envelope de todos os eventos do serve (`agent.raw`, `agent.text`, `agent.tool_call`, `agent.complete`… e `orq.*`), WebSocket e stdio.
+- `rodar` com regras padrão e prompt `/comando`: o comando vai primeiro e as regras por outro canal (claude: `--append-system-prompt`; codex: `-c developer_instructions`; aider: `--read`; demais: depois do comando).
+- Anotações mascaram segredos (`***`, como o `--seco`) ao gravar e ao listar; `comandos.yaml` com 0600 e pasta nova com 0700.
+
 ### Adicionado (catálogo de comandos por harness)
 
 - `openheinerss comandos <harness> [--json] [--cwd]` (alias `commands`), `comandos anotar <harness> </cmd> "<texto>"` e `comandos confirmar <harness> </cmd>`; no servidor, `harness.comandos`, `harness.comandos.anotar` e `harness.comandos.confirmar`; SDKs TS/Py/PHP `listCommands`, `annotateCommand`, `confirmCommand`. Cada harness base (claude-code, codex, opencode, aider, agy) tem o catálogo embutido com descrição em pt-BR e o repasse (`literal`, `traduzido`, `sem_equivalente`); instâncias herdam da `base:`. Comandos e skills instalados no harness (`.claude/commands`, `skills/`, `command/` do opencode, `prompts/` do codex) são descobertos em tempo de execução. Anotações e `confirmado` ficam em `comandos.yaml` (`~/.config/openheinerss/` e a pasta de `--config`/`OPENHEINERSS_CONFIG`), gravado preservando comentários. Pedido do usuário para a crom-central.

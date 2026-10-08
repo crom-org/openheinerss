@@ -39,7 +39,9 @@ type Response struct {
 
 // Notification representa um evento emitido assincronamente (sem campo id)
 type Notification struct {
-	JSONRPC string      `json:"jsonrpc"`
+	JSONRPC string `json:"jsonrpc"`
+	// Geracao identifica o processo do serve que emitiu o evento (vai em todos os eventos do serve).
+	Geracao string      `json:"geracao,omitempty"`
 	Method  string      `json:"method"`
 	Params  interface{} `json:"params"`
 }

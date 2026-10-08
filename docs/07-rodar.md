@@ -36,7 +36,9 @@ KEY/TOKEN/SECRET aparecem como `***`). Quando o `rodar` termina com código ≠ 
 a linha final do terminal traz a causa curta: `FIM nome código 1: <causa>`; o
 detalhe fica no log.
 
-Por padrão, o runner acrescenta regras curtas ao prompt: trabalhar somente dentro da pasta/worktree do agente e não fazer buscas fora dela (`find /`, `find ~`, `locate` ou varreduras de disco). Use `--sem-regras-padrao` (`--no-default-rules`) para desligá-las. Também é possível definir `regras_padroes: caminho/para/regras.txt` em `.openheinerss/config.yaml`; `sem_regras_padroes: true` desliga as regras pela configuração.
+Por padrão, o runner acrescenta regras curtas ao prompt: trabalhar somente dentro da pasta/worktree do agente e não fazer buscas fora dela (`find /`, `find ~`, `locate` ou varreduras de disco). Use `--sem-regras-padrao` (`--no-default-rules`) para desligá-las.
+
+Quando o prompt é um `/comando` (ex.: `--texto "/review agora"`), ele continua sendo o começo do que o harness recebe e as regras vão por outro canal: **claude-code** (e instâncias com essa base) → `--append-system-prompt`; **codex** → `-c developer_instructions="..."`; **aider** → `--read <pasta>/logs/<nome>.regras.md`; **opencode, agy, custom e mock** → no mesmo prompt, depois do comando (separadas por uma linha em branco). Prompt comum continua com as regras antes do texto. Também é possível definir `regras_padroes: caminho/para/regras.txt` em `.openheinerss/config.yaml`; `sem_regras_padroes: true` desliga as regras pela configuração.
 
 **Código de saída.** O processo termina com o código do `FIM` do log: `0` concluído, `1` erro (tentativas esgotadas), `2` falta de cota sem reserva (ou todas as instâncias acima de `--cota-max`) e `130` parado por Ctrl-C/SIGTERM (o log e o `meta.json` são fechados antes de sair) ou por `agentes parar`.
 

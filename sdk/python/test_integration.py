@@ -161,6 +161,63 @@ class PonteTest(unittest.TestCase):
             self.assertEqual(prompt["params"]["text"], "/model x")
 
 
+FALSO_SEM_EQUIVALENTE = """#!/usr/bin/env python3
+import json, sys
+for linha in sys.stdin:
+    req = json.loads(linha)
+    if req["method"] == "session.create":
+        print(json.dumps({"jsonrpc": "2.0", "id": req["id"], "result": {"sessionId": "s1"}}), flush=True)
+    elif req["method"] == "session.prompt" and req["params"]["text"].startswith("/compact"):
+        print(json.dumps({"jsonrpc": "2.0", "id": req["id"], "error": {"code": -32603, "message": "codex não aceita /compact"}}), flush=True)
+    elif req["method"] == "session.prompt":
+        print(json.dumps({"jsonrpc": "2.0", "id": req["id"], "result": {"accepted": True}}), flush=True)
+"""
+
+
+class ErroDoPromptTest(unittest.TestCase):
+    """Auditoria 26: /comando sem equivalente devolvia erro RPC e o SDK esperava agent.complete para sempre."""
+
+    def _falso(self, pasta):
+        falso = os.path.join(pasta, "falso")
+        with open(falso, "w", encoding="utf-8") as arquivo:
+            arquivo.write(FALSO_SEM_EQUIVALENTE)
+        os.chmod(falso, os.stat(falso).st_mode | stat.S_IXUSR)
+        return falso
+
+    def test_erro_rpc_do_prompt_vira_excecao(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            agent = Agent(harness="codex", bin_path=self._falso(pasta))
+            try:
+                inicio = time.monotonic()
+                with self.assertRaisesRegex(RuntimeError, "não aceita /compact"):
+                    agent.prompt("/compact")
+                self.assertLess(time.monotonic() - inicio, 2)
+            finally:
+                agent.close()
+
+    def test_timeout_de_seguranca_sem_eventos(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            agent = Agent(harness="codex", bin_path=self._falso(pasta))
+            try:
+                with self.assertRaises(TimeoutError):
+                    agent.prompt("oi", timeout=0.3)
+            finally:
+                agent.close()
+
+    def test_servidor_real_codex_compact(self):
+        try:
+            agent = Agent(harness="codex", bin_path=os.environ.get("OPENHEINERSS_BIN", "openheinerss"), cwd=tempfile.mkdtemp(prefix="oh-py-codex-"))
+        except RuntimeError as erro:
+            self.skipTest(f"codex indisponível: {erro}")
+        try:
+            inicio = time.monotonic()
+            with self.assertRaisesRegex(RuntimeError, "/compact"):
+                agent.prompt("/compact", timeout=10)
+            self.assertLess(time.monotonic() - inicio, 5)
+        finally:
+            agent.close()
+
+
 def StdioTransportEsperar(condicao, segundos=1.0):
     fim = time.monotonic() + segundos
     while not condicao() and time.monotonic() < fim:

@@ -79,6 +79,7 @@ func NewWSServerWithMaxAgents(m *session.Manager, maxAgents int) *WSServer {
 
 	// Repassa eventos assíncronos do agente para todos os clientes conectados
 	m.SubscribeEvents(func(notification protocol.Notification) {
+		notification.Geracao = s.router.geracao
 		s.broadcast(notification)
 	})
 

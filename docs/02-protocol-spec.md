@@ -253,7 +253,7 @@ Quando ocorre um erro de execução ou dependência ausente, a resposta de erro 
 
 ## 5. Orquestração (`rodar`, limites e eventos `orq.*`)
 
-Cada processo `serve` cria uma `geracao` aleatória no início. Ela aparece no envelope de todas as respostas JSON-RPC e nos parâmetros de todos os eventos `orq.*`; clientes devem usá-la junto aos IDs, pois `rodar-1` e `dec-2` podem ser reciclados depois de um reinício.
+Cada processo `serve` cria uma `geracao` aleatória no início. Ela aparece no envelope de todas as respostas JSON-RPC, no envelope de **todos** os eventos do serve (`agent.*` e `orq.*`, campo `geracao` ao lado de `method`) e também nos parâmetros dos eventos `orq.*`; clientes devem usá-la junto aos IDs, pois `rodar-1` e `dec-2` podem ser reciclados depois de um reinício.
 
 Os mesmos métodos valem no STDIO (NDJSON) e no WebSocket (`ws://127.0.0.1:4820/ws`). **Segurança do WebSocket:** o servidor executa agentes na máquina, então só aceita conexões sem cabeçalho `Origin` (SDKs e scripts) ou de origens locais (`localhost`, `127.0.0.1`, `[::1]`, Tauri). Para liberar a página de um painel remoto, defina `OPENHEINERSS_ORIGENS` com as origens separadas por vírgula (ou `*` para liberar todas, por sua conta e risco); qualquer outra recebe `403`. O `crom-central` (ou qualquer cliente) lança agentes pelo servidor e acompanha tudo por eventos. Os eventos `agent.*` continuam como na seção 2; os `orq.*` descrevem a **missão** (um agente do `rodar`), não a conversa.
 
@@ -327,7 +327,7 @@ Comandos nativos (`/compact`, `/model`…) de um harness ou instância. Não é 
   - `origem`: `embutido` (catálogo da auditoria docs/PONTE.md), `descoberto` (achado nos arquivos do harness: `.claude/commands`, `skills/*/SKILL.md` em `cwd` e em `CLAUDE_CONFIG_DIR`; `command(s)/` do opencode; `prompts/` do codex) ou `usuario` (só no `comandos.yaml`).
   - `cwd` (opcional): pasta do projeto onde procurar comandos do harness.
 - `harness.comandos.anotar` `{harness, comando, anotacao}` e `harness.comandos.confirmar` `{harness, comando}` gravam no `comandos.yaml` e devolvem o comando já mesclado. A tela de confirmação do primeiro uso é do cliente; o openheinerss só guarda `confirmado`.
-- Arquivo: `~/.config/openheinerss/comandos.yaml` (respeita `XDG_CONFIG_HOME`); com `--config`/`OPENHEINERSS_CONFIG`, também `<pasta>/comandos.yaml`, que vence o global e é onde se grava. A gravação preserva comentários.
+- Arquivo: `~/.config/openheinerss/comandos.yaml` (respeita `XDG_CONFIG_HOME`); com `--config`/`OPENHEINERSS_CONFIG`, também `<pasta>/comandos.yaml`, que vence o global e é onde se grava. A gravação preserva comentários, usa trava entre processos (`comandos.yaml.lock`: flock no Linux/macOS, arquivo exclusivo no Windows) cobrindo ler+alterar+gravar, temporário único na mesma pasta e devolve erro se não gravar — dois `serve` na mesma `--config` não perdem anotações. O arquivo fica com permissão 0600 (pasta criada com 0700). Segredos em `anotacao` (`NOME=valor`/`NOME: valor` com nome de credencial — token, secret, senha, password, api_key, authorization…, `Bearer …` e chaves conhecidas `sk-…`, `ghp_…`, `github_pat_…`, `glpat-…`, `xox?-…`, `AKIA…`) viram `***` antes de gravar e ao listar.
 
 ```yaml
 claude-code:

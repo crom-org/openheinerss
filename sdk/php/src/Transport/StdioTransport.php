@@ -55,6 +55,12 @@ class StdioTransport
         return $message;
     }
 
+    /** true quando o servidor fechou o stdout (EOF). */
+    public function encerrado(): bool
+    {
+        return !is_resource($this->pipes[1] ?? null) || feof($this->pipes[1]);
+    }
+
     public function readLine(): ?string
     {
         $message = $this->pump(null);

@@ -10,6 +10,8 @@ class Agent
     private string $sessionId;
     private int $reqId = 1;
     public ?string $generation = null;
+    /** Teto de segurança (s) sem nenhuma mensagem durante prompt(); null desliga. */
+    public ?float $promptTimeout = 3600.0;
     /** @var array<string, callable> */
     private array $callbacks = [];
 
@@ -74,9 +76,16 @@ class Agent
         $this->callbacks[$method] = $callback;
     }
 
-    public function prompt(string $text, ?callable $onEvent = null): string
+    /**
+     * Envia o prompt e lê eventos até agent.complete. Erro na resposta de session.prompt
+     * (ex.: /comando sem equivalente) vira RuntimeException, como no SDK TypeScript; sem nenhuma
+     * mensagem por $timeout segundos (padrão $promptTimeout; null/0 desliga) lança RuntimeException
+     * em vez de esperar para sempre.
+     */
+    public function prompt(string $text, ?callable $onEvent = null, ?float $timeout = null): string
     {
         $id = $this->reqId++;
+        $limite = $timeout ?? $this->promptTimeout;
         $this->transport->send([
             "jsonrpc" => "2.0",
             "id"      => $id,
@@ -88,10 +97,27 @@ class Agent
         ]);
 
         $fullText = "";
+        $ultimo = microtime(true);
 
-        while ($line = $this->transport->readLine()) {
-            $msg = json_decode($line, true);
-            if (!$msg) continue;
+        while (true) {
+            $msg = $this->transport->pump(0.1);
+            if ($msg === null) {
+                if ($this->transport->encerrado()) {
+                    throw new \RuntimeException("Servidor encerrou a conexão durante session.prompt");
+                }
+                if ($limite && microtime(true) - $ultimo > $limite) {
+                    throw new \RuntimeException("session.prompt sem eventos há {$limite}s");
+                }
+                continue;
+            }
+            $ultimo = microtime(true);
+
+            if (($msg['id'] ?? null) === $id) {
+                if (isset($msg['error'])) {
+                    throw new \RuntimeException($msg['error']['message'] ?? 'session.prompt falhou');
+                }
+                continue;
+            }
 
             if (isset($msg['method'])) {
                 $method = $msg['method'];
