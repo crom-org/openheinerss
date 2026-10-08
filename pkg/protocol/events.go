@@ -10,6 +10,8 @@ const (
 	EventAgentComplete          = "agent.complete"
 	EventAgentError             = "agent.error"
 	EventAgentUsage             = "agent.usage"
+	// EventAgentRaw leva a linha original do harness quando ela não vira outro evento.
+	EventAgentRaw = "agent.raw"
 )
 
 // ThinkingParams payload para agent.thinking
@@ -75,4 +77,12 @@ type UsageParams struct {
 	OutputTokens int64   `json:"outputTokens,omitempty"`
 	TotalTokens  int64   `json:"totalTokens,omitempty"`
 	CostUSD      float64 `json:"costUsd,omitempty"`
+}
+
+// RawParams payload para agent.raw: a linha exatamente como o harness a escreveu.
+type RawParams struct {
+	SessionID string `json:"sessionId"`
+	Harness   string `json:"harness,omitempty"`
+	Stream    string `json:"stream,omitempty"` // "stdout" ou "stderr"
+	Line      string `json:"line"`
 }

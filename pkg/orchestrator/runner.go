@@ -45,9 +45,11 @@ type Options struct {
 	MaxAgents, Attempts   int
 	QuotaMax              float64
 	EventLog              string
-	Load                  func() (float64, error)
-	Sleep                 func(time.Duration)
-	Now                   func() time.Time
+	// HarnessArgs vai intacto, na ordem, para o processo do harness (--arg/--harness-arg).
+	HarnessArgs []string
+	Load        func() (float64, error)
+	Sleep       func(time.Duration)
+	Now         func() time.Time
 	// OnEvent recebe os eventos de orquestração (opcional; o CLI não usa).
 	OnEvent func(Evento)
 	// ViaServidor marca execuções lançadas por `serve`: o PID do meta.json é o do servidor.
@@ -430,6 +432,9 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		hctx, cancel := context.WithCancel(ctx)
 		options := map[string]interface{}{"effort": effort}
 		options["rodar"] = true
+		if len(o.HarnessArgs) > 0 {
+			options[harness.OptionHarnessArgs] = append([]string(nil), o.HarnessArgs...)
+		}
 		if resumeID != "" && resumeMotor == candidate {
 			options["codex_session_id"] = resumeID
 			options["claude_session_id"] = resumeID

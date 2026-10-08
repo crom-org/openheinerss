@@ -40,10 +40,12 @@ type Attachment struct {
 
 // SessionOptions opções extras de configuração da sessão
 type SessionOptions struct {
-	Effort         string                 `json:"effort,omitempty"`         // "low", "medium", "high", "ultracode"
-	PermissionMode string                 `json:"permissionMode,omitempty"` // "ask", "always_allow", "plan"
-	SystemPrompt   string                 `json:"systemPrompt,omitempty"`
-	Extra          map[string]interface{} `json:"extra,omitempty"`
+	Effort         string `json:"effort,omitempty"`         // "low", "medium", "high", "ultracode"
+	PermissionMode string `json:"permissionMode,omitempty"` // "ask", "always_allow", "plan"
+	SystemPrompt   string `json:"systemPrompt,omitempty"`
+	// HarnessArgs vai intacto, na ordem, para o processo do harness (repasse de opções nativas).
+	HarnessArgs []string               `json:"harnessArgs,omitempty"`
+	Extra       map[string]interface{} `json:"extra,omitempty"`
 }
 
 // SessionCreateParams parâmetros para session.create
@@ -204,7 +206,9 @@ type RunParams struct {
 	MaxAgentes int     `json:"maxAgentes,omitempty"`
 	Tentativas int     `json:"tentativas,omitempty"`
 	CotaMax    float64 `json:"cotaMax,omitempty"`
-	CWD        string  `json:"cwd,omitempty"`
+	// HarnessArgs vai intacto, na ordem, para o processo do harness.
+	HarnessArgs []string `json:"harnessArgs,omitempty"`
+	CWD         string   `json:"cwd,omitempty"`
 }
 
 type LimitsParams struct{}
