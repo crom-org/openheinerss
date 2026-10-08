@@ -161,6 +161,7 @@ Flags:
       --motor string      Harness base ou instância custom definida pelo usuário
       --papel string      Papel definido em .openheinerss/motores.yaml
       --provider string   Provedor do modelo
+      --retomar string    Retoma a sessão persistida pelo ID
 
 ```
 
