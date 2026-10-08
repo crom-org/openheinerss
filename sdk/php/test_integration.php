@@ -7,10 +7,19 @@ function repoTemporario(): string {
     if ($codigo !== 0) throw new RuntimeException('git init falhou');
     return $pasta;
 }
+require __DIR__ . '/src/Transport/TransportInterface.php';
 require __DIR__ . '/src/Transport/StdioTransport.php';
+require __DIR__ . '/src/Transport/WebSocketTransport.php';
 require __DIR__ . '/src/Types.php';
 require __DIR__ . '/src/Agent.php';
-$agent = Openheinerss\Agent::session(['harness' => 'mock'], getenv('OPENHEINERSS_BIN') ?: 'openheinerss');
+// test_websocket.php reexecuta este arquivo com TESTE_WS_PORTA (e TESTE_WS_CFG_PORTA/TESTE_WS_CFG): os mesmos
+// testes de API contra um `serve` WebSocket real. Sem elas, STDIO. Os servidores falsos abaixo são sempre STDIO.
+function agenteReal(array $opcoes = [], bool $comConfig = false): Openheinerss\Agent {
+    $porta = getenv($comConfig ? 'TESTE_WS_CFG_PORTA' : 'TESTE_WS_PORTA');
+    if ($porta) return Openheinerss\Agent::session($opcoes + ['harness' => 'mock', 'transport' => 'websocket', 'port' => (int) $porta]);
+    return Openheinerss\Agent::session($opcoes + ['harness' => 'mock'], getenv('OPENHEINERSS_BIN') ?: 'openheinerss');
+}
+$agent = agenteReal();
 $agent->registerHarness(['name' => 'php-test-harness', 'base' => 'mock']);
 $names = array_map(fn($h) => $h['id'], $agent->listHarnesses());
 if (!in_array('php-test-harness', $names, true)) throw new RuntimeException('harness não registrado');
@@ -105,7 +114,7 @@ if (microtime(true) - $inicio > 2) throw new RuntimeException('erro do prompt de
 try { $semEq->prompt('oi', null, 0.3); throw new LogicException('timeout de segurança não disparou'); }
 catch (RuntimeException $e) { if (!str_contains($e->getMessage(), 'sem eventos')) throw $e; }
 unset($semEq);
-try { $codexReal = Openheinerss\Agent::session(['harness' => 'codex', 'cwd' => sys_get_temp_dir()], getenv('OPENHEINERSS_BIN') ?: 'openheinerss'); }
+try { $codexReal = agenteReal(['harness' => 'codex', 'cwd' => sys_get_temp_dir()]); }
 catch (RuntimeException $e) { $codexReal = null; echo "codex indisponível, pulando /compact real: {$e->getMessage()}\n"; }
 if ($codexReal) {
     try { $codexReal->prompt('/compact', null, 10); throw new LogicException('/compact no codex não lançou'); }
@@ -113,12 +122,12 @@ if ($codexReal) {
     unset($codexReal);
 }
 // Comandos do harness: anotar e confirmar gravam em <OPENHEINERSS_CONFIG>/comandos.yaml.
-$cfgComandos = sys_get_temp_dir() . '/openheinerss-cmd-php-' . bin2hex(random_bytes(4));
-mkdir($cfgComandos);
+$cfgComandos = getenv('TESTE_WS_CFG') ?: sys_get_temp_dir() . '/openheinerss-cmd-php-' . bin2hex(random_bytes(4));
+if (!is_dir($cfgComandos)) mkdir($cfgComandos);
 $antesCfg = getenv('OPENHEINERSS_CONFIG');
 putenv('OPENHEINERSS_CONFIG=' . $cfgComandos);
 try {
-    $cmdAgent = Openheinerss\Agent::session(['harness' => 'mock'], getenv('OPENHEINERSS_BIN') ?: 'openheinerss');
+    $cmdAgent = agenteReal([], true);
     $nota = $cmdAgent->annotateCommand('claude-code', '/compact', 'compacta o claude code; o central não usa');
     if (($nota['anotacao'] ?? '') !== 'compacta o claude code; o central não usa') throw new RuntimeException('anotação não gravada');
     if (!($cmdAgent->confirmCommand('claude-code', '/compact')['confirmado'] ?? false)) throw new RuntimeException('confirmar falhou');
@@ -130,6 +139,7 @@ try {
     putenv($antesCfg === false ? 'OPENHEINERSS_CONFIG' : 'OPENHEINERSS_CONFIG=' . $antesCfg);
 }
 echo "PHP SDK integração OK\n";
+if (getenv('TESTE_WS_PORTA')) exit(0); // caminho com espaço só vale para o processo filho (STDIO)
 
 // O caminho do executável pode conter espaços; proc_open recebe argv, não shell.
 $bin = getenv('OPENHEINERSS_BIN') ?: 'openheinerss';

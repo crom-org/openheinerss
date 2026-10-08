@@ -3,10 +3,12 @@
 namespace Openheinerss;
 
 use Openheinerss\Transport\StdioTransport;
+use Openheinerss\Transport\TransportInterface;
+use Openheinerss\Transport\WebSocketTransport;
 
 class Agent
 {
-    private StdioTransport $transport;
+    private TransportInterface $transport;
     private string $sessionId;
     private int $reqId = 1;
     public ?string $generation = null;
@@ -17,7 +19,13 @@ class Agent
 
     public function __construct(array $options = [], string $binPath = "openheinerss")
     {
-        $this->transport = new StdioTransport($binPath);
+        // Padrão STDIO; transport => 'websocket' (ou url) conecta a um `serve --porta N` já rodando.
+        $modo = $options['transport'] ?? (isset($options['url']) ? 'websocket' : 'stdio');
+        $this->transport = match ($modo) {
+            'stdio' => new StdioTransport($binPath),
+            'websocket' => new WebSocketTransport($options['url'] ?? null, $options['host'] ?? '127.0.0.1', isset($options['port']) ? (int) $options['port'] : null, $options['origin'] ?? null),
+            default => throw new \InvalidArgumentException("transport inválido: {$modo} (use 'stdio' ou 'websocket')"),
+        };
         $this->transport->onMessage(function (array $message): void {
             $name = $message['method'] ?? null;
             if ($name !== null && isset($this->callbacks[$name])) {
@@ -59,6 +67,7 @@ class Agent
                 return;
             }
         }
+        throw new \RuntimeException("Servidor encerrou a conexão durante session.create");
     }
 
     /** effort e harnessArgs (argumentos nativos extras, intactos e na ordem) vão em params.options. */
