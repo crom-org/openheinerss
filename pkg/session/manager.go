@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/crom-org/openheinerss/pkg/harness"
+	"github.com/crom-org/openheinerss/pkg/motor"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 )
 
@@ -62,6 +63,23 @@ func (m *Manager) broadcast(notification protocol.Notification) {
 
 // CreateSession inicializa uma nova sessão com o harness e configurações solicitadas
 func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCreateParams) (*protocol.SessionCreateResult, error) {
+	if params.Papel != "" {
+		roles, path, err := motor.FindRoles(params.CWD)
+		if err != nil {
+			return nil, &protocol.RPCError{Code: protocol.CodeInvalidParams, Message: err.Error()}
+		}
+		p, ok := roles[params.Papel]
+		if !ok {
+			return nil, &protocol.RPCError{Code: protocol.CodeInvalidParams, Message: fmt.Sprintf("papel '%s' não encontrado em %s", params.Papel, path)}
+		}
+		params.Harness, params.Mode, params.Provider, params.Model, params.Env = p.Harness, p.Mode, p.Provider, p.Model, p.Env
+		if params.Options.Extra == nil {
+			params.Options.Extra = map[string]interface{}{}
+		}
+		if p.Effort != "" {
+			params.Options.Extra["effort"] = p.Effort
+		}
+	}
 	if params.Harness == "" {
 		params.Harness = "mock"
 	}

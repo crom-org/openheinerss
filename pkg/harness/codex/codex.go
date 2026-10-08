@@ -18,12 +18,16 @@ import (
 )
 
 func init() {
-	harness.Register("codex", protocol.HarnessCatalogItem{ID: "codex", DisplayName: "OpenAI Codex / Assistant Engine", SupportedModes: []string{"cli", "api"}, SupportedProtocols: []string{"openai"}}, func(mode harness.Mode) (harness.Harness, error) {
-		if mode == "" || mode == harness.ModeMock {
-			mode = harness.ModeCLI
-		}
-		return NewCodexHarness(mode), nil
-	})
+	register := func(name string) {
+		harness.Register(name, protocol.HarnessCatalogItem{ID: name, DisplayName: "OpenAI Codex / Assistant Engine", SupportedModes: []string{"cli", "api"}, SupportedProtocols: []string{"openai"}}, func(mode harness.Mode) (harness.Harness, error) {
+			if mode == "" || mode == harness.ModeMock {
+				mode = harness.ModeCLI
+			}
+			return NewCodexHarness(mode), nil
+		})
+	}
+	register("codex")
+	register("codex2")
 }
 
 // CodexHarness adapta o streaming JSONL do `codex exec` ao protocolo do projeto.
@@ -208,7 +212,7 @@ func buildExecArgs(cfg harness.SessionConfig, threadID, prompt string) []string 
 	}
 	model := cfg.Model
 	if model == "" {
-		model = "gpt-5-codex"
+		model = "gpt-reserve"
 	}
 	if threadID != "" {
 		return []string{"exec", "resume", "--json", "-m", model, "-c", "model_reasoning_effort=" + effort, "--dangerously-bypass-approvals-and-sandbox", threadID, prompt}

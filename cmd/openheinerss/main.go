@@ -16,11 +16,13 @@ import (
 	"github.com/crom-org/openheinerss/pkg/doctor"
 	_ "github.com/crom-org/openheinerss/pkg/harness/agy"
 	_ "github.com/crom-org/openheinerss/pkg/harness/aider"
+	_ "github.com/crom-org/openheinerss/pkg/harness/cco"
 	_ "github.com/crom-org/openheinerss/pkg/harness/claudecode"
 	_ "github.com/crom-org/openheinerss/pkg/harness/codex"
 	_ "github.com/crom-org/openheinerss/pkg/harness/mock"
 	_ "github.com/crom-org/openheinerss/pkg/harness/opencode"
 	"github.com/crom-org/openheinerss/pkg/mcp"
+	"github.com/crom-org/openheinerss/pkg/motor"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 	"github.com/crom-org/openheinerss/pkg/server"
 	"github.com/crom-org/openheinerss/pkg/session"
@@ -43,6 +45,7 @@ Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC d
 	rootCmd.AddCommand(newDoctorCmd())
 	rootCmd.AddCommand(newInitCmd())
 	rootCmd.AddCommand(newRunCmd())
+	rootCmd.AddCommand(newMotorsCmd())
 	rootCmd.AddCommand(newMcpCmd())
 	rootCmd.AddCommand(newVersionCmd())
 
@@ -154,10 +157,13 @@ func newInitCmd() *cobra.Command {
 
 func newRunCmd() *cobra.Command {
 	var (
+		role        string
+		motorName   string
 		harnessName string
 		modeName    string
 		provider    string
 		model       string
+		effort      string
 	)
 
 	cmd := &cobra.Command{
@@ -167,6 +173,28 @@ func newRunCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			promptText := strings.Join(args, " ")
 			cwd, _ := os.Getwd()
+			var env map[string]string
+			var extra map[string]interface{}
+			if role != "" {
+				roles, path, err := motor.FindRoles(cwd)
+				if err != nil {
+					return err
+				}
+				p, ok := roles[role]
+				if !ok {
+					return fmt.Errorf("papel '%s' não encontrado em %s", role, path)
+				}
+				harnessName, modeName, provider, model, env, effort = p.Harness, p.Mode, p.Provider, p.Model, p.Env, p.Effort
+			} else if motorName != "" {
+				p, err := motor.Resolve(motorName, model, effort)
+				if err != nil {
+					return err
+				}
+				harnessName, modeName, provider, model, env, effort = p.Harness, p.Mode, p.Provider, p.Model, p.Env, p.Effort
+			}
+			if effort != "" {
+				extra = map[string]interface{}{"effort": effort}
+			}
 
 			manager := session.NewManager()
 			ctx, cancel := context.WithCancel(context.Background())
@@ -178,6 +206,8 @@ func newRunCmd() *cobra.Command {
 				CWD:      cwd,
 				Provider: provider,
 				Model:    model,
+				Env:      env,
+				Options:  protocol.SessionOptions{Extra: extra},
 			})
 			if err != nil {
 				return fmt.Errorf("falha ao criar sessão: %v", err)
@@ -248,12 +278,42 @@ func newRunCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVar(&role, "papel", "", "Papel definido em .openheinerss/motores.yaml")
+	cmd.Flags().StringVar(&motorName, "motor", "", "Perfil de motor (codex, claude-conta2, cco-zen, opencode...)")
 	cmd.Flags().StringVar(&harnessName, "harness", "mock", "Nome do harness ('mock', 'claude-code', 'opencode')")
 	cmd.Flags().StringVar(&modeName, "mode", "mock", "Modo do harness ('mock', 'sdk', 'cli')")
 	cmd.Flags().StringVar(&provider, "provider", "", "Provedor do modelo")
 	cmd.Flags().StringVar(&model, "model", "", "Nome do modelo")
+	cmd.Flags().StringVar(&model, "modelo", "", "Alias em português de --model")
+	cmd.Flags().StringVar(&effort, "esforco", "", "Esforço de raciocínio do motor")
 
 	return cmd
+}
+
+func newMotorsCmd() *cobra.Command {
+	return &cobra.Command{Use: "motores", Short: "Lista perfis de motores e papéis configurados", RunE: func(cmd *cobra.Command, args []string) error {
+		for _, p := range motor.Perfis() {
+			fmt.Printf("%-16s harness=%-12s modelo=%s", p.Nome, p.Harness, p.Model)
+			if p.Provider != "" {
+				fmt.Printf(" provedor=%s", p.Provider)
+			}
+			fmt.Println()
+		}
+		cwd, _ := os.Getwd()
+		roles, path, err := motor.FindRoles(cwd)
+		if err != nil {
+			return err
+		}
+		if len(roles) == 0 {
+			fmt.Printf("Nenhum papel em %s\n", path)
+			return nil
+		}
+		fmt.Println("Papéis:")
+		for name, p := range roles {
+			fmt.Printf("%-16s %s/%s\n", name, p.Nome, p.Model)
+		}
+		return nil
+	}}
 }
 
 func newMcpCmd() *cobra.Command {

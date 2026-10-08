@@ -36,14 +36,15 @@ type Attachment struct {
 
 // SessionOptions opções extras de configuração da sessão
 type SessionOptions struct {
-	Effort         string                 `json:"effort,omitempty"`          // "low", "medium", "high", "ultracode"
-	PermissionMode string                 `json:"permissionMode,omitempty"`  // "ask", "always_allow", "plan"
+	Effort         string                 `json:"effort,omitempty"`         // "low", "medium", "high", "ultracode"
+	PermissionMode string                 `json:"permissionMode,omitempty"` // "ask", "always_allow", "plan"
 	SystemPrompt   string                 `json:"systemPrompt,omitempty"`
 	Extra          map[string]interface{} `json:"extra,omitempty"`
 }
 
 // SessionCreateParams parâmetros para session.create
 type SessionCreateParams struct {
+	Papel    string            `json:"papel,omitempty"`
 	Harness  string            `json:"harness"`            // "mock", "claude-code", "opencode", etc.
 	Mode     string            `json:"mode,omitempty"`     // "sdk", "cli", etc.
 	CWD      string            `json:"cwd"`                // Diretório de trabalho
