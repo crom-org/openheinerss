@@ -18,6 +18,27 @@ def repo_temporario():
 
 
 class SDKIntegrationTest(unittest.TestCase):
+    def test_comandos_do_harness(self):
+        cfg = tempfile.mkdtemp(prefix="openheinerss-cmd-py-")
+        antes = os.environ.get("OPENHEINERSS_CONFIG")
+        os.environ["OPENHEINERSS_CONFIG"] = cfg
+        agent = Agent(harness="mock", bin_path=os.environ.get("OPENHEINERSS_BIN", "openheinerss"))
+        try:
+            nota = agent.annotate_command("claude-code", "/compact", "compacta o claude code; o central não usa")
+            self.assertEqual(nota["anotacao"], "compacta o claude code; o central não usa")
+            self.assertTrue(agent.confirmCommand("claude-code", "compact")["confirmado"])
+            lista = agent.list_commands("claude-code")
+            self.assertEqual(lista["arquivo"], os.path.join(cfg, "comandos.yaml"))
+            compact = next(c for c in lista["comandos"] if c["nome"] == "/compact")
+            self.assertTrue(compact["confirmado"])
+            self.assertEqual(agent.listCommands("codex")["desconhecido"], "sem_equivalente")
+        finally:
+            agent.close()
+            if antes is None:
+                os.environ.pop("OPENHEINERSS_CONFIG", None)
+            else:
+                os.environ["OPENHEINERSS_CONFIG"] = antes
+
     @staticmethod
     def _esperar(condicao, segundos):
         fim = time.monotonic() + segundos

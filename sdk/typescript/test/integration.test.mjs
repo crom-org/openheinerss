@@ -125,3 +125,24 @@ async function repoTemporario() {
   execFileSync("git", ["-C", pasta, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"]);
   return pasta;
 }
+
+test("SDK TypeScript lista, anota e confirma comandos do harness", async () => {
+  const cfg = await mkdtemp(join(tmpdir(), "openheinerss-cmd-ts-"));
+  const antes = process.env.OPENHEINERSS_CONFIG;
+  process.env.OPENHEINERSS_CONFIG = cfg;
+  const client = new Openheinerss({ binPath: bin, transport: "stdio" });
+  try {
+    const nota = await client.annotateCommand("claude-code", "/compact", "compacta o claude code; o central não usa");
+    assert.equal(nota.anotacao, "compacta o claude code; o central não usa");
+    assert.equal((await client.confirmCommand("claude-code", "/compact")).confirmado, true);
+    const lista = await client.listCommands("codex");
+    assert.equal(lista.desconhecido, "sem_equivalente");
+    assert.equal(lista.comandos.find((c) => c.nome === "/compact").repasse, "sem_equivalente");
+    const claude = await client.listCommands("claude-code");
+    assert.equal(claude.arquivo, join(cfg, "comandos.yaml"));
+    assert.equal(claude.comandos.find((c) => c.nome === "/compact").confirmado, true);
+  } finally {
+    client.close();
+    if (antes === undefined) delete process.env.OPENHEINERSS_CONFIG; else process.env.OPENHEINERSS_CONFIG = antes;
+  }
+});

@@ -6,6 +6,10 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 
 ## [Não lançado]
 
+### Adicionado (catálogo de comandos por harness)
+
+- `openheinerss comandos <harness> [--json] [--cwd]` (alias `commands`), `comandos anotar <harness> </cmd> "<texto>"` e `comandos confirmar <harness> </cmd>`; no servidor, `harness.comandos`, `harness.comandos.anotar` e `harness.comandos.confirmar`; SDKs TS/Py/PHP `listCommands`, `annotateCommand`, `confirmCommand`. Cada harness base (claude-code, codex, opencode, aider, agy) tem o catálogo embutido com descrição em pt-BR e o repasse (`literal`, `traduzido`, `sem_equivalente`); instâncias herdam da `base:`. Comandos e skills instalados no harness (`.claude/commands`, `skills/`, `command/` do opencode, `prompts/` do codex) são descobertos em tempo de execução. Anotações e `confirmado` ficam em `comandos.yaml` (`~/.config/openheinerss/` e a pasta de `--config`/`OPENHEINERSS_CONFIG`), gravado preservando comentários. Pedido do usuário para a crom-central.
+
 ### Adicionado (negar = encerrar)
 
 - `serve --negar-encerra` (alias `--deny-ends`) e campo opcional `encerrar` em `rodar.decidir` (vence a flag naquela decisão): uma negação termina a execução com `FIM HH:MM código 3`, `meta.json` com `codigo` 3 e `motivo` `"negado"`, e `orq.fim` com `motivo` `"negado"`, sem nova tentativa nem reserva. Sem a opção, nada muda. SDKs TS/Py/PHP: `decideRun(..., encerrar)`. Pedido da crom-central.

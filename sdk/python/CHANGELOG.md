@@ -1,6 +1,7 @@
 # Changelog
 
 ## Não lançado
+- Adiciona `list_commands`, `annotate_command`, `confirm_command` (e os aliases camelCase) para `harness.comandos*`.
 - Adiciona `harness_args` e `effort` no `Agent`, `harnessArgs` em `run`, `on(método, callback)` e o evento `agent.raw`.
 
 ## 1.1.0

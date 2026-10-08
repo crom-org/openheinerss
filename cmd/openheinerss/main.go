@@ -19,6 +19,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/crom-org/openheinerss/pkg/comandos"
 	"github.com/crom-org/openheinerss/pkg/config"
 	"github.com/crom-org/openheinerss/pkg/doctor"
 	"github.com/crom-org/openheinerss/pkg/harness"
@@ -174,6 +175,7 @@ Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC d
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newDocsCmd())
 	rootCmd.AddCommand(newAgentesCmd())
+	rootCmd.AddCommand(newComandosCmd())
 	return rootCmd
 }
 
@@ -1039,4 +1041,80 @@ func remarshal(src interface{}, dst interface{}) {
 		return
 	}
 	_ = json.Unmarshal(data, dst)
+}
+
+func newComandosCmd() *cobra.Command {
+	var jsonOutput bool
+	var cwd string
+	pasta := func() string {
+		if cwd != "" {
+			return cwd
+		}
+		d, _ := os.Getwd()
+		return d
+	}
+	mostrar := func(v interface{}) error {
+		b, err := json.MarshalIndent(v, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(b))
+		return nil
+	}
+	mostrarComando := func(c comandos.Comando) error {
+		if jsonOutput {
+			return mostrar(c)
+		}
+		fmt.Printf("%s (%s) anotação=%q confirmado=%v\n", c.Nome, c.Repasse, c.Anotacao, c.Confirmado)
+		return nil
+	}
+	root := &cobra.Command{
+		Use:     "comandos <harness>",
+		Aliases: []string{"commands"},
+		Short:   "Lista os comandos nativos (/compact, /model…) de um harness ou instância e como são repassados",
+		Long: `Lista os comandos nativos do harness (catálogo embutido da base, mais comandos e skills achados
+nos arquivos do harness) mesclados com as anotações do usuário em comandos.yaml.
+Repasse: literal (vai como está), traduzido (a ponte troca por flag/opção), sem_equivalente (só existe na tela).
+Anotações ficam em ~/.config/openheinerss/comandos.yaml; com --config/` + config.EnvConfigDir + `, em <pasta>/comandos.yaml.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			l, err := comandos.Listar(args[0], pasta())
+			if err != nil {
+				return err
+			}
+			if jsonOutput {
+				return mostrar(l)
+			}
+			fmt.Printf("Harness %s (base %s); /x fora da lista: %s; anotações em %s\n", l.Harness, l.Base, l.Desconhecido, l.Arquivo)
+			for _, c := range l.Comandos {
+				marca := " "
+				if c.Confirmado {
+					marca = "✓"
+				}
+				fmt.Printf("%s %-22s %-16s %s", marca, c.Nome, c.Repasse, c.Descricao)
+				if c.Anotacao != "" {
+					fmt.Printf(" — nota: %s", c.Anotacao)
+				}
+				fmt.Println()
+			}
+			return nil
+		},
+	}
+	root.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Emite JSON")
+	root.PersistentFlags().StringVar(&cwd, "cwd", "", "Pasta do projeto onde procurar comandos/skills do harness (padrão: pasta atual)")
+	root.AddCommand(&cobra.Command{Use: "anotar <harness> </comando> <texto>", Aliases: []string{"annotate"}, Short: "Grava uma anotação livre para o comando (vale para as instâncias que herdam do harness)", Args: cobra.ExactArgs(3), RunE: func(cmd *cobra.Command, args []string) error {
+		c, err := comandos.Anotar(args[0], args[1], args[2], pasta())
+		if err != nil {
+			return err
+		}
+		return mostrarComando(c)
+	}})
+	root.AddCommand(&cobra.Command{Use: "confirmar <harness> </comando>", Aliases: []string{"confirm"}, Short: "Marca o primeiro uso do comando como já confirmado", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+		c, err := comandos.Confirmar(args[0], args[1], pasta())
+		if err != nil {
+			return err
+		}
+		return mostrarComando(c)
+	}})
+	return root
 }

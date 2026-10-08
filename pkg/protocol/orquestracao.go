@@ -9,7 +9,21 @@ const (
 	MethodLimitesObter   = "limites.obter"
 	MethodHarnessListar  = "harness.listar"
 	MethodEventosAssinar = "eventos.assinar"
+
+	MethodHarnessComandos          = "harness.comandos"
+	MethodHarnessComandosAnotar    = "harness.comandos.anotar"
+	MethodHarnessComandosConfirmar = "harness.comandos.confirmar"
 )
+
+// HarnessComandosParams pede os comandos nativos de um harness ou instância. CWD (opcional) é a
+// pasta do projeto onde procurar comandos/skills do harness (ex.: .claude/commands).
+// Comando e Anotacao valem para harness.comandos.anotar/confirmar.
+type HarnessComandosParams struct {
+	Harness  string `json:"harness"`
+	CWD      string `json:"cwd,omitempty"`
+	Comando  string `json:"comando,omitempty"`
+	Anotacao string `json:"anotacao,omitempty"`
+}
 
 // Eventos de orquestração emitidos para quem chamou eventos.assinar.
 const (

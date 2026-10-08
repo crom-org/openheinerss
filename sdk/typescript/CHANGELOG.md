@@ -1,6 +1,7 @@
 # Changelog
 
 ## Não lançado
+- Adiciona `listCommands`, `annotateCommand`, `confirmCommand` (`harness.comandos*`) e os tipos `HarnessCommand`/`HarnessCommandList`.
 - Adiciona `harnessArgs` e `effort` nas opções de sessão, `harnessArgs` em `run` e o evento `raw` (`agent.raw`).
 
 ## 1.1.0
