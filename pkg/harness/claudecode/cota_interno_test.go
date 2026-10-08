@@ -11,7 +11,14 @@ func TestRateLimitPermitidoComOverageDesligadoNaoECota(t *testing.T) {
 	c.parseCLIEvent([]byte(`{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","overageStatus":"rejected","overageDisabledReason":"org_level_disabled"}}`), "s", &cliTurn{})
 	select {
 	case ev := <-c.Events():
-		t.Fatalf("evento inesperado: %+v", ev)
+		if ev.Type != harness.EventRaw {
+			t.Fatalf("evento inesperado: %+v", ev)
+		}
+		select {
+		case ev := <-c.Events():
+			t.Fatalf("evento inesperado depois do raw: %+v", ev)
+		default:
+		}
 	default:
 	}
 }
