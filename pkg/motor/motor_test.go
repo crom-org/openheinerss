@@ -9,8 +9,8 @@ import (
 
 func TestPerfisMontamMotorModeloEAmbiente(t *testing.T) {
 	cases := map[string]struct{ harness, provider, model, env string }{
-		"codex":          {"codex", "", "gpt-5-codex", ""},
-		"codex2":         {"codex2", "", "gpt-5-codex", "CODEX_HOME="},
+		"codex":          {"codex", "", "gpt-reserve", ""},
+		"codex2":         {"codex2", "", "gpt-reserve", "CODEX_HOME="},
 		"claude":         {"claude", "", "claude-sonnet-5-5", ""},
 		"claude-conta2":  {"claude", "", "claude-sonnet-5-5", "CLAUDE_CONFIG_DIR="},
 		"cco-openrouter": {"cco", "openrouter", "", ""},

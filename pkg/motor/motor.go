@@ -17,8 +17,8 @@ type Perfil struct {
 }
 
 var perfis = map[string]Perfil{
-	"codex":          {Nome: "codex", Harness: "codex", Mode: "cli", Model: "gpt-5-codex", Effort: "medium"},
-	"codex2":         {Nome: "codex2", Harness: "codex2", Mode: "cli", Model: "gpt-5-codex", Effort: "medium", Env: map[string]string{"CODEX_HOME": "~/.codex-compartilhado"}},
+	"codex":          {Nome: "codex", Harness: "codex", Mode: "cli", Model: "gpt-reserve", Effort: "medium"},
+	"codex2":         {Nome: "codex2", Harness: "codex2", Mode: "cli", Model: "gpt-reserve", Effort: "medium", Env: map[string]string{"CODEX_HOME": "~/.codex-compartilhado"}},
 	"claude":         {Nome: "claude", Harness: "claude", Mode: "cli", Model: "claude-sonnet-5-5"},
 	"claude-conta2":  {Nome: "claude-conta2", Harness: "claude", Mode: "cli", Model: "claude-sonnet-5-5", Env: map[string]string{"CLAUDE_CONFIG_DIR": "~/.claude-conta2"}},
 	"cco-openrouter": {Nome: "cco-openrouter", Harness: "cco", Mode: "cli", Provider: "openrouter", Model: ""},

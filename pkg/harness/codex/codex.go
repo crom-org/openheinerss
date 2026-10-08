@@ -212,7 +212,7 @@ func buildExecArgs(cfg harness.SessionConfig, threadID, prompt string) []string 
 	}
 	model := cfg.Model
 	if model == "" {
-		model = "gpt-5-codex"
+		model = "gpt-reserve"
 	}
 	if threadID != "" {
 		return []string{"exec", "resume", "--json", "-m", model, "-c", "model_reasoning_effort=" + effort, "--dangerously-bypass-approvals-and-sandbox", threadID, prompt}
