@@ -72,6 +72,8 @@ func (s *WSServer) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := &wsClient{conn: conn}
+	ctx, c := comConexao(context.Background(), func(v interface{}) { _ = client.writeJSON(v) })
+	defer s.router.orq.desconectar(c)
 	s.mu.Lock()
 	s.clients[client] = true
 	s.mu.Unlock()
@@ -96,7 +98,6 @@ func (s *WSServer) handleWS(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		ctx := context.Background()
 		resp := s.router.HandleRequest(ctx, req)
 		if err := client.writeJSON(resp); err != nil {
 			break
@@ -121,6 +122,7 @@ func (s *WSServer) ListenAndServe(addr string) error {
 
 // Shutdown desliga o servidor graciosamente
 func (s *WSServer) Shutdown(ctx context.Context) error {
+	s.router.orq.Close()
 	if s.server != nil {
 		return s.server.Shutdown(ctx)
 	}

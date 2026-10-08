@@ -48,6 +48,9 @@ func NewStdioServer(m *session.Manager, in io.Reader, out io.Writer) *StdioServe
 
 // Run inicia o loop de leitura e processamento de linhas do stdin
 func (s *StdioServer) Run(ctx context.Context) error {
+	ctx, c := comConexao(ctx, func(v interface{}) { s.writeMessage(v) })
+	defer s.router.orq.desconectar(c)
+	defer s.router.orq.Close()
 	scanner := bufio.NewScanner(s.in)
 	// Suporta linhas grandes (ex: buffers de código ou imagens base64)
 	buf := make([]byte, 1024*1024)

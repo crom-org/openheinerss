@@ -216,3 +216,100 @@ Quando ocorre um erro de execução ou dependência ausente, a resposta de erro 
 | `4020` | `PERMISSION_REJECTED` | A ferramenta foi negada pelo usuário ou política de segurança |
 | `4030` | `PROCESS_CRASHED` | O subprocesso do agente finalizou inesperadamente |
 
+
+---
+
+## 5. Orquestração (`rodar`, limites e eventos `orq.*`)
+
+Os mesmos métodos valem no STDIO (NDJSON) e no WebSocket (`ws://127.0.0.1:4820/ws`). O `crom-central` (ou qualquer cliente) lança agentes pelo servidor e acompanha tudo por eventos. Os eventos `agent.*` continuam como na seção 2; os `orq.*` descrevem a **missão** (um agente do `rodar`), não a conversa.
+
+### `eventos.assinar`
+Registra a conexão para receber os eventos `orq.*`. Sem assinar, nenhum `orq.*` chega. Uma nova chamada na mesma conexão troca o filtro. Todos os campos são opcionais.
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"eventos.assinar","params":{"projeto":"crom-tv","agente":"etapa-1","cwd":"/home/j/projetos/crom-tv"}}
+```
+```json
+{"jsonrpc":"2.0","id":1,"result":{"assinado":true,"projeto":"crom-tv","agente":"etapa-1","observando":"/home/j/projetos/crom-tv/.claude/agentes"}}
+```
+
+- `projeto` e `agente` filtram os eventos (vazio = todos). O nome do projeto é o nome da pasta da raiz git (ou o campo `projeto` de `rodar.iniciar`).
+- `cwd` / `pasta` dizem qual pasta de agentes observar (padrão: raiz git do servidor + `.claude/agentes`, ou `$AGENTES`). Veja "Agentes lançados pelo CLI" abaixo.
+
+### `rodar.iniciar`
+Mesmas opções do `openheinerss rodar` (nomes em português, como em `run`), mais `projeto`. Não bloqueia: devolve o `id` e os eventos informam o andamento.
+
+```json
+{"jsonrpc":"2.0","id":2,"method":"rodar.iniciar","params":{"nome":"etapa-1","motor":"codex2","modelo":"","esforco":"high","prompt":"","retomar":false,"pasta":"","branchBase":"main","cargaMax":0,"maxAgentes":4,"tentativas":4,"cotaMax":0,"cwd":"/home/j/projetos/crom-tv","projeto":"crom-tv"}}
+```
+```json
+{"jsonrpc":"2.0","id":2,"result":{"id":"rodar-1","agente":"etapa-1","projeto":"crom-tv"}}
+```
+Erros (`-32602`): nome ou motor vazio; agente com o mesmo nome já rodando neste servidor.
+
+### `rodar.listar`
+Lê `logs/*.meta.json` da pasta de agentes (`cwd`, `pasta` e `projeto` opcionais) e junta as execuções do servidor e as decisões pendentes. `estado`: `aguardando` (esperando vaga/worktree), `rodando`, `concluido`, `falhou` ou `interrompido` (processo morreu sem registrar o fim).
+
+```json
+{"jsonrpc":"2.0","id":3,"method":"rodar.listar","params":{"cwd":"/home/j/projetos/crom-tv"}}
+```
+```json
+{"jsonrpc":"2.0","id":3,"result":{"agentes":[{"id":"rodar-1","agente":"etapa-1","projeto":"crom-tv","estado":"rodando","motor":"codex2","modelo":"padrão","tentativa":1,"inicio":"2026-10-08T07:30:00-03:00","pid":4242,"log":"/home/j/projetos/crom-tv/.claude/agentes/logs/etapa-1.log"}],"decisoes":[{"id":"dec-2","agente":"etapa-1","projeto":"crom-tv","pergunta":"Permitir a ferramenta Bash: git status (risco medium)?","opcoes":["permitir","negar"]}]}}
+```
+
+### `rodar.parar`
+Para uma execução **lançada por este servidor**, por `id` ou `agente`. O fim chega como `orq.fim` com `codigo` 130 (o meta e o log também recebem o FIM).
+
+```json
+{"jsonrpc":"2.0","id":4,"method":"rodar.parar","params":{"id":"rodar-1"}}
+```
+```json
+{"jsonrpc":"2.0","id":4,"result":{"parando":true}}
+```
+
+### `rodar.decidir`
+Responde um `orq.precisa_decisao`. `resposta`: `"permitir"` ou `"negar"` (aceita também `sim`/`não`, `allow`/`deny`); `mensagem` é opcional. O agente fica parado até a resposta (ou até `rodar.parar`). `rodar.listar` mostra as decisões ainda pendentes para quem conectar depois. Rodando pelo CLI (sem servidor) as permissões são aprovadas automaticamente, como antes.
+
+```json
+{"jsonrpc":"2.0","id":5,"method":"rodar.decidir","params":{"id":"dec-2","resposta":"permitir"}}
+```
+```json
+{"jsonrpc":"2.0","id":5,"result":{"id":"dec-2","resposta":"permitir"}}
+```
+
+### `limites.obter` e `harness.listar`
+`limites.obter` devolve o mesmo JSON do `openheinerss limites --json` (o método antigo `limites` continua valendo). `harness.listar` devolve os harnesses e instâncias carregados, no formato de `catalog.list`.
+
+```json
+{"jsonrpc":"2.0","id":6,"method":"limites.obter"}
+```
+```json
+{"jsonrpc":"2.0","id":6,"result":{"agora":"2026-10-08T07:30:00-03:00","instancias":[{"nome":"codex","base":"codex","janelas":[{"nome":"5h","percentual":12.5,"reiniciaEm":"2026-10-08T11:00:00-03:00"}]}]}}
+```
+
+### Eventos `orq.*`
+Notificações sem `id`. Os eventos de execuções lançadas por `rodar.iniciar` trazem `id`; os de agentes vindos do CLI não.
+
+| Evento | Quando | Campos |
+| :--- | :--- | :--- |
+| `orq.inicio` | começa cada tentativa | `agente`, `projeto`, `motor`, `modelo`, `tentativa`, `worktree` |
+| `orq.progresso` | texto ou ferramenta nova; **no máximo 1 a cada 2 s por agente** (o excedente sai no fim da janela, só o mais recente) | `agente`, `projeto`, `resumo` (até ~160 caracteres) |
+| `orq.precisa_decisao` | `agent.permission_request` do agente | `id`, `agente`, `projeto`, `pergunta`, `opcoes` |
+| `orq.erro` | falha de uma tentativa, cota ou erro antes de começar | `agente`, `projeto`, `mensagem`, `cota` (bool) |
+| `orq.fim` | missão terminou (também após erro ou parada) | `agente`, `projeto`, `codigo`, `tentativas`, `duracao` (segundos), `relatorio` (caminho do `RELATORIO-AGENTE.md`, se existir) |
+
+Ordem garantida por agente: `orq.inicio` → (`orq.progresso` | `orq.precisa_decisao` | `orq.erro`)* → `orq.fim`; nenhum progresso depois do fim. Com reservas ou novas tentativas há um `orq.inicio` por tentativa e um só `orq.fim`.
+
+```json
+{"jsonrpc":"2.0","method":"orq.inicio","params":{"id":"rodar-1","agente":"etapa-1","projeto":"crom-tv","motor":"codex2","modelo":"padrão","tentativa":1,"worktree":"/home/j/projetos/crom-tv/.claude/agentes/etapa-1"}}
+{"jsonrpc":"2.0","method":"orq.progresso","params":{"id":"rodar-1","agente":"etapa-1","projeto":"crom-tv","resumo":"ferramenta Bash {\"command\":\"go test ./...\"}"}}
+{"jsonrpc":"2.0","method":"orq.precisa_decisao","params":{"id":"dec-2","agente":"etapa-1","projeto":"crom-tv","pergunta":"Permitir a ferramenta Bash: git status (risco medium)?","opcoes":["permitir","negar"]}}
+{"jsonrpc":"2.0","method":"orq.erro","params":{"id":"rodar-1","agente":"etapa-1","projeto":"crom-tv","mensagem":"execução interrompida por falta de cota","cota":true}}
+{"jsonrpc":"2.0","method":"orq.fim","params":{"id":"rodar-1","agente":"etapa-1","projeto":"crom-tv","codigo":0,"tentativas":2,"duracao":812.4,"relatorio":"/home/j/projetos/crom-tv/.claude/agentes/etapa-1/RELATORIO-AGENTE.md"}}
+```
+
+### Agentes lançados pelo CLI
+Um `openheinerss rodar` iniciado fora do servidor também aparece. Depois de `eventos.assinar`, o servidor lê `logs/*.meta.json` e `*.log` da pasta de agentes a cada 1 s (leitura periódica, sem dependência extra) e emite `orq.inicio`, `orq.progresso` (última linha nova do log) e `orq.fim` (do `codigo` do meta). Regras:
+- na primeira leitura, só agentes que **estão rodando** (PID vivo) geram `orq.inicio`; execuções já terminadas são histórico;
+- se o PID morrer sem registrar o fim, saem `orq.erro` e `orq.fim` com `codigo` 1;
+- agentes lançados pelo próprio servidor não são lidos duas vezes.
