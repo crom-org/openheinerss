@@ -11,7 +11,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -20,7 +19,7 @@ import (
 	_ "github.com/crom-org/openheinerss/pkg/harness/agy"
 	_ "github.com/crom-org/openheinerss/pkg/harness/aider"
 	_ "github.com/crom-org/openheinerss/pkg/harness/claudecode"
-	_ "github.com/crom-org/openheinerss/pkg/harness/codex"
+	"github.com/crom-org/openheinerss/pkg/harness/codex"
 	_ "github.com/crom-org/openheinerss/pkg/harness/mock"
 	_ "github.com/crom-org/openheinerss/pkg/harness/opencode"
 	"github.com/crom-org/openheinerss/pkg/limites"
@@ -97,6 +96,8 @@ type Result struct {
 	Code                             int
 	// Causa é a razão curta de um Code ≠ 0 (vazia no sucesso); o detalhe fica no log.
 	Causa string
+	// Relatorio é o RELATORIO-AGENTE.md do agente (nas missões, a cópia em relatorios/<nome>.md); vazio se não houver.
+	Relatorio string
 }
 
 type meta struct {
@@ -300,10 +301,19 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			prefix = "\n"
 		}
 		write(fmt.Sprintf("%sFIM %s código %d\n", prefix, o.Now().Format("15:04"), code))
-		appendEventLog(o, filepath.Base(repo), o.Name, code, motorName)
-		o.emit(Evento{Tipo: EvFim, Motor: motorName, Codigo: code, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: relatorio(work)})
+		if err := appendEventLog(o, filepath.Base(repo), o.Name, code, motorName); err != nil {
+			aviso := "AVISO: não gravei o FIM no log de eventos: " + err.Error()
+			write(aviso + "\n")
+			fmt.Fprintln(os.Stderr, aviso)
+		}
+		rel := relatorio(work)
+		if strings.HasPrefix(o.Name, "missao-") && work != "" {
+			// A pasta da missão é descartável: o relatório precisa sair dela antes de ser apagada.
+			rel = salvarRelatorio(work, agents, o.Name)
+		}
+		o.emit(Evento{Tipo: EvFim, Motor: motorName, Codigo: code, Tentativas: attempts, Duracao: o.Now().Sub(start), Relatorio: rel})
 		finalized = true
-		return Result{Name: o.Name, WorkDir: work, LogFile: logPath, MetaFile: metaPath, Attempts: attempts, Code: code, Causa: causa}
+		return Result{Name: o.Name, WorkDir: work, LogFile: logPath, MetaFile: metaPath, Attempts: attempts, Code: code, Causa: causa, Relatorio: rel}
 	}
 	// abort registra no log e no FIM um erro de preparação: nada de sair mudo.
 	abort := func(e error) (Result, error) {
@@ -311,11 +321,10 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		o.emit(Evento{Tipo: EvErro, Motor: o.Motor, Mensagem: e.Error()})
 		return finish(1, curto(e.Error(), 200), o.Motor, false), e
 	}
-	restoreKeys, err := loadKeys(o.KeysFile)
+	keys, err := loadKeys(o.KeysFile)
 	if err != nil {
 		return abort(err)
 	}
-	defer restoreKeys()
 	work, cleanup, err := prepareWorktree(ctx, repo, agents, o.Name, o.BranchBase)
 	if err != nil {
 		return abort(err)
@@ -368,11 +377,20 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			}
 		}
 		// "padrão" só aparece no meta.json; o harness recebe vazio e usa o próprio padrão.
-		modeloMeta := modelName
+		// No codex o padrão é conhecido: o meta mostra o modelo e o esforço que o `codex exec` vai usar de fato.
+		modeloMeta, esforcoMeta := modelName, effort
+		if baseHarness(candidate) == "codex" {
+			if modeloMeta == "" {
+				modeloMeta = codex.ModeloPadrao
+			}
+			if esforcoMeta == "" {
+				esforcoMeta = codex.EsforcoPadrao
+			}
+		}
 		if modeloMeta == "" {
 			modeloMeta = "padrão"
 		}
-		cur.Motor, cur.Modelo, cur.Esforco, cur.Tentativa = candidate, modeloMeta, effort, attempts
+		cur.Motor, cur.Modelo, cur.Esforco, cur.Tentativa = candidate, modeloMeta, esforcoMeta, attempts
 		if o.Conta == "" {
 			cur.Conta = candidate
 		}
@@ -405,7 +423,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			options["codex_session_id"] = resumeID
 			options["claude_session_id"] = resumeID
 		}
-		cfg := harness.SessionConfig{SessionID: fmt.Sprintf("rodar-%s-%d", o.Name, attempts), CWD: work, Model: modelName, Options: options}
+		cfg := harness.SessionConfig{SessionID: fmt.Sprintf("rodar-%s-%d", o.Name, attempts), CWD: work, Model: modelName, Options: options, Env: keys}
 		if e = h.Start(hctx, cfg); e == nil {
 			text := prompt
 			if attempts > 1 || o.Retomar {
@@ -427,8 +445,9 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		quotaNotice := ""
 		providerNotice := ""
 		providerRe := providerPattern(candidate)
-		// Turno sem resultado: o texto final só é checado contra cota/sobrecarga nesse caso.
-		tools, textLen, shortText, errMsg, endReason := 0, 0, "", "", ""
+		// Cota e sobrecarga só valem em canal de erro (evento de erro, stderr do motor, resultado com
+		// is_error); o texto livre do agente nunca é examinado.
+		errMsg, endReason := "", ""
 		for {
 			select {
 			case ev := <-h.Events():
@@ -436,15 +455,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				if line != "" {
 					write(line)
 				}
-				switch p := ev.Payload.(type) {
-				case protocol.TextParams:
-					textLen += len(strings.TrimSpace(p.Delta))
-					if len(shortText) < 2*textoCurtoMax {
-						shortText += p.Delta
-					}
-				case protocol.ToolCallParams:
-					tools++
-				case protocol.ErrorParams:
+				if p, ok := ev.Payload.(protocol.ErrorParams); ok {
 					errMsg = p.Message
 				}
 				// Cota só em eventos de erro: o texto do agente pode falar de "cota" sem estar sem cota (achado real na etapa 6).
@@ -482,16 +493,6 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				// Avisos no stderr (rede, MCP) chegam como erro mas não derrubam a tarefa;
 				// quem decide é o motivo do fim.
 				if ev.Type == harness.EventComplete {
-					// Instância sem regex que só imprime a frase do provedor no stdout e sai 0: se o turno não
-					// fez nada útil (sem ferramentas, texto curto), o texto é a mensagem do provedor.
-					if !quotaHit && !providerFailure && textoSemResultado(tools, textLen) {
-						switch {
-						case eMensagemDoProvedor(shortText, quota):
-							quotaHit, quotaNotice = true, quotaResetNotice(shortText)
-						case eMensagemDoProvedor(shortText, providerStdoutPattern(candidate)):
-							providerFailure, providerNotice = true, strings.TrimSpace(shortText)
-						}
-					}
 					failed = quotaHit || providerFailure
 					if c, ok := ev.Payload.(protocol.CompleteParams); ok && falhaNoFim[c.Reason] {
 						failed = true
@@ -752,7 +753,7 @@ func rejectLiveMeta(agents, name string) error {
 	return nil
 }
 
-func appendEventLog(o Options, projeto, nome string, codigo int, motor string) {
+func appendEventLog(o Options, projeto, nome string, codigo int, motor string) error {
 	path := o.EventLog
 	if path == "" {
 		if spec, ok := harness.CustomSpecFor(motor); ok {
@@ -760,14 +761,15 @@ func appendEventLog(o Options, projeto, nome string, codigo int, motor string) {
 		}
 	}
 	if path == "" {
-		return
+		return nil
 	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
-		return
+		return err
 	}
 	defer f.Close()
-	_, _ = fmt.Fprintf(f, "[%s] FIM %s código %d\n", projeto, nome, codigo)
+	_, err = fmt.Fprintf(f, "[%s] FIM %s código %d\n", projeto, nome, codigo)
+	return err
 }
 func writeMeta(path string, m meta) error {
 	b, err := json.Marshal(m)
@@ -794,11 +796,11 @@ func writeMeta(path string, m meta) error {
 	return os.Rename(tmp, path)
 }
 
-var keysMu sync.Mutex
-
-func loadKeys(path string) (func(), error) {
+// loadKeys lê o arquivo de chaves (KEY=valor) para o ambiente DESTA execução (SessionConfig.Env).
+// Nada de os.Setenv: o processo é compartilhado e o segredo não pode vazar para outros agentes.
+func loadKeys(path string) (map[string]string, error) {
 	if path == "" {
-		return func() {}, nil
+		return nil, nil
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -807,39 +809,17 @@ func loadKeys(path string) (func(), error) {
 	values := make(map[string]string)
 	for _, line := range strings.Split(string(b), "\n") {
 		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "export ") && strings.TrimSpace(strings.TrimPrefix(line, "export ")) == "" {
+		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		line = strings.TrimPrefix(line, "export ")
+		line = strings.TrimSpace(strings.TrimPrefix(line, "export "))
 		key, value, ok := strings.Cut(line, "=")
 		if !ok || strings.TrimSpace(key) == "" {
 			continue
 		}
-		key = strings.TrimSpace(key)
-		value = strings.Trim(strings.TrimSpace(value), "\"'")
-		values[key] = value
+		values[strings.TrimSpace(key)] = strings.Trim(strings.TrimSpace(value), "\"'")
 	}
-	keysMu.Lock()
-	previous := make(map[string]*string, len(values))
-	for key, value := range values {
-		if old, ok := os.LookupEnv(key); ok {
-			copy := old
-			previous[key] = &copy
-		} else {
-			previous[key] = nil
-		}
-		_ = os.Setenv(key, value)
-	}
-	return func() {
-		for key, old := range previous {
-			if old == nil {
-				_ = os.Unsetenv(key)
-			} else {
-				_ = os.Setenv(key, *old)
-			}
-		}
-		keysMu.Unlock()
-	}, nil
+	return values, nil
 }
 func pause(ctx context.Context, o Options) error {
 	done := make(chan struct{})

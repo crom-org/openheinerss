@@ -13,6 +13,7 @@ import (
 // filhos ficavam órfãos, e um SIGINT herdado como "ignorado" (shell com `&`) não os parava.
 func Configure(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	morrerComOPai(cmd.SysProcAttr)
 	cmd.Cancel = func() error {
 		if cmd.Process == nil {
 			return nil

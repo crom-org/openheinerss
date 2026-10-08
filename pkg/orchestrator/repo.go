@@ -7,11 +7,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/crom-org/openheinerss/pkg/harness"
+	"github.com/crom-org/openheinerss/pkg/harness/codex"
 )
 
 // RepoRoot (alias em inglês: RepoRoot) devolve a raiz do REPOSITÓRIO que contém cwd. Dentro de uma
@@ -106,7 +108,7 @@ func prepareWorktree(ctx context.Context, repo, agents, name, requestedBase stri
 		return "", func() {}, err
 	}
 	// Criar worktrees em paralelo no mesmo repositório disputa travas do git.
-	err = withFileLock(filepath.Join(agents, "logs", ".worktree.lock"), func() error {
+	err = withFileLock(ctx, filepath.Join(agents, "logs", ".worktree.lock"), func() error {
 		out, err := exec.CommandContext(ctx, "git", "-C", repo, "worktree", "add", target, "-b", "agente/"+name, base).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("criar worktree: %w (%s)", err, strings.TrimSpace(string(out)))
@@ -119,29 +121,56 @@ func prepareWorktree(ctx context.Context, repo, agents, name, requestedBase stri
 	return target, func() {}, nil
 }
 
+// missionDir monta a pasta descartável de uma missão SEM escrita no Git do repositório: um clone raso
+// (--shared, só lê os objetos do original) numa pasta temporária, com refs próprias. Um `git update-ref`,
+// `branch` ou `commit` feito pela missão fica no clone e some com ele. Sem como clonar: pasta vazia.
+// O RELATORIO-AGENTE.md é copiado para relatorios/<nome>.md antes de apagar (ver salvarRelatorio).
 func missionDir(ctx context.Context, repo, agents, requestedBase string) (string, func(), error) {
 	dir, err := os.MkdirTemp("", "oh-missao-")
 	if err != nil {
 		return "", func() {}, err
 	}
 	remove := func() { _ = os.RemoveAll(dir) }
-	if base, err := resolveBase(repo, requestedBase); err == nil {
-		err = withFileLock(filepath.Join(agents, "logs", ".worktree.lock"), func() error {
-			return exec.CommandContext(ctx, "git", "-C", repo, "worktree", "add", "--detach", dir, base).Run()
-		})
-		if err == nil {
-			return dir, func() {
-				_ = exec.Command("git", "-C", repo, "worktree", "remove", "--force", dir).Run()
-				remove()
-				_ = exec.Command("git", "-C", repo, "worktree", "prune").Run()
-			}, nil
-		}
+	base, err := resolveBase(repo, requestedBase)
+	if err != nil {
+		return dir, remove, nil // sem base: pasta vazia, como no rodar.sh
 	}
-	return dir, remove, nil // sem como montar a worktree: pasta vazia, como no rodar.sh
+	sha, err := exec.CommandContext(ctx, "git", "-C", repo, "rev-parse", "--verify", "--quiet", base+"^{commit}").Output()
+	if err != nil {
+		return dir, remove, nil
+	}
+	if exec.CommandContext(ctx, "git", "clone", "--quiet", "--shared", "--no-checkout", repo, dir).Run() != nil {
+		return dir, remove, nil
+	}
+	if exec.CommandContext(ctx, "git", "-C", dir, "checkout", "--quiet", "--detach", strings.TrimSpace(string(sha))).Run() != nil {
+		_ = os.RemoveAll(dir)
+		d2, e := os.MkdirTemp("", "oh-missao-")
+		if e != nil {
+			return "", func() {}, e
+		}
+		dir = d2
+		return dir, func() { _ = os.RemoveAll(dir) }, nil
+	}
+	return dir, remove, nil
 }
 
-// withFileLock executa fn segurando um flock exclusivo (bloqueante) no arquivo de trava.
-func withFileLock(path string, fn func() error) error {
+// salvarRelatorio copia o RELATORIO-AGENTE.md de uma pasta descartável para <agentes>/relatorios/<nome>.md
+// e devolve o caminho que sobrevive; vazio se a missão não escreveu relatório.
+func salvarRelatorio(work, agents, name string) string {
+	b, err := os.ReadFile(filepath.Join(work, "RELATORIO-AGENTE.md"))
+	if err != nil {
+		return ""
+	}
+	dest := filepath.Join(agents, "relatorios", name+".md")
+	if os.MkdirAll(filepath.Dir(dest), 0755) != nil || os.WriteFile(dest, b, 0644) != nil {
+		return ""
+	}
+	return dest
+}
+
+// withFileLock executa fn segurando um flock exclusivo no arquivo de trava. A espera é cancelável:
+// tenta LOCK_NB a cada poucos milissegundos e desiste quando ctx é cancelado, mesmo com o detentor vivo.
+func withFileLock(ctx context.Context, path string, fn func() error) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
@@ -150,8 +179,19 @@ func withFileLock(path string, fn func() error) error {
 		return err
 	}
 	defer f.Close()
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
-		return err
+	for {
+		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if err == nil {
+			break
+		}
+		if err != syscall.EWOULDBLOCK && err != syscall.EINTR {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("esperando a trava %s: %w", filepath.Base(path), ctx.Err())
+		case <-time.After(10 * time.Millisecond):
+		}
 	}
 	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 	return fn()
@@ -167,7 +207,7 @@ func reserveSlot(ctx context.Context, agents string, o Options, m meta) error {
 			return err
 		}
 		got := false
-		err := withFileLock(lock, func() error {
+		err := withFileLock(ctx, lock, func() error {
 			if o.MaxAgents > 0 {
 				n, err := activeAgents(agents)
 				if err != nil {
@@ -229,38 +269,20 @@ func backoff(tentativa int) time.Duration {
 	return d
 }
 
-// providerStdoutPattern vale só para o texto final de um turno sem resultado: sem os números soltos
-// (429/5xx) do padrão de eventos de erro, para não confundir uma resposta curta qualquer com falha.
-func providerStdoutPattern(name string) *regexp.Regexp {
-	if s, ok := harness.CustomSpecFor(name); ok && s.ErrorRegex != "" {
-		return regexp.MustCompile(s.ErrorRegex)
+// baseHarness segue a cadeia de `base:` de uma instância até o harness base (ou o próprio nome).
+func baseHarness(name string) string {
+	for i := 0; i < 16; i++ {
+		spec, ok := harness.CustomSpecFor(name)
+		if !ok || spec.Command != "" || spec.Base == "" {
+			return name
+		}
+		name = spec.Base
 	}
-	return regexp.MustCompile(`(?i)(upstream error|serviceunavailableerror|service temporarily overloaded|temporarily unavailable|too many requests|bad gateway|gateway timeout|internal server error)`)
-}
-
-// textoSemResultado diz se o turno terminou sem trabalho útil: nenhuma ferramenta usada e texto final curto.
-// Só nesse caso o padrão de cota/sobrecarga é aplicado ao texto (agentes falam de "cota" nos resumos).
-const textoCurtoMax = 160
-
-func textoSemResultado(ferramentas, tamanho int) bool {
-	return ferramentas == 0 && tamanho > 0 && tamanho <= textoCurtoMax
-}
-
-var introMensagem = regexp.MustCompile(`(?i)^(?:(?:api\s+)?(?:error|erro|warning|aviso)\s*[:\-–—]?\s*|you(?:'ve|\s+have)?\s+(?:hit|reached|exceeded)\s+(?:your|the)\s+)+`)
-
-// eMensagemDoProvedor diz se o texto final É a mensagem do provedor e não um agente falando sobre ela:
-// curto, e o padrão aparece logo no início (depois de "Error:", "You've hit your"…).
-func eMensagemDoProvedor(texto string, re *regexp.Regexp) bool {
-	texto = strings.Join(strings.Fields(texto), " ")
-	if re == nil || texto == "" || len([]rune(texto)) > textoCurtoMax || len(strings.Fields(texto)) > 20 {
-		return false
-	}
-	resto := strings.TrimLeft(introMensagem.ReplaceAllString(texto, ""), " \"'`[(")
-	loc := re.FindStringIndex(resto)
-	return loc != nil && loc[0] == 0
+	return name
 }
 
 // dryRunCommand monta o comando completo que o `rodar` executaria: binário, modelo efetivo e argumentos.
+// Caminhos com espaço vão entre aspas (o texto pode ser colado num shell); valores de ambiente são mascarados.
 func dryRunCommand(o Options) string {
 	spec, isCustom := harness.CustomSpecFor(o.Motor)
 	model, effort := o.Model, o.Effort
@@ -279,9 +301,12 @@ func dryRunCommand(o Options) string {
 			}
 		}
 		if spec.Command != "" {
-			parts := append([]string{spec.Command}, spec.Args...)
+			parts := []string{shQuote(spec.Command)}
+			for _, a := range spec.Args {
+				parts = append(parts, shQuote(a))
+			}
 			if model != "" {
-				parts = append(parts, "--model", model)
+				parts = append(parts, "--model", shQuote(model))
 			}
 			return envPrefix(envSpec) + strings.Join(parts, " ") + " <prompt>" + modeloEfetivo(model)
 		}
@@ -296,28 +321,28 @@ func dryRunCommand(o Options) string {
 	switch base {
 	case "codex":
 		if model == "" {
-			model = "gpt-reserve"
+			model = codex.ModeloPadrao
 		}
 		if effort == "" {
-			effort = "medium"
+			effort = codex.EsforcoPadrao
 		}
-		cmd = "codex exec --json -m " + model + " -c model_reasoning_effort=" + effort + " --dangerously-bypass-approvals-and-sandbox <prompt>"
+		cmd = "codex exec --json -m " + shQuote(model) + " -c model_reasoning_effort=" + shQuote(effort) + " --dangerously-bypass-approvals-and-sandbox <prompt>"
 	case "claude-code", "claude":
 		cmd = "claude -p <prompt> --output-format stream-json --verbose"
 		if model != "" {
-			cmd += " --model " + model
+			cmd += " --model " + shQuote(model)
 		}
 		if o.Mode == "sdk" || (isCustom && (spec.Mode == "sdk")) {
 			cmd = "node <worker SDK do Claude Agent> (modo sdk)" + modelArg(model)
 		}
 	case "agy":
-		cmd = "agy" + modelArg(model) + " --dangerously-skip-permissions --output-format stream-json <prompt>"
+		cmd = "agy" + modelArg(model) + " --dangerously-skip-permissions --output-format stream-json -p <prompt>"
 	case "opencode":
 		cmd = "opencode run --format json" + modelArg(model) + " <prompt>"
 	case "aider":
 		cmd = "aider --yes-always --no-pretty --no-stream --no-check-update --no-analytics --no-show-model-warnings --no-browser --message <prompt>" + modelArg(model)
 	default:
-		cmd = base + modelArg(model) + " <prompt>"
+		cmd = shQuote(base) + modelArg(model) + " <prompt>"
 	}
 	return envPrefix(envSpec) + cmd + modeloEfetivo(model)
 }
@@ -326,7 +351,7 @@ func modelArg(model string) string {
 	if model == "" {
 		return ""
 	}
-	return " --model " + model
+	return " --model " + shQuote(model)
 }
 
 func modeloEfetivo(model string) string {
@@ -336,7 +361,21 @@ func modeloEfetivo(model string) string {
 	return "  [modelo efetivo: " + model + "]"
 }
 
-// envPrefix mostra as variáveis da instância; valores de chaves/tokens nunca aparecem.
+var shSeguro = regexp.MustCompile(`^[A-Za-z0-9_@%+=:,./~-]+$`)
+
+// shQuote devolve s pronto para colar num shell: sem aspas se for seguro, senão entre aspas simples.
+func shQuote(s string) string {
+	if s != "" && shSeguro.MatchString(s) {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// envPublico lista as únicas variáveis cujo valor o --seco mostra (caminhos de configuração, nunca credenciais).
+var envPublico = map[string]bool{"CODEX_HOME": true, "CLAUDE_CONFIG_DIR": true, "PWD": true, "HOME": true, "XDG_CONFIG_HOME": true, "XDG_DATA_HOME": true, "OPENCODE_CONFIG_DIR": true, "AIDER_HOME": true}
+
+// envPrefix mostra as variáveis da instância; só as de envPublico aparecem com valor, as demais viram ***
+// (AUTHORIZATION, CREDENTIALS, cookies… não têm um padrão de nome que dê para adivinhar).
 func envPrefix(env map[string]string) string {
 	if len(env) == 0 {
 		return ""
@@ -345,19 +384,12 @@ func envPrefix(env map[string]string) string {
 	for k := range env {
 		keys = append(keys, k)
 	}
-	for i := range keys {
-		for j := i + 1; j < len(keys); j++ {
-			if keys[j] < keys[i] {
-				keys[i], keys[j] = keys[j], keys[i]
-			}
-		}
-	}
+	sort.Strings(keys)
 	var b strings.Builder
 	for _, k := range keys {
-		v := env[k]
-		u := strings.ToUpper(k)
-		if strings.Contains(u, "KEY") || strings.Contains(u, "TOKEN") || strings.Contains(u, "SECRET") || strings.Contains(u, "PASSWORD") {
-			v = "***"
+		v := "***"
+		if envPublico[k] {
+			v = shQuote(env[k])
 		}
 		b.WriteString(k + "=" + v + " ")
 	}

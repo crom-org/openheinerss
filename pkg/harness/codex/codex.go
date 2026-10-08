@@ -29,6 +29,12 @@ func init() {
 	register("codex")
 }
 
+// Modelo e esforço que o `codex exec` recebe quando a instância não define os seus.
+const (
+	ModeloPadrao  = "gpt-reserve"
+	EsforcoPadrao = "medium"
+)
+
 // CodexHarness adapta o streaming JSONL do `codex exec` ao protocolo do projeto.
 type CodexHarness struct {
 	mu       sync.Mutex
@@ -63,7 +69,7 @@ func (c *CodexHarness) Start(ctx context.Context, cfg harness.SessionConfig) err
 	if c.cfg.Model == "" {
 		// Mantém o modelo efetivo explícito no estado do adaptador; o CLI usa o
 		// mesmo valor em buildExecArgs quando a instância não o sobrescreve.
-		c.cfg.Model = "gpt-reserve"
+		c.cfg.Model = ModeloPadrao
 	}
 	c.stopped = false
 	c.threadID = optionString(cfg.Options, "codex_session_id", "resume_session", "session_id")
@@ -235,11 +241,11 @@ func mergedEnv(extra map[string]string, cwd ...string) []string {
 func buildExecArgs(cfg harness.SessionConfig, threadID, prompt string) []string {
 	effort := optionString(cfg.Options, "effort")
 	if effort == "" {
-		effort = "medium"
+		effort = EsforcoPadrao
 	}
 	model := cfg.Model
 	if model == "" {
-		model = "gpt-reserve"
+		model = ModeloPadrao
 	}
 	if threadID != "" {
 		return []string{"exec", "resume", "--json", "-m", model, "-c", "model_reasoning_effort=" + effort, "--dangerously-bypass-approvals-and-sandbox", threadID, prompt}
