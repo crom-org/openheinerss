@@ -60,6 +60,34 @@ func ResolveAgentsDir(cwd, dir string) string {
 	return abs
 }
 
+// ValidateAgentsDir resolve e garante que a pasta de agentes permaneça dentro
+// da raiz do repositório. Isso evita que uma opção de linha de comando escape
+// por caminho absoluto, .. ou um symlink já existente.
+func ValidateAgentsDir(cwd, dir string) (string, error) {
+	repo, err := RepoRoot(cwd)
+	if err != nil {
+		return "", err
+	}
+	resolved := ResolveAgentsDir(cwd, dir)
+	repoAbs, _ := filepath.Abs(repo)
+	pathAbs, _ := filepath.Abs(resolved)
+	check := pathAbs
+	if real, e := filepath.EvalSymlinks(pathAbs); e == nil {
+		check = real
+	} else if parent, e := filepath.EvalSymlinks(filepath.Dir(pathAbs)); e == nil {
+		check = filepath.Join(parent, filepath.Base(pathAbs))
+	}
+	realRepo := repoAbs
+	if real, e := filepath.EvalSymlinks(repoAbs); e == nil {
+		realRepo = real
+	}
+	rel, err := filepath.Rel(realRepo, check)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("pasta de agentes fora do repositório: %s (raiz: %s)", pathAbs, repoAbs)
+	}
+	return pathAbs, nil
+}
+
 func gitRoot(cwd string) (string, error) { return RepoRoot(cwd) }
 
 func gitOK(repo string, args ...string) bool {
@@ -151,6 +179,12 @@ func missionDir(ctx context.Context, repo, agents, requestedBase string) (string
 		dir = d2
 		return dir, func() { _ = os.RemoveAll(dir) }, nil
 	}
+	// A missão é descartável e nunca deve conseguir publicar no repositório
+	// usado como origem pelo clone compartilhado.
+	if err := exec.CommandContext(ctx, "git", "-C", dir, "remote", "remove", "origin").Run(); err != nil {
+		_ = os.RemoveAll(dir)
+		return "", func() {}, fmt.Errorf("remover remote origin da missão: %w", err)
+	}
 	return dir, remove, nil
 }
 
@@ -208,6 +242,9 @@ func reserveSlot(ctx context.Context, agents string, o Options, m meta) error {
 		}
 		got := false
 		err := withFileLock(ctx, lock, func() error {
+			if _, err := os.Stat(filepath.Join(agents, "logs", o.Name+".cancelado")); err == nil {
+				return fmt.Errorf("agente %s foi cancelado antes de começar", o.Name)
+			}
 			if o.MaxAgents > 0 {
 				n, err := activeAgents(agents)
 				if err != nil {

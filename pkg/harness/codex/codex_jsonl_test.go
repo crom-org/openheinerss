@@ -47,7 +47,7 @@ func TestParseJSONLSamples(t *testing.T) {
 func TestBuildExecArgsAndEnv(t *testing.T) {
 	cfg := harness.SessionConfig{Model: "o3", Options: map[string]interface{}{"effort": "high"}, Env: map[string]string{"CODEX_HOME": "/tmp/codex-compartilhado"}}
 	args := buildExecArgs(cfg, "", "responda só OK")
-	expected := []string{"exec", "--json", "-m", "o3", "-c", "model_reasoning_effort=high", "--dangerously-bypass-approvals-and-sandbox", "responda só OK"}
+	expected := []string{"exec", "--json", "-m", "o3", "-c", "model_reasoning_effort=high", "--dangerously-bypass-approvals-and-sandbox", "--", "responda só OK"}
 	if len(args) != len(expected) {
 		t.Fatalf("args: %#v", args)
 	}
@@ -57,7 +57,7 @@ func TestBuildExecArgsAndEnv(t *testing.T) {
 		}
 	}
 	resume := buildExecArgs(cfg, "thread-1", "continua")
-	if resume[1] != "resume" || resume[len(resume)-2] != "thread-1" {
+	if resume[1] != "resume" || resume[len(resume)-3] != "thread-1" || resume[len(resume)-2] != "--" {
 		t.Fatalf("retomada: %#v", resume)
 	}
 	env := mergedEnv(cfg.Env)

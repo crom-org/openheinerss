@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -130,17 +131,27 @@ func (s *WSServer) handleWS(w http.ResponseWriter, r *http.Request) {
 
 // ListenAndServe inicia o servidor HTTP na porta informada
 func (s *WSServer) ListenAndServe(addr string) error {
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	return s.Serve(listener)
+}
+
+// Serve atende em um listener já aberto, permitindo que o chamador anuncie o
+// servidor somente depois de confirmar que a porta está disponível.
+func (s *WSServer) Serve(listener net.Listener) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleWS)
 	mux.HandleFunc("/ws", s.handleWS)
 
 	s.server = &http.Server{
-		Addr:              addr,
+		Addr:              listener.Addr().String(),
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	return s.server.ListenAndServe()
+	return s.server.Serve(listener)
 }
 
 // Shutdown desliga o servidor graciosamente

@@ -131,7 +131,7 @@ func (a *AiderHarness) SendPrompt(ctx context.Context, text string, attachments 
 		// --yes-always responde "sim" a toda pergunta e --no-pretty/--no-stream evitam
 		// controle de terminal; sem isso o aider pode ficar esperando entrada.
 		// O git fica habilitado para que uma missão possa criar o commit pedido.
-		args := []string{"--yes-always", "--no-pretty", "--no-stream", "--no-check-update", "--no-analytics", "--no-show-model-warnings", "--no-browser", "--message", text}
+		args := []string{"--yes-always", "--no-pretty", "--no-stream", "--no-check-update", "--no-analytics", "--no-show-model-warnings", "--no-browser", "--message=" + text}
 		if a.cfg.Model != "" {
 			args = append(args, "--model", a.cfg.Model)
 		}

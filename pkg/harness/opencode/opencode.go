@@ -151,7 +151,7 @@ func (o *OpenCodeHarness) SendPrompt(ctx context.Context, text string, attachmen
 		if o.cfg.Model != "" {
 			args = append(args, "-m", o.cfg.Model)
 		}
-		args = append(args, text)
+		args = append(args, "--", text)
 
 		cmd := exec.CommandContext(o.ctx, "opencode", args...)
 		process.Configure(cmd)

@@ -279,7 +279,7 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 			},
 		})
 
-		args := []string{"-p", text, "--output-format", "stream-json", "--verbose"}
+		args := []string{"--print", "--output-format", "stream-json", "--verbose"}
 		if c.cfg.Model != "" {
 			args = append(args, "--model", c.cfg.Model)
 		}
@@ -289,6 +289,7 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 		if permission := c.cliPermissionMode(); permission != "" {
 			args = append(args, "--permission-mode", permission)
 		}
+		args = append(args, "--", text)
 		cmd := exec.CommandContext(c.ctx, "claude", args...)
 		process.Configure(cmd)
 		cmd.Dir = c.cfg.CWD

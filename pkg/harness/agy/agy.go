@@ -126,7 +126,7 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 		if a.cfg.Model != "" {
 			args = append([]string{"--model", a.cfg.Model}, args...)
 		}
-		args = append(args, "-p", text)
+		args = append(args, "-p", "--", text)
 
 		cmd := exec.CommandContext(a.ctx, "agy", args...)
 		process.Configure(cmd)

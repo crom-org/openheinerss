@@ -248,9 +248,9 @@ func buildExecArgs(cfg harness.SessionConfig, threadID, prompt string) []string 
 		model = ModeloPadrao
 	}
 	if threadID != "" {
-		return []string{"exec", "resume", "--json", "-m", model, "-c", "model_reasoning_effort=" + effort, "--dangerously-bypass-approvals-and-sandbox", threadID, prompt}
+		return []string{"exec", "resume", "--json", "-m", model, "-c", "model_reasoning_effort=" + effort, "--dangerously-bypass-approvals-and-sandbox", threadID, "--", prompt}
 	}
-	return []string{"exec", "--json", "-m", model, "-c", "model_reasoning_effort=" + effort, "--dangerously-bypass-approvals-and-sandbox", prompt}
+	return []string{"exec", "--json", "-m", model, "-c", "model_reasoning_effort=" + effort, "--dangerously-bypass-approvals-and-sandbox", "--", prompt}
 }
 func optionString(options map[string]interface{}, names ...string) string {
 	for _, name := range names {
