@@ -1,0 +1,3 @@
+name: aider-gratis
+base: aider
+model: openrouter/nvidia/nemotron-3-ultra-550b-a55b:free

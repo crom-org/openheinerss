@@ -59,3 +59,9 @@ Em uma repetição isolada da retomada Claude conta2 com 20 s, o primeiro turno 
 - Testes unitários cobrem a configuração de grupo do Codex e a tradução do modo de permissão SDK.
 
 Os timeouts de Claude SDK e Aider foram registrados como falha por timeout, não como falta de CLI, cota ou login: ambos tinham `--version` disponível e não emitiram uma mensagem confiável dessas categorias.
+
+## Rodada de 08/10 09:40 (depois da etapa 4a)
+
+`openheinerss harness test --todos --timeout 90s`: 7 de 8 OK — codex, codex2, claude-conta2 (CLI e SDK), opencode, opencode-gratis e agy.
+`aider` (configuração padrão do usuário) falhou por causa **externa**: o provedor recusou por créditos ("request requires more credits, or fewer max_tokens"); o openheinerss classificou como "sem cota" em 3,4 s.
+Como resolver: usar a instância `aider-gratis` (`.openheinerss/harnesses/aider-gratis.yaml`, modelo `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`), que respondeu de verdade (611 tokens enviados, 47 recebidos, depois de uma nova tentativa automática por sobrecarga do provedor), ou pôr créditos/outro modelo no aider.
