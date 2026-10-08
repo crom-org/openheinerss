@@ -1,4 +1,4 @@
-# Openheinerss Python SDK 0.2.0
+# Openheinerss Python SDK 1.1.0
 
 SDK oficial em **Python** para integração com o maestro **Openheinerss** (crom-org).
 
