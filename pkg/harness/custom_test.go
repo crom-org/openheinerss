@@ -99,3 +99,13 @@ func contains(s, part string) bool {
 	}
 	return false
 }
+
+func TestExpandHomeNoEnv(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	if got := expandHome("~/.codex-compartilhado"); got != home+"/.codex-compartilhado" {
+		t.Fatalf("expandHome: %s", got)
+	}
+	if got := expandHome("/abs/~x"); got != "/abs/~x" {
+		t.Fatalf("expandHome mexeu em caminho absoluto: %s", got)
+	}
+}

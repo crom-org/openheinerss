@@ -135,7 +135,7 @@ func resolveSpec(s CustomSpec, seen map[string]bool) (CustomSpec, error) {
 			base.Env = map[string]string{}
 		}
 		for k, v := range s.Env {
-			base.Env[k] = v
+			base.Env[k] = expandHome(v)
 		}
 	}
 	if s.Model != "" {
@@ -452,4 +452,14 @@ func mergedCustomEnv(base, extra map[string]string) []string {
 		env = append(env, k+"="+v)
 	}
 	return env
+}
+
+// expandHome troca o "~/" inicial pela pasta do usuário (o shell não faz isso por nós).
+func expandHome(v string) string {
+	if v == "~" || strings.HasPrefix(v, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return home + v[1:]
+		}
+	}
+	return v
 }
