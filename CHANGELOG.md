@@ -13,6 +13,13 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 ### Corrigido (alinhamento de `comandos`)
 
 - `openheinerss comandos <harness>` calcula a largura das colunas pelo maior nome (teto 40) e pelo número de runes, não de bytes: nomes longos como `/crom-tv-agentes-externos` e acentos não desalinham mais a tabela.
+### Corrigido (aceitação das novidades — análise 26 da Central)
+
+- `comandos.yaml` não perde anotações entre processos: trava `comandos.yaml.lock` (flock; Windows: arquivo exclusivo) em volta de ler+alterar+gravar, temporário único (`CreateTemp` na mesma pasta) e erro real se a gravação falhar. Teste com 2 processos × 25 anotações: 50/50 (antes 23/50).
+- SDKs Python e PHP: erro RPC de `session.prompt` (ex.: `/compact` no codex) vira exceção em vez de esperar `agent.complete` para sempre; teto de segurança sem eventos (`prompt_timeout`/`$promptTimeout`, 3600 s; `timeout` por chamada).
+- `geracao` no envelope de todos os eventos do serve (`agent.raw`, `agent.text`, `agent.tool_call`, `agent.complete`… e `orq.*`), WebSocket e stdio.
+- `rodar` com regras padrão e prompt `/comando`: o comando vai primeiro e as regras por outro canal (claude: `--append-system-prompt`; codex: `-c developer_instructions`; aider: `--read`; demais: depois do comando).
+- Anotações mascaram segredos (`***`, como o `--seco`) ao gravar e ao listar; `comandos.yaml` com 0600 e pasta nova com 0700.
 
 ### Adicionado (catálogo de comandos por harness)
 

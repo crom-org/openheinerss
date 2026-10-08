@@ -1,5 +1,7 @@
 import json
 import os
+import queue
+import time
 from typing import Generator, Dict, Any, Optional, Callable, TypedDict
 from .transport import StdioTransport
 
@@ -23,7 +25,10 @@ class Agent:
         bin_path: str = "openheinerss",
         effort: Optional[str] = None,
         harness_args: Optional[list] = None,
+        prompt_timeout: Optional[float] = 3600.0,
     ):
+        # Teto de segurança sem nenhum evento durante um prompt (None/0 desliga).
+        self.prompt_timeout = prompt_timeout
         self.transport = StdioTransport(bin_path)
         self.req_id = 1
         self.generation: Optional[str] = None
@@ -71,11 +76,15 @@ class Agent:
         self.generation = response.get("geracao")
         return response["result"]["sessionId"]
 
-    def stream(self, text: str) -> Generator[Dict[str, Any], None, None]:
+    def stream(self, text: str, timeout: Optional[float] = None) -> Generator[Dict[str, Any], None, None]:
+        """Eventos do prompt até agent.complete. Erro na resposta de session.prompt (ex.: /comando
+        sem equivalente) vira RuntimeError, como no SDK TypeScript; sem nenhum evento por
+        `timeout` segundos (padrão self.prompt_timeout) levanta TimeoutError em vez de esperar para sempre."""
         req_id = self.req_id
         self.req_id += 1
+        limite = self.prompt_timeout if timeout is None else timeout
 
-        self.transport.send({
+        resposta = self.transport.start_request({
             "jsonrpc": "2.0",
             "id": req_id,
             "method": "session.prompt",
@@ -84,27 +93,47 @@ class Agent:
                 "text": text
             }
         })
+        respondeu = False
+        ultimo = time.monotonic()
+        try:
+            while True:
+                if not respondeu:
+                    try:
+                        r = resposta.get_nowait()
+                    except queue.Empty:
+                        r = None
+                    if r is not None:
+                        respondeu = True
+                        if isinstance(r, BaseException):
+                            raise r
+                        if r.get("error"):
+                            raise RuntimeError(r["error"].get("message", "session.prompt falhou"))
+                msg = self.transport.next_event(timeout=0.05)
+                if not msg:
+                    if self.transport._closed and self.transport._events.empty():
+                        raise self.transport._eof_error or RuntimeError("transporte fechado")
+                    if limite and time.monotonic() - ultimo > limite:
+                        raise TimeoutError(f"session.prompt sem eventos há {limite:g}s")
+                    continue
+                ultimo = time.monotonic()
+                if "method" in msg:
+                    method = msg["method"]
+                    params = msg.get("params", {})
 
-        while True:
-            msg = self.transport.next_event()
-            if not msg:
-                break
-            if "method" in msg:
-                method = msg["method"]
-                params = msg.get("params", {})
+                    yield {"type": method, "data": params}
 
-                yield {"type": method, "data": params}
+                    if method == "agent.permission_request":
+                        # Auto-autoriza em modo stream simples
+                        self.respond_permission(params.get("requestId"), True)
 
-                if method == "agent.permission_request":
-                    # Auto-autoriza em modo stream simples
-                    self.respond_permission(params.get("requestId"), True)
+                    if method == "agent.complete":
+                        break
+        finally:
+            self.transport.end_request(req_id)
 
-                if method == "agent.complete":
-                    break
-
-    def prompt(self, text: str) -> str:
+    def prompt(self, text: str, timeout: Optional[float] = None) -> str:
         output = []
-        for event in self.stream(text):
+        for event in self.stream(text, timeout):
             if event["type"] == "agent.text":
                 output.append(event["data"].get("delta", ""))
         return "".join(output)

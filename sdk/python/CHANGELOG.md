@@ -1,6 +1,7 @@
 # Changelog
 
 ## Não lançado
+- `Agent.stream`/`prompt`: erro RPC de `session.prompt` (ex.: `/compact` sem equivalente) levanta `RuntimeError` em vez de travar; teto `prompt_timeout` (3600 s) e `timeout` por chamada levantam `TimeoutError`.
 - Adiciona `list_commands`, `annotate_command`, `confirm_command` (e os aliases camelCase) para `harness.comandos*`.
 - Adiciona `harness_args` e `effort` no `Agent`, `harnessArgs` em `run`, `on(método, callback)` e o evento `agent.raw`.
 

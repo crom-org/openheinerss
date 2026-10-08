@@ -85,6 +85,33 @@ $criar = array_values(array_filter($reqs, fn($r) => $r['method'] === 'session.cr
 if ($criar['params']['options']['harnessArgs'] !== ['--x=a,b', '/compact', 'c d'] || $criar['params']['options']['effort'] !== 'high') throw new RuntimeException('harnessArgs fora do JSON-RPC');
 $prompt = array_values(array_filter($reqs, fn($r) => $r['method'] === 'session.prompt'))[0];
 if ($prompt['params']['text'] !== '/model x') throw new RuntimeException('prompt não chegou literal');
+// Auditoria 26: /comando sem equivalente devolve erro RPC; o SDK esperava agent.complete para sempre.
+$falsoErro = $pasta . '/falso-erro.php';
+file_put_contents($falsoErro, '#!/usr/bin/env php
+<?php
+while (($l = fgets(STDIN)) !== false) {
+    $r = json_decode($l, true);
+    if ($r["method"] === "session.create") echo json_encode(["jsonrpc" => "2.0", "id" => $r["id"], "result" => ["sessionId" => "s1"]]) . "\n";
+    if ($r["method"] === "session.prompt" && str_starts_with($r["params"]["text"], "/compact")) echo json_encode(["jsonrpc" => "2.0", "id" => $r["id"], "error" => ["code" => -32603, "message" => "codex não aceita /compact"]]) . "\n";
+    elseif ($r["method"] === "session.prompt") echo json_encode(["jsonrpc" => "2.0", "id" => $r["id"], "result" => ["accepted" => true]]) . "\n";
+}
+');
+chmod($falsoErro, 0755);
+$semEq = Openheinerss\Agent::session(['harness' => 'codex'], $falsoErro);
+$inicio = microtime(true);
+try { $semEq->prompt('/compact'); throw new LogicException('prompt com erro RPC não lançou'); }
+catch (RuntimeException $e) { if (!str_contains($e->getMessage(), 'não aceita /compact')) throw $e; }
+if (microtime(true) - $inicio > 2) throw new RuntimeException('erro do prompt demorou');
+try { $semEq->prompt('oi', null, 0.3); throw new LogicException('timeout de segurança não disparou'); }
+catch (RuntimeException $e) { if (!str_contains($e->getMessage(), 'sem eventos')) throw $e; }
+unset($semEq);
+try { $codexReal = Openheinerss\Agent::session(['harness' => 'codex', 'cwd' => sys_get_temp_dir()], getenv('OPENHEINERSS_BIN') ?: 'openheinerss'); }
+catch (RuntimeException $e) { $codexReal = null; echo "codex indisponível, pulando /compact real: {$e->getMessage()}\n"; }
+if ($codexReal) {
+    try { $codexReal->prompt('/compact', null, 10); throw new LogicException('/compact no codex não lançou'); }
+    catch (RuntimeException $e) { if (!str_contains($e->getMessage(), '/compact')) throw $e; }
+    unset($codexReal);
+}
 // Comandos do harness: anotar e confirmar gravam em <OPENHEINERSS_CONFIG>/comandos.yaml.
 $cfgComandos = sys_get_temp_dir() . '/openheinerss-cmd-php-' . bin2hex(random_bytes(4));
 mkdir($cfgComandos);

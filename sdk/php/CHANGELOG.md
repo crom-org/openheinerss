@@ -1,6 +1,7 @@
 # Changelog
 
 ## Não lançado
+- `Agent::prompt`: erro RPC de `session.prompt` (ex.: `/compact` sem equivalente) lança `RuntimeException` em vez de travar; teto `$promptTimeout` (3600 s) e `$timeout` por chamada.
 - Adiciona `listCommands`, `annotateCommand`, `confirmCommand` para `harness.comandos*`.
 - Adiciona `harnessArgs` e `effort` nas opções da sessão, `harnessArgs` em `run`, `on($método, $callback)` e o evento `agent.raw`.
 

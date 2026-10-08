@@ -72,3 +72,69 @@ func TestSecoMostraHarnessArgs(t *testing.T) {
 		t.Fatalf("seco sem os args: %s", got)
 	}
 }
+
+// Auditoria 26: com regras padrão o stdin começava com "--- REGRAS PADRÃO", e o /comando deixava de ser comando.
+func TestRodarComRegrasPadraoMantemSlashNoComeco(t *testing.T) {
+	spy := &espiaHarness{}
+	harness.Register("espia-ponte", protocol.HarnessCatalogItem{ID: "espia-ponte"}, func(harness.Mode) (harness.Harness, error) { return spy, nil })
+	root, agents := repoFixture(t)
+	res, err := Run(context.Background(), root, Options{Name: "slash-padrao", Motor: "espia-ponte", PromptText: "/x literal", AgentsDir: agents, MaxAgents: 99})
+	if err != nil || res.Code != 0 {
+		t.Fatalf("err=%v código=%d", err, res.Code)
+	}
+	if len(spy.prompts) != 1 || !strings.HasPrefix(spy.prompts[0], "/x literal\n\n") || !strings.Contains(spy.prompts[0], defaultPromptRules) {
+		t.Fatalf("o /comando precisa vir primeiro e as regras depois: %q", spy.prompts)
+	}
+	if strings.Contains(spy.prompts[0], "\x00") {
+		t.Fatalf("separador interno vazou: %q", spy.prompts[0])
+	}
+	// Prompt comum continua com as regras antes.
+	spy.prompts = nil
+	if _, err := Run(context.Background(), root, Options{Name: "texto-padrao", Motor: "espia-ponte", PromptText: "faça x", AgentsDir: agents, MaxAgents: 99}); err != nil {
+		t.Fatal(err)
+	}
+	if len(spy.prompts) != 1 || !strings.HasPrefix(spy.prompts[0], defaultPromptRules) {
+		t.Fatalf("prompt comum mudou: %q", spy.prompts)
+	}
+}
+
+func TestRegrasDeSlashPorHarness(t *testing.T) {
+	_, agents := repoFixture(t)
+	p, err := readPromptOptions(agents, "missao-x", "", "/review agora", "", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	envio, regras := separarRegras(p)
+	if envio != "/review agora" || !strings.Contains(regras, defaultPromptRules) || !strings.Contains(regras, "MISSÃO SOMENTE LEITURA") {
+		t.Fatalf("envio=%q regras=%q", envio, regras)
+	}
+	novo := func() *harness.SessionConfig { return &harness.SessionConfig{Options: map[string]interface{}{}} }
+
+	cfg := novo()
+	if got, _ := entregarRegras("claude-code", envio, regras, "", cfg); got != envio || cfg.SystemPrompt != regras {
+		t.Fatalf("claude: envio=%q system=%q", got, cfg.SystemPrompt)
+	}
+	cfg = novo()
+	cfg.Options["config"] = []string{"a=1"}
+	if got, _ := entregarRegras("codex", envio, "linha \"1\"\n<b>", "", cfg); got != envio {
+		t.Fatalf("codex: envio=%q", got)
+	}
+	if c := harness.OptionStrings(cfg.Options, "config"); len(c) != 2 || c[0] != "a=1" || c[1] != `developer_instructions="linha \"1\"\n<b>"` {
+		t.Fatalf("codex: config=%q", c)
+	}
+	cfg = novo()
+	arq := filepath.Join(t.TempDir(), "r.md")
+	if got, _ := entregarRegras("aider", envio, regras, arq, cfg); got != envio {
+		t.Fatalf("aider: envio=%q", got)
+	}
+	if b, _ := os.ReadFile(arq); !strings.Contains(string(b), defaultPromptRules) || harness.OpcaoLista(cfg.Options, "read_files")[0] != arq {
+		t.Fatalf("aider: arquivo %q opções %v", b, cfg.Options)
+	}
+	cfg = novo()
+	if got, _ := entregarRegras("opencode", envio, regras, "", cfg); got != envio+"\n\n"+regras {
+		t.Fatalf("opencode: %q", got)
+	}
+	if got, _ := entregarRegras("claude-code", "faça", "", "", novo()); got != "faça" {
+		t.Fatalf("sem regras: %q", got)
+	}
+}

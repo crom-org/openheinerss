@@ -3,6 +3,7 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -508,14 +509,21 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			options["claude_session_id"] = resumeID
 		}
 		cfg := harness.SessionConfig{SessionID: fmt.Sprintf("rodar-%s-%d", o.Name, attempts), CWD: work, Model: modelName, Options: options, Env: keys}
+		envio, regras := separarRegras(prompt)
+		if envio, e = entregarRegras(candidate, envio, regras, filepath.Join(agents, "logs", o.Name+".regras.md"), &cfg); e != nil {
+			lastErr = e
+			write("ERRO: " + e.Error() + "\n")
+			cancel()
+			continue
+		}
 		if e = h.Start(hctx, cfg); e == nil {
-			text := prompt
+			text := envio
 			if turnoMsg != "" {
 				// Com sessão nativa a conversa continua e basta a mensagem; sem ela o motor precisa do prompt.
 				if options["claude_session_id"] != nil {
 					text = turnoMsg
 				} else {
-					text = prompt + "\n\n" + turnoMsg
+					text = envio + "\n\n" + turnoMsg
 				}
 				turnoMsg = ""
 			} else if attempts > 1 || o.Retomar {
@@ -781,7 +789,7 @@ func readPromptOptions(agents, name, explicit, text, rulesPath, defaultRulesPath
 			rules = "_regras-missao.md"
 		}
 	}
-	result := string(b)
+	var prefixos []string
 	if !noRules {
 		defaultRules := defaultPromptRules
 		if defaultRulesPath != "" {
@@ -795,18 +803,62 @@ func readPromptOptions(agents, name, explicit, text, rulesPath, defaultRulesPath
 			defaultRules = strings.TrimSpace(string(rb))
 		}
 		if defaultRules != "" {
-			result = defaultRules + "\n\n" + result
+			prefixos = append(prefixos, defaultRules)
 		}
 		rb, err := os.ReadFile(filepath.Join(agents, "prompts", rules))
 		if err == nil {
-			result = string(rb) + "\n\n" + result
+			prefixos = append([]string{string(rb)}, prefixos...)
 		}
 	}
+	missao := ""
 	if strings.HasPrefix(name, "missao-") {
-		result += missionRules
+		missao = missionRules
 	}
-	return result, nil
+	texto := string(b)
+	// Um /comando precisa ser o começo do prompt: as regras vão depois do separador e o
+	// runner as entrega por outro canal (veja separarRegras).
+	if _, _, ok := harness.SlashCommand(texto); ok && (len(prefixos) > 0 || missao != "") {
+		return texto + separadorRegras + strings.TrimSpace(strings.Join(prefixos, "\n\n")+missao), nil
+	}
+	return strings.Join(append(prefixos, texto), "\n\n") + missao, nil
 }
+
+// separadorRegras separa um /comando das regras que o acompanham (só quando o prompt é um /comando).
+const separadorRegras = "\n\n\x00regras-do-rodar\x00\n"
+
+// separarRegras devolve o /comando e as regras que o readPromptOptions pôs depois dele.
+func separarRegras(prompt string) (envio, regras string) {
+	envio, regras, _ = strings.Cut(prompt, separadorRegras)
+	return envio, regras
+}
+
+// entregarRegras manda as regras de um /comando por um canal que não tira o comando do começo
+// do prompt: claude → --append-system-prompt; codex → -c developer_instructions; aider → --read
+// com um arquivo em logs/; os demais recebem as regras depois do comando, no mesmo prompt.
+func entregarRegras(motor, envio, regras, arquivo string, cfg *harness.SessionConfig) (string, error) {
+	if regras == "" {
+		return envio, nil
+	}
+	switch baseHarness(motor) {
+	case "claude-code", "claude":
+		cfg.SystemPrompt = regras
+	case "codex":
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		enc.SetEscapeHTML(false)
+		_ = enc.Encode(regras) // string JSON também é string básica TOML
+		cfg.Options["config"] = append(harness.OptionStrings(cfg.Options, "config"), "developer_instructions="+strings.TrimSpace(buf.String()))
+	case "aider":
+		if err := os.WriteFile(arquivo, []byte(regras+"\n"), 0o600); err != nil {
+			return "", err
+		}
+		cfg.Options["read_files"] = append(harness.OpcaoLista(cfg.Options, "read_files", "read"), arquivo)
+	default:
+		return envio + "\n\n" + regras, nil
+	}
+	return envio, nil
+}
+
 func eventText(e harness.Event) string {
 	b, _ := json.Marshal(e.Payload)
 	if p, ok := e.Payload.(protocol.TextParams); ok {

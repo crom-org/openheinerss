@@ -164,6 +164,7 @@ func (o *Orq) emitir(method, projeto, agente string, params interface{}) {
 
 // entregar exige emitMu.
 func (o *Orq) entregar(n protocol.Notification, projeto, agente string) {
+	n.Geracao = o.geracao
 	o.mu.Lock()
 	var alvos []*conexao
 	for c, a := range o.subs {

@@ -2,12 +2,14 @@ package comandos
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/crom-org/openheinerss/pkg/config"
 	"github.com/crom-org/openheinerss/pkg/harness"
@@ -50,7 +52,11 @@ type anotacao struct {
 
 type arquivoAnotacoes map[string]map[string]anotacao
 
+// gravarMu serializa as gravações deste processo; comTrava (arquivo comandos.yaml.lock) as de outros
+// processos (dois `serve` na mesma --config), cobrindo ler+alterar+gravar.
 var gravarMu sync.Mutex
+
+const esperaTrava = 30 * time.Second
 
 // Cadeia devolve a herança de nome (da base embutida até a própria instância).
 func Cadeia(nome string) ([]string, error) {
@@ -188,10 +194,10 @@ func Listar(nome, cwd string) (Lista, error) {
 					c = porNome[n]
 				}
 				if an.Descricao != "" {
-					c.Descricao = an.Descricao
+					c.Descricao = Mascarar(an.Descricao)
 				}
 				if an.Anotacao != "" {
-					c.Anotacao = an.Anotacao
+					c.Anotacao = Mascarar(an.Anotacao)
 				}
 				if an.Confirmado != nil {
 					c.Confirmado = *an.Confirmado
@@ -209,7 +215,7 @@ func Listar(nome, cwd string) (Lista, error) {
 
 // Anotar grava o texto livre de um comando para o harness/instância e devolve o comando mesclado.
 func Anotar(nome, cmd, texto, cwd string) (Comando, error) {
-	return gravar(nome, cmd, cwd, "anotacao", strings.TrimSpace(texto), "!!str")
+	return gravar(nome, cmd, cwd, "anotacao", Mascarar(strings.TrimSpace(texto)), "!!str")
 }
 
 // Confirmar marca o primeiro uso do comando como já confirmado.
@@ -229,8 +235,11 @@ func gravar(nome, cmd, cwd, campo, valor, tag string) (Comando, error) {
 	if err != nil {
 		return Comando{}, err
 	}
+	if err := criarPasta(filepath.Dir(alvo)); err != nil {
+		return Comando{}, err
+	}
 	gravarMu.Lock()
-	err = editarYAML(alvo, []string{nome, n, campo}, valor, tag)
+	err = comTrava(alvo+".lock", func() error { return editarYAML(alvo, []string{nome, n, campo}, valor, tag) })
 	gravarMu.Unlock()
 	if err != nil {
 		return Comando{}, err
@@ -301,15 +310,48 @@ func editarYAML(path string, chaves []string, valor, tag string) error {
 	if err := enc.Encode(&doc); err != nil {
 		return err
 	}
-	out := buf.Bytes()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
+	return gravarAtomico(path, buf.Bytes())
+}
+
+// criarPasta cria a pasta do comandos.yaml com 0700 (só quando ela ainda não existe).
+func criarPasta(dir string) error {
+	if _, err := os.Stat(dir); err == nil {
+		return nil
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, out, 0o644); err != nil {
-		return err
+	return os.MkdirAll(dir, 0o700)
+}
+
+// gravarAtomico grava num temporário único da mesma pasta (0600) e troca pelo arquivo final.
+// Qualquer falha volta como erro: nada de sucesso sem o dado no disco.
+func gravarAtomico(path string, out []byte) error {
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return fmt.Errorf("gravar %s: %w", path, err)
 	}
-	return os.Rename(tmp, path)
+	tmp := f.Name()
+	falhar := func(e error) error {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return fmt.Errorf("gravar %s: %w", path, e)
+	}
+	if err := f.Chmod(0o600); err != nil && !errors.Is(err, errors.ErrUnsupported) {
+		return falhar(err)
+	}
+	if _, err := f.Write(out); err != nil {
+		return falhar(err)
+	}
+	if err := f.Sync(); err != nil {
+		return falhar(err)
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("gravar %s: %w", path, err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("gravar %s: %w", path, err)
+	}
+	return nil
 }
 
 func estilo(tag string) yaml.Style {
