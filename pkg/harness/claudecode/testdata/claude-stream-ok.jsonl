@@ -1,0 +1,3 @@
+{"type":"system","subtype":"init","session_id":"7c5a7305-1195-4f86-ae7e-eccec9f0ee90","model":"claude-sonnet-5-5"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"OK"}],"usage":{"input_tokens":2,"output_tokens":3}},"session_id":"7c5a7305-1195-4f86-ae7e-eccec9f0ee90"}
+{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.0550424,"usage":{"input_tokens":2,"output_tokens":4},"result":"OK","session_id":"7c5a7305-1195-4f86-ae7e-eccec9f0ee90"}

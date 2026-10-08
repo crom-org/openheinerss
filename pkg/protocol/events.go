@@ -64,8 +64,9 @@ type ErrorParams struct {
 
 // UsageParams informa o consumo de tokens quando o motor o fornece.
 type UsageParams struct {
-	SessionID    string `json:"sessionId"`
-	InputTokens  int64  `json:"inputTokens,omitempty"`
-	OutputTokens int64  `json:"outputTokens,omitempty"`
-	TotalTokens  int64  `json:"totalTokens,omitempty"`
+	SessionID    string  `json:"sessionId"`
+	InputTokens  int64   `json:"inputTokens,omitempty"`
+	OutputTokens int64   `json:"outputTokens,omitempty"`
+	TotalTokens  int64   `json:"totalTokens,omitempty"`
+	CostUSD      float64 `json:"costUsd,omitempty"`
 }
