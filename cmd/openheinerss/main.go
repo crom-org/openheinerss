@@ -24,6 +24,7 @@ import (
 	_ "github.com/crom-org/openheinerss/pkg/harness/opencode"
 	"github.com/crom-org/openheinerss/pkg/mcp"
 	"github.com/crom-org/openheinerss/pkg/motor"
+	"github.com/crom-org/openheinerss/pkg/orchestrator"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 	"github.com/crom-org/openheinerss/pkg/server"
 	"github.com/crom-org/openheinerss/pkg/session"
@@ -51,6 +52,7 @@ Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC d
 	rootCmd.AddCommand(newDoctorCmd())
 	rootCmd.AddCommand(newInitCmd())
 	rootCmd.AddCommand(newRunCmd())
+	rootCmd.AddCommand(newRodarCmd())
 	rootCmd.AddCommand(newMotorsCmd())
 	rootCmd.AddCommand(newMcpCmd())
 	rootCmd.AddCommand(newHarnessCmd())
@@ -294,6 +296,43 @@ func newRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&model, "modelo", "", "Alias em português de --model")
 	cmd.Flags().StringVar(&effort, "esforco", "", "Esforço de raciocínio do motor")
 
+	return cmd
+}
+
+func newRodarCmd() *cobra.Command {
+	var modelo, esforco, prompt, pasta, branchBase string
+	var retomar bool
+	var carga float64
+	var maxAgentes, tentativas int
+	cmd := &cobra.Command{
+		Use: "rodar <nome> <instância|harness>", Short: "Executa uma missão com worktree, log e retomada",
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if os.Getenv("RETOMAR") == "1" {
+				retomar = true
+			}
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, PromptFile: prompt, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas})
+			if err != nil {
+				return err
+			}
+			fmt.Printf("FIM %s código %d\nlog: %s\n", res.Name, res.Code, res.LogFile)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&modelo, "modelo", "", "Modelo a usar")
+	cmd.Flags().StringVar(&esforco, "esforco", "", "Esforço de raciocínio")
+	cmd.Flags().StringVar(&prompt, "prompt", "", "Arquivo de prompt alternativo")
+	cmd.Flags().BoolVar(&retomar, "retomar", false, "Acrescenta o texto de continuação e preserva o log")
+	cmd.Flags().StringVar(&pasta, "pasta-agentes", "", "Pasta dos agentes (padrão .claude/agentes)")
+	cmd.Flags().StringVar(&pasta, "agentes", "", "Alias de --pasta-agentes")
+	cmd.Flags().StringVar(&branchBase, "branch-base", "", "Branch base da worktree (padrão main)")
+	cmd.Flags().Float64Var(&carga, "carga-maxima", 0, "Carga máxima de 1 minuto; 0 desativa")
+	cmd.Flags().IntVar(&maxAgentes, "max-agentes", 0, "Máximo de agentes simultâneos")
+	cmd.Flags().IntVar(&tentativas, "tentativas", 0, "Máximo de tentativas")
 	return cmd
 }
 

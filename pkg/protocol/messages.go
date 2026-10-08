@@ -12,6 +12,7 @@ const (
 	MethodMCPList                  = "mcp.list"
 	MethodMCPAdd                   = "mcp.add"
 	MethodHarnessRegister          = "harness.register"
+	MethodRun                      = "run"
 )
 
 // MCPListParams parâmetros para mcp.list
@@ -176,4 +177,30 @@ type HarnessRegisterParams struct {
 	Prompt      string            `json:"prompt,omitempty" yaml:"prompt,omitempty"`
 	FinishRegex string            `json:"finishRegex,omitempty" yaml:"finishRegex,omitempty"`
 	QuotaRegex  string            `json:"quotaRegex,omitempty" yaml:"quotaRegex,omitempty"`
+	Reserva     []string          `json:"reserva,omitempty" yaml:"reserva,omitempty"`
+}
+
+// RunParams descreve uma missão no mesmo formato do comando openheinerss rodar.
+type RunParams struct {
+	Nome       string  `json:"nome"`
+	Motor      string  `json:"motor"`
+	Modelo     string  `json:"modelo,omitempty"`
+	Esforco    string  `json:"esforco,omitempty"`
+	Prompt     string  `json:"prompt,omitempty"`
+	Retomar    bool    `json:"retomar,omitempty"`
+	Pasta      string  `json:"pasta,omitempty"`
+	BranchBase string  `json:"branchBase,omitempty"`
+	CargaMax   float64 `json:"cargaMax,omitempty"`
+	MaxAgentes int     `json:"maxAgentes,omitempty"`
+	Tentativas int     `json:"tentativas,omitempty"`
+	CWD        string  `json:"cwd,omitempty"`
+}
+
+type RunResult struct {
+	Nome       string `json:"nome"`
+	WorkDir    string `json:"workDir"`
+	Log        string `json:"log"`
+	Meta       string `json:"meta"`
+	Tentativas int    `json:"tentativas"`
+	Codigo     int    `json:"codigo"`
 }

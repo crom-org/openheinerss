@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/crom-org/openheinerss/pkg/doctor"
 	"github.com/crom-org/openheinerss/pkg/harness"
 	"github.com/crom-org/openheinerss/pkg/mcp"
+	"github.com/crom-org/openheinerss/pkg/orchestrator"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 	"github.com/crom-org/openheinerss/pkg/session"
 )
@@ -82,11 +84,26 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) protoc
 		if err := json.Unmarshal(req.Params, &p); err != nil {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para harness.register", nil)
 		}
-		err := harness.RegisterCustom(harness.CustomSpec{Name: p.Name, Base: p.Base, DisplayName: p.DisplayName, Command: p.Command, Args: p.Args, Env: p.Env, Model: p.Model, Prompt: p.Prompt, FinishRegex: p.FinishRegex, QuotaRegex: p.QuotaRegex})
+		err := harness.RegisterCustom(harness.CustomSpec{Name: p.Name, Base: p.Base, DisplayName: p.DisplayName, Command: p.Command, Args: p.Args, Env: p.Env, Model: p.Model, Prompt: p.Prompt, FinishRegex: p.FinishRegex, QuotaRegex: p.QuotaRegex, Reserva: p.Reserva})
 		if err != nil {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, err.Error(), nil)
 		}
 		return protocol.NewResponse(req.ID, map[string]string{"name": p.Name, "status": "registered"})
+
+	case protocol.MethodRun:
+		var p protocol.RunParams
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para run", nil)
+		}
+		cwd := p.CWD
+		if cwd == "" {
+			cwd, _ = os.Getwd()
+		}
+		res, err := orchestrator.Run(ctx, cwd, orchestrator.Options{Name: p.Nome, Motor: p.Motor, Model: p.Modelo, Effort: p.Esforco, PromptFile: p.Prompt, Retomar: p.Retomar, AgentsDir: p.Pasta, BranchBase: p.BranchBase, MaxLoad: p.CargaMax, MaxAgents: p.MaxAgentes, Attempts: p.Tentativas})
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), res)
+		}
+		return protocol.NewResponse(req.ID, protocol.RunResult{Nome: res.Name, WorkDir: res.WorkDir, Log: res.LogFile, Meta: res.MetaFile, Tentativas: res.Attempts, Codigo: res.Code})
 
 	case protocol.MethodDoctorCheck:
 		var params protocol.DoctorCheckParams
