@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"bytes"
 	"github.com/crom-org/openheinerss/pkg/harness"
 	"os"
@@ -70,5 +71,18 @@ func TestInstanciaCustomDaRaizCarregaDeDentroDaWorktree(t *testing.T) {
 	}
 	if !harness.Exists("so-na-raiz-r5") {
 		t.Fatal("instância da raiz do repositório não carregou ao lançar de dentro da worktree")
+	}
+}
+
+func TestFlagVersionFunciona(t *testing.T) {
+	root := newRootCmd()
+	root.SetArgs([]string{"--version"})
+	var out strings.Builder
+	root.SetOut(&out)
+	if err := root.Execute(); err != nil {
+		t.Fatalf("--version falhou: %v", err)
+	}
+	if !strings.Contains(out.String(), "commit") {
+		t.Fatalf("--version sem commit: %q", out.String())
 	}
 }

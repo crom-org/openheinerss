@@ -97,9 +97,12 @@ type codigoSaida int
 func (c codigoSaida) Error() string { return fmt.Sprintf("código de saída %d", int(c)) }
 
 func newRootCmd() *cobra.Command {
+	versao, commit, data := buildVersion()
 	rootCmd := &cobra.Command{
-		Use:   "openheinerss",
-		Short: "Openheinerss - O maestro universal de orquestração de AI Coding Agents",
+		Use: "openheinerss",
+		// --version / -v mostram o mesmo texto do comando `version`.
+		Version: fmt.Sprintf("%s (commit %s, data %s)", versao, commit, data),
+		Short:   "Openheinerss - O maestro universal de orquestração de AI Coding Agents",
 		Long: `🎼 Openheinerss (crom-org)
 Regendo a orquestra universal de agentes e harnesses de IA.
 Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC de alta performance.`,
