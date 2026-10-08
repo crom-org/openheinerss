@@ -223,6 +223,9 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 		})
 
 		args := []string{"-p", text}
+		if resume, ok := c.cfg.Options["resume_session"].(string); ok && resume != "" {
+			args = []string{"--resume", resume, "-p", text}
+		}
 		cmd := exec.CommandContext(c.ctx, "claude", args...)
 		cmd.Dir = c.cfg.CWD
 		cmd.Env = c.env
@@ -235,6 +238,11 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 			})
 			return
 		}
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
+			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()}})
+			return
+		}
 
 		if err := cmd.Start(); err != nil {
 			c.emit(harness.Event{
@@ -243,6 +251,10 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 			})
 			return
 		}
+		c.mu.Lock()
+		c.cmd = cmd
+		c.mu.Unlock()
+		go c.readStderr(stderr)
 
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
@@ -256,7 +268,19 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 			})
 		}
 
-		_ = cmd.Wait()
+		err = cmd.Wait()
+		c.mu.Lock()
+		if c.cmd == cmd {
+			c.cmd = nil
+		}
+		stopped := c.stopped
+		c.mu.Unlock()
+		if stopped {
+			return
+		}
+		if err != nil {
+			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()}})
+		}
 
 		c.emit(harness.Event{
 			Type: harness.EventComplete,
@@ -353,6 +377,12 @@ func (c *ClaudeCodeHarness) readEvents(r io.Reader) {
 		}
 
 		// Fallback para streaming textual (modo CLI ou mensagens de texto puro)
+		if events := harness.ParseJSONEvent(line, sessID); len(events) > 0 {
+			for _, event := range events {
+				c.emit(event)
+			}
+			continue
+		}
 		c.emit(harness.Event{
 			Type: harness.EventText,
 			Payload: protocol.TextParams{

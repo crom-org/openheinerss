@@ -149,23 +149,38 @@ func (o *OpenCodeHarness) SendPrompt(ctx context.Context, text string, attachmen
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			o.emit(harness.Event{
-				Type: harness.EventError,
+				Type:    harness.EventError,
 				Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()},
 			})
+			return
+		}
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
+			o.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()}})
 			return
 		}
 
 		if err := cmd.Start(); err != nil {
 			o.emit(harness.Event{
-				Type: harness.EventError,
+				Type:    harness.EventError,
 				Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()},
 			})
 			return
 		}
+		o.mu.Lock()
+		o.cmd = cmd
+		o.mu.Unlock()
+		go func() { _, _ = io.Copy(io.Discard, stderr) }()
 
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			line := scanner.Text()
+			if events := harness.ParseJSONEvent(line, sessID); len(events) > 0 {
+				for _, event := range events {
+					o.emit(event)
+				}
+				continue
+			}
 			o.emit(harness.Event{
 				Type: harness.EventText,
 				Payload: protocol.TextParams{
@@ -175,7 +190,19 @@ func (o *OpenCodeHarness) SendPrompt(ctx context.Context, text string, attachmen
 			})
 		}
 
-		_ = cmd.Wait()
+		err = cmd.Wait()
+		o.mu.Lock()
+		if o.cmd == cmd {
+			o.cmd = nil
+		}
+		stopped := o.stopped
+		o.mu.Unlock()
+		if stopped {
+			return
+		}
+		if err != nil {
+			o.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()}})
+		}
 
 		o.emit(harness.Event{
 			Type: harness.EventComplete,
@@ -238,6 +265,12 @@ func (o *OpenCodeHarness) readEvents(r io.Reader) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if len(line) == 0 {
+			continue
+		}
+		if events := harness.ParseJSONEvent(line, sessID); len(events) > 0 {
+			for _, event := range events {
+				o.emit(event)
+			}
 			continue
 		}
 

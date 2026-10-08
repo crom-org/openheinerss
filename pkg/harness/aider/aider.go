@@ -129,23 +129,38 @@ func (a *AiderHarness) SendPrompt(ctx context.Context, text string, attachments 
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			a.emit(harness.Event{
-				Type: harness.EventError,
+				Type:    harness.EventError,
 				Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()},
 			})
+			return
+		}
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
+			a.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()}})
 			return
 		}
 
 		if err := cmd.Start(); err != nil {
 			a.emit(harness.Event{
-				Type: harness.EventError,
+				Type:    harness.EventError,
 				Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()},
 			})
 			return
 		}
+		a.mu.Lock()
+		a.cmd = cmd
+		a.mu.Unlock()
+		go drainStderr(stderr)
 
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			line := scanner.Text()
+			if events := harness.ParseJSONEvent(line, sessID); len(events) > 0 {
+				for _, event := range events {
+					a.emit(event)
+				}
+				continue
+			}
 			a.emit(harness.Event{
 				Type: harness.EventText,
 				Payload: protocol.TextParams{
@@ -155,7 +170,19 @@ func (a *AiderHarness) SendPrompt(ctx context.Context, text string, attachments 
 			})
 		}
 
-		_ = cmd.Wait()
+		err = cmd.Wait()
+		a.mu.Lock()
+		if a.cmd == cmd {
+			a.cmd = nil
+		}
+		stopped := a.stopped
+		a.mu.Unlock()
+		if stopped {
+			return
+		}
+		if err != nil {
+			a.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()}})
+		}
 
 		a.emit(harness.Event{
 			Type: harness.EventComplete,
@@ -168,6 +195,8 @@ func (a *AiderHarness) SendPrompt(ctx context.Context, text string, attachments 
 
 	return nil
 }
+
+func drainStderr(r io.Reader) { _, _ = io.Copy(io.Discard, r) }
 
 func (a *AiderHarness) RespondPermission(ctx context.Context, reqID string, allow bool, message string) error {
 	a.mu.Lock()
@@ -217,6 +246,12 @@ func (a *AiderHarness) readEvents(r io.Reader) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if len(line) == 0 {
+			continue
+		}
+		if events := harness.ParseJSONEvent(line, sessID); len(events) > 0 {
+			for _, event := range events {
+				a.emit(event)
+			}
 			continue
 		}
 		a.emit(harness.Event{

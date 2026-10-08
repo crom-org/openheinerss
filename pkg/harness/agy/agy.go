@@ -138,20 +138,30 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 				},
 			})
 			a.emit(harness.Event{
-				Type: harness.EventComplete,
+				Type:    harness.EventComplete,
 				Payload: protocol.CompleteParams{SessionID: sessID, Reason: "completed"},
 			})
 			return
 		}
+		a.mu.Lock()
+		a.cmd = cmd
+		a.mu.Unlock()
 
+		waitDone := make(chan error, 1)
 		go func() {
-			_ = cmd.Wait()
+			waitDone <- cmd.Wait()
 			_ = pw.Close()
 		}()
 
 		scanner := bufio.NewScanner(pr)
 		for scanner.Scan() {
 			line := scanner.Text()
+			if events := harness.ParseJSONEvent(line, sessID); len(events) > 0 {
+				for _, event := range events {
+					a.emit(event)
+				}
+				continue
+			}
 			a.emit(harness.Event{
 				Type: harness.EventText,
 				Payload: protocol.TextParams{
@@ -159,6 +169,19 @@ func (a *AGYHarness) SendPrompt(ctx context.Context, text string, attachments []
 					Delta:     line + "\n",
 				},
 			})
+		}
+		waitErr := <-waitDone
+		a.mu.Lock()
+		if a.cmd == cmd {
+			a.cmd = nil
+		}
+		stopped := a.stopped
+		a.mu.Unlock()
+		if stopped {
+			return
+		}
+		if waitErr != nil {
+			a.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: waitErr.Error()}})
 		}
 
 		a.emit(harness.Event{
