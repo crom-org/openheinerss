@@ -133,11 +133,14 @@ class Agent:
     def stop_run(self, id: Optional[str] = None, agente: Optional[str] = None) -> None:
         self._request("rodar.parar", {k: v for k, v in {"id": id, "agente": agente}.items() if v})
 
-    def decide_run(self, id: str, resposta: str, mensagem: Optional[str] = None, run: Optional[str] = None) -> None:
+    def decide_run(self, id: str, resposta: str, mensagem: Optional[str] = None, run: Optional[str] = None, encerrar: Optional[bool] = None) -> None:
         # run (id da execução, vem em orq.precisa_decisao) é opcional; se vier, o servidor confere.
+        # encerrar: numa negação, termina a execução (orq.fim código 3, motivo "negado"); None vale serve --negar-encerra.
         params = {"id": id, "resposta": resposta, "mensagem": mensagem}
         if run:
             params["run"] = run
+        if encerrar is not None:
+            params["encerrar"] = encerrar
         self._request("rodar.decidir", params)
 
     def get_limits(self) -> Dict[str, Any]:

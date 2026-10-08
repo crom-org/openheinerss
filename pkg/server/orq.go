@@ -49,8 +49,9 @@ type decisao struct {
 }
 
 type decisaoResp struct {
-	allow bool
-	msg   string
+	allow   bool
+	msg     string
+	encerra bool
 }
 
 type limiteProg struct {
@@ -98,6 +99,8 @@ type Orq struct {
 	agora     func() time.Time
 	geracao   string
 	maxAgents int
+	// negarEncerra é o padrão de serve --negar-encerra; rodar.decidir com "encerrar" vence.
+	negarEncerra bool
 }
 
 func newOrq(limite ...int) *Orq {
@@ -326,6 +329,7 @@ type metaArq struct {
 	PID       int    `json:"pid"`
 	Fim       string `json:"fim"`
 	Codigo    *int   `json:"codigo"`
+	Motivo    string `json:"motivo"`
 }
 
 func lerMeta(path string) (metaArq, bool) {
@@ -452,7 +456,7 @@ func (o *Orq) varrerAgente(p *pasta, conhecida bool, nome, prefixo string) {
 		if _, err := os.Stat(rel); err != nil {
 			rel = ""
 		}
-		o.fim(protocol.OrqFimParams{Agente: nome, Projeto: p.projeto, Codigo: cod, Tentativas: m.Tentativa, Duracao: dur, Relatorio: rel})
+		o.fim(protocol.OrqFimParams{Agente: nome, Projeto: p.projeto, Codigo: cod, Tentativas: m.Tentativa, Duracao: dur, Relatorio: rel, Motivo: m.Motivo})
 		return
 	}
 	if !st.travou && orchestrator.LogParado(logPath, o.agora()) {
@@ -534,7 +538,7 @@ func (o *Orq) iniciar(p protocol.RodarIniciarParams) (protocol.RodarIniciarResul
 
 	opts := orchestrator.Options{Name: p.Nome, Motor: p.Motor, Model: p.Modelo, Effort: p.Esforco, PromptFile: p.Prompt, PromptText: p.Texto, Retomar: p.Retomar, AgentsDir: p.Pasta, BranchBase: p.BranchBase, MaxLoad: p.CargaMax, MaxAgents: p.MaxAgentes, Attempts: p.Tentativas, QuotaMax: p.CotaMax, ViaServidor: true}
 	opts.OnEvent = func(e orchestrator.Evento) { o.deJob(j, e) }
-	opts.Decidir = func(ctx context.Context, q orchestrator.Pergunta) (bool, string) { return o.perguntar(ctx, j, q) }
+	opts.DecidirFim = func(ctx context.Context, q orchestrator.Pergunta) (bool, string, bool) { return o.perguntar(ctx, j, q) }
 	go func() {
 		defer o.wg.Done()
 		defer cancel()
@@ -600,11 +604,11 @@ func (o *Orq) deJob(j *job, e orchestrator.Evento) {
 		o.mu.Lock()
 		j.fimEmitido = true
 		o.mu.Unlock()
-		o.fim(protocol.OrqFimParams{ID: j.id, Agente: j.nome, Projeto: j.projeto, Codigo: e.Codigo, Tentativas: e.Tentativas, Duracao: e.Duracao.Seconds(), Relatorio: e.Relatorio})
+		o.fim(protocol.OrqFimParams{ID: j.id, Agente: j.nome, Projeto: j.projeto, Codigo: e.Codigo, Tentativas: e.Tentativas, Duracao: e.Duracao.Seconds(), Relatorio: e.Relatorio, Motivo: e.Motivo})
 	}
 }
 
-func (o *Orq) perguntar(ctx context.Context, j *job, q orchestrator.Pergunta) (bool, string) {
+func (o *Orq) perguntar(ctx context.Context, j *job, q orchestrator.Pergunta) (bool, string, bool) {
 	o.mu.Lock()
 	o.seq++
 	d := &decisao{ch: make(chan decisaoResp, 1), params: protocol.OrqDecisaoParams{Geracao: o.geracao, ID: fmt.Sprintf("dec-%d", o.seq), Run: j.id, Agente: j.nome, Projeto: j.projeto, Pergunta: q.Pergunta, Opcoes: q.Opcoes}}
@@ -618,9 +622,9 @@ func (o *Orq) perguntar(ctx context.Context, j *job, q orchestrator.Pergunta) (b
 	o.emitir(protocol.EventOrqPrecisaDecisao, j.projeto, j.nome, d.params)
 	select {
 	case r := <-d.ch:
-		return r.allow, r.msg
+		return r.allow, r.msg, r.encerra
 	case <-ctx.Done():
-		return false, "cancelado"
+		return false, "cancelado", false
 	}
 }
 
@@ -640,6 +644,7 @@ func (o *Orq) decidir(p protocol.RodarDecidirParams) error {
 	// não consome a decisão de outra execução. Run vazio (cliente antigo) é aceito.
 	o.mu.Lock()
 	d := o.decisoes[p.ID]
+	encerra := o.negarEncerra
 	if d != nil && p.Run != "" && d.params.Run != p.Run {
 		o.mu.Unlock()
 		return fmt.Errorf("decisão %q não pertence à execução %q", p.ID, p.Run)
@@ -649,7 +654,10 @@ func (o *Orq) decidir(p protocol.RodarDecidirParams) error {
 	if d == nil {
 		return fmt.Errorf("decisão %q não encontrada (já respondida ou expirada)", p.ID)
 	}
-	d.ch <- decisaoResp{allow, p.Mensagem}
+	if p.Encerrar != nil {
+		encerra = *p.Encerrar
+	}
+	d.ch <- decisaoResp{allow, p.Mensagem, !allow && encerra}
 	return nil
 }
 

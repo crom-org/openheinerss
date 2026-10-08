@@ -304,10 +304,12 @@ Aliases:
   serve, servir
 
 Flags:
+      --deny-ends           Alias em inglês de --negar-encerra
       --hospedeiro string   Alias em português de --host (default "127.0.0.1")
       --host string         Host de vinculação do WebSocket (default "127.0.0.1")
       --max-agentes int     Máximo de agentes simultâneos no servidor
       --max-agents int      Alias em inglês de --max-agentes
+      --negar-encerra       Negar em rodar.decidir encerra a execução (código 3, motivo negado) sem nova tentativa
   -p, --port int            Porta para o servidor WebSocket (alias de --porta) (default 4820)
       --porta int           Porta para o servidor WebSocket (default 4820)
       --stdio               Executa via pipes padrão STDIO (JSON-RPC / NDJSON)

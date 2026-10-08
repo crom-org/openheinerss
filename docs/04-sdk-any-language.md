@@ -59,6 +59,10 @@ Todos expõem sessões, `registerHarness`/`harness.listar`, `rodar.iniciar`, `ro
 `projeto`, `agente`, `cwd` e `pasta`; os callbacks recebem `orq.inicio`, `orq.progresso`,
 `orq.fim`, `orq.erro` e `orq.precisa_decisao`.
 
+`decideRun(id, resposta, mensagem, run, encerrar)` (Python: `decide_run(..., encerrar=True)`) aceita
+`encerrar` opcional: numa negação, termina a execução com `orq.fim` código 3 e `motivo` `"negado"`,
+sem nova tentativa. Omitido, vale o padrão do servidor (`serve --negar-encerra`).
+
 Exemplo conceitual (os exemplos completos estão nos READMEs de cada SDK):
 
 ```text

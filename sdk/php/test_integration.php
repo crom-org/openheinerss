@@ -37,6 +37,25 @@ $agent->prompt('responda OK', function (string $metodo, array $params) use (&$pe
 });
 if (!$pensamentos) throw new RuntimeException('agent.thinking não recebido');
 if (!isset($agent->listRuns(['projeto' => 'teste-php'])['agentes'])) throw new RuntimeException('lista ausente');
+// Negar com encerrar: orq.fim código 3, motivo "negado", sem nova tentativa.
+$fimNegado = null;
+$iniciosNegar = 0;
+$decisaoNegar = null;
+$agent->subscribeEvents(['projeto' => 'teste-php-negar'], [
+    'orq.inicio' => function (array $event) use (&$iniciosNegar): void { $iniciosNegar++; },
+    'orq.fim' => function (array $event) use (&$fimNegado): void { $fimNegado = $event; },
+    'orq.precisa_decisao' => function (array $event) use (&$decisaoNegar): void { $decisaoNegar = $event; },
+]);
+$agent->run(['nome' => 'teste-php-negar', 'motor' => 'mock', 'texto' => 'responda OK', 'cwd' => repoTemporario(), 'projeto' => 'teste-php-negar', 'tentativas' => 2]);
+$fim = microtime(true) + 3.0;
+while ($decisaoNegar === null && microtime(true) < $fim) $agent->listen(0.05);
+if ($decisaoNegar === null) throw new RuntimeException('decisão (negar) não recebida');
+$agent->decideRun($decisaoNegar['id'], 'negar', null, $decisaoNegar['run'], true);
+$fim = microtime(true) + 3.0;
+while ($fimNegado === null && microtime(true) < $fim) $agent->listen(0.05);
+if (($fimNegado['codigo'] ?? null) !== 3 || ($fimNegado['motivo'] ?? null) !== 'negado' || $iniciosNegar !== 1) {
+    throw new RuntimeException('negar com encerrar: ' . json_encode([$fimNegado, $iniciosNegar]));
+}
 echo "PHP SDK integração OK\n";
 
 // O caminho do executável pode conter espaços; proc_open recebe argv, não shell.

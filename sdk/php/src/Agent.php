@@ -139,9 +139,14 @@ class Agent
     public function stopRun(?string $id = null, ?string $agente = null): void {
         $this->request('rodar.parar', array_filter(['id' => $id, 'agente' => $agente]));
     }
-    /** $run (id da execução, vem em orq.precisa_decisao) é opcional; se vier, o servidor confere. */
-    public function decideRun(string $id, string $resposta, ?string $mensagem = null, ?string $run = null): void {
-        $this->request('rodar.decidir', array_filter(['id' => $id, 'resposta' => $resposta, 'mensagem' => $mensagem, 'run' => $run]));
+    /**
+     * $run (id da execução, vem em orq.precisa_decisao) é opcional; se vier, o servidor confere.
+     * $encerrar: numa negação, termina a execução (orq.fim código 3, motivo "negado"); null vale serve --negar-encerra.
+     */
+    public function decideRun(string $id, string $resposta, ?string $mensagem = null, ?string $run = null, ?bool $encerrar = null): void {
+        $params = array_filter(['id' => $id, 'resposta' => $resposta, 'mensagem' => $mensagem, 'run' => $run]);
+        if ($encerrar !== null) $params['encerrar'] = $encerrar;
+        $this->request('rodar.decidir', $params);
     }
     public function getLimits(): array { return $this->request('limites.obter', []); }
     /** @param array<string, callable(array): void> $callbacks */

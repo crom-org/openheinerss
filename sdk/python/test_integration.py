@@ -55,6 +55,28 @@ class SDKIntegrationTest(unittest.TestCase):
         finally:
             agent.close()
 
+    def test_negar_com_encerrar(self):
+        agent = Agent(harness="mock", bin_path=os.environ.get("OPENHEINERSS_BIN", "openheinerss"))
+        try:
+            fins, inicios = [], []
+            terminou = threading.Event()
+            def evento(payload):
+                if payload.get("opcoes"):
+                    agent.decide_run(payload["id"], "negar", run=payload["run"], encerrar=True)
+                elif "codigo" in payload:
+                    fins.append(payload)
+                    terminou.set()
+                elif "tentativa" in payload:
+                    inicios.append(payload)
+            agent.subscribeEvents(evento, projeto="teste-py-negar")
+            agent.run({"nome": "teste-py-negar", "motor": "mock", "texto": "responda OK", "cwd": repo_temporario(), "projeto": "teste-py-negar", "tentativas": 2})
+            self.assertTrue(terminou.wait(5.0))
+            self.assertEqual(fins[0]["codigo"], 3)
+            self.assertEqual(fins[0]["motivo"], "negado")
+            self.assertEqual(len(inicios), 1)
+        finally:
+            agent.close()
+
     def test_eof_falha_requisicao_pendente(self):
         with tempfile.TemporaryDirectory() as pasta:
             falso = os.path.join(pasta, "servidor falso")

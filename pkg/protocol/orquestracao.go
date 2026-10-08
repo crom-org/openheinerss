@@ -51,6 +51,7 @@ type OrqFimParams struct {
 	Tentativas int     `json:"tentativas"`
 	Duracao    float64 `json:"duracao"`
 	Relatorio  string  `json:"relatorio,omitempty"`
+	Motivo     string  `json:"motivo,omitempty"` // "negado" quando uma negação encerrou a execução
 }
 
 // OrqErroParams payload de orq.erro.
@@ -130,6 +131,9 @@ type RodarDecidirParams struct {
 	ID       string `json:"id"`
 	Resposta string `json:"resposta"`
 	Mensagem string `json:"mensagem,omitempty"`
+	// Encerrar, numa negação, termina a execução (código 3, motivo "negado") sem nova tentativa.
+	// Ausente: vale `serve --negar-encerra`.
+	Encerrar *bool `json:"encerrar,omitempty"`
 }
 
 // EventosAssinarParams filtra os eventos; vazio recebe todos. Pasta/CWD indicam o que observar.
