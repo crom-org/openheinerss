@@ -2,6 +2,8 @@
 
 O contrato interno está em `pkg/harness/harness.go`. Cada adaptador inicia um processo (ou o worker SDK do Claude), envia prompts e normaliza NDJSON para eventos `agent.*`.
 
+O adaptador é só a ponte: argumentos nativos (`harness_args`), comandos `/x` e as linhas sem mapeamento (`agent.raw`) passam sem filtro. Veja [PONTE.md](PONTE.md).
+
 ## Harnesses embutidos
 
 | Nome | Execução real | Permissão |

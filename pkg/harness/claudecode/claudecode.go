@@ -368,6 +368,9 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 			}
 			return
 		}
+		if turn.quotaRejected {
+			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: "limite de cota do Claude Code atingido"}})
+		}
 		if err != nil {
 			message := err.Error()
 			if tail != "" {
@@ -440,7 +443,9 @@ func (c *ClaudeCodeHarness) ResumeID() string {
 }
 
 // cliTurn guarda o estado de um único `claude -p`.
-type cliTurn struct{ completed bool }
+// cliTurn guarda o estado de um turno do claude -p. quotaRejected marca um rate_limit_event
+// "rejected": só vira falta de cota se o turno terminar sem resultado bem-sucedido.
+type cliTurn struct{ completed, quotaRejected bool }
 
 func buildCLIArgs(cfg harness.SessionConfig, resume, permission, text string) []string {
 	args := []string{"--print", "--output-format", "stream-json", "--verbose"}
@@ -568,8 +573,9 @@ func (c *ClaudeCodeHarness) parseCLIEvent(data []byte, fallbackSession string, t
 		if reason == "" {
 			reason = stringField(msg, "stop_reason")
 		}
-		if quotaMessage(msg) {
-			isError = true
+		// Cota só quando o turno falhou: um resultado bem-sucedido pode citar "rate limit" ou "cota"
+		// no próprio texto, e um rate_limit_event no meio do turno não impediu o resultado.
+		if isError && (turn.quotaRejected || quotaMessage(msg)) {
 			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessionID, Message: "limite de cota do Claude Code atingido"}})
 		}
 		if isError {
@@ -587,8 +593,9 @@ func (c *ClaudeCodeHarness) parseCLIEvent(data []byte, fallbackSession string, t
 	case "rate_limit_event":
 		info, _ := msg["rate_limit_info"].(map[string]interface{})
 		// Só status "rejected" é cota esgotada; overageStatus "rejected" quer dizer apenas que o uso extra pago está desligado.
+		// A decisão fica para o fim do turno (resultado com erro ou processo sem resultado).
 		if stringField(msg, "status") == "rejected" || stringField(info, "status") == "rejected" {
-			c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessionID, Message: "limite de cota do Claude Code atingido"}})
+			turn.quotaRejected = true
 		}
 		c.emit(harness.RawEvent(sessionID, "claude-code", "stdout", line))
 	default:
@@ -627,9 +634,22 @@ func (c *ClaudeCodeHarness) parseContentBlocks(value interface{}, sessionID, lin
 func stringField(m map[string]interface{}, key string) string { v, _ := m[key].(string); return v }
 func boolField(m map[string]interface{}, key string) bool     { v, _ := m[key].(bool); return v }
 func number(m map[string]interface{}, key string) float64     { v, _ := m[key].(float64); return v }
+
+// quotaMessage olha só os campos de erro do resultado, nunca a mensagem inteira.
 func quotaMessage(m map[string]interface{}) bool {
-	data, _ := json.Marshal(m)
-	s := strings.ToLower(string(data))
+	parts := []string{stringField(m, "result"), stringField(m, "subtype")}
+	switch e := m["error"].(type) {
+	case string:
+		parts = append(parts, e)
+	case map[string]interface{}:
+		data, _ := json.Marshal(e)
+		parts = append(parts, string(data))
+	}
+	if errs, ok := m["errors"].([]interface{}); ok {
+		data, _ := json.Marshal(errs)
+		parts = append(parts, string(data))
+	}
+	s := strings.ToLower(strings.Join(parts, " "))
 	for _, marker := range []string{"session limit", "usage limit", "hit your limit", "rate limit", "rate_limit", "quota", "limite de uso", "limite de cota", "out of credits"} {
 		if strings.Contains(s, marker) {
 			return true

@@ -17,7 +17,7 @@ Fonte: `claude --help` (salvo em /tmp/ponte-help/claude.txt) e `pkg/harness/clau
 | `--continue` | não | opção `continue: true` quando não há id de retomada (SDK: `continue`) |
 | `--max-turns` | — | **não existe** no `--help` instalado; use `harness_args` se a versão aceitar |
 | Anexos/imagens | ignorados no CLI | continuam sem flag no `claude -p`; só o SDK recebe `images`. Use `harness_args` ou `--input-format stream-json` |
-| Stream (`system`, `rate_limit_event`, tipos novos, blocos de conteúdo desconhecidos) | descartados | emitidos como `raw` (`agent.raw`), além dos eventos mapeados |
+| Stream (`system`, `rate_limit_event`, tipos novos, blocos de conteúdo desconhecidos) | descartados | emitidos como `raw` (`agent.raw`), além dos eventos mapeados; `rate_limit_event` rejeitado só vira cota se o turno terminar sem resultado bom |
 | stderr | só no texto de erro | cada linha vira `raw` (stream `stderr`); `stderrTail` nas mensagens de erro continua |
 | Custo/uso | `usage` com `total_cost_usd` | igual |
 | Eventos mapeados | text, thinking, tool_call, tool_result, usage, error, complete | iguais |

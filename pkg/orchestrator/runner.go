@@ -379,7 +379,9 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		}
 		p := profile
 		if candidate != o.Motor {
-			p, err = motor.Resolve(candidate, o.Model, o.Effort)
+			// A reserva usa o modelo e o esforço da própria instância: o modelo pedido para o motor
+			// principal (ex.: claude-sonnet-5-5) não vale em outro harness (o codex devolvia 400).
+			p, err = motor.Resolve(candidate, "", "")
 			if err != nil {
 				lastErr = err
 				continue

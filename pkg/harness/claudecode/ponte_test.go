@@ -82,6 +82,24 @@ func TestPonteHarnessArgsTipadasERawDoClaude(t *testing.T) {
 		t.Fatal(err)
 	}
 	evs := coletar(t, h, harness.EventComplete)
+	// O stderr é lido em paralelo e pode chegar depois do complete do "result".
+	espera := time.After(3 * time.Second)
+	for temStderr := false; !temStderr; {
+		for _, ev := range evs {
+			if r, ok := ev.Payload.(protocol.RawParams); ok && r.Stream == "stderr" {
+				temStderr = true
+			}
+		}
+		if temStderr {
+			break
+		}
+		select {
+		case ev := <-h.Events():
+			evs = append(evs, ev)
+		case <-espera:
+			temStderr = true
+		}
+	}
 	got := strings.Join(lerArgv(t, argv), "\x00")
 	want := strings.Join([]string{"--print", "--output-format", "stream-json", "--verbose",
 		"--effort", "high", "--append-system-prompt", "seja breve", "--add-dir", "/a", "--add-dir", "/b",

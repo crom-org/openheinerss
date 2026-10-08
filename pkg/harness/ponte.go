@@ -22,21 +22,7 @@ const EventRaw EventType = "raw"
 // HarnessArgs devolve os argumentos nativos extras guardados em options.
 // Aceita []string (Go) e []interface{} (JSON decodificado).
 func HarnessArgs(options map[string]interface{}) []string {
-	switch v := options[OptionHarnessArgs].(type) {
-	case []string:
-		return append([]string(nil), v...)
-	case []interface{}:
-		out := make([]string, 0, len(v))
-		for _, item := range v {
-			out = append(out, fmt.Sprint(item))
-		}
-		return out
-	case string:
-		if v != "" {
-			return []string{v}
-		}
-	}
-	return nil
+	return OpcaoLista(options, OptionHarnessArgs)
 }
 
 var slashName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.:-]*$`)
@@ -85,21 +71,7 @@ func RawEvent(sessionID, harnessName, stream, line string) Event {
 // OptionStrings devolve uma opção do tipo lista de textos. Aceita []string, []interface{}
 // e um texto único (JSON decodificado ou valor da CLI).
 func OptionStrings(options map[string]interface{}, key string) []string {
-	switch v := options[key].(type) {
-	case []string:
-		return append([]string(nil), v...)
-	case []interface{}:
-		out := make([]string, 0, len(v))
-		for _, item := range v {
-			out = append(out, fmt.Sprint(item))
-		}
-		return out
-	case string:
-		if v != "" {
-			return []string{v}
-		}
-	}
-	return nil
+	return OpcaoLista(options, key)
 }
 
 // WithOption devolve uma cópia de options com key=value, sem alterar o mapa original.
