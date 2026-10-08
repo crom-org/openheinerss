@@ -18,7 +18,8 @@ export class Openheinerss extends EventEmitter {
   private ws?: any;
   private sessionId?: string;
   private reqId = 1;
-  private pendingCallbacks = new Map<number, (res: any) => void>();
+  private pendingCallbacks = new Map<number, { resolve: (res: any) => void; reject: (err: Error) => void }>();
+  private transportReady?: Promise<void>;
   private config: ClientConfig;
 
   constructor(config: ClientConfig = {}) {
@@ -34,24 +35,27 @@ export class Openheinerss extends EventEmitter {
 
   /** Registra um harness custom no processo do openheinerss. */
   async registerHarness(spec: HarnessRegistration): Promise<void> {
-    this.ensureTransport();
+    await this.ensureTransport();
     await this.sendRPC("harness.register", spec as unknown as Record<string, unknown>);
   }
 
-  async listHarnesses(): Promise<any[]> { this.ensureTransport(); return (await this.sendRPC("harness.listar", {})).harnesses || []; }
-  async run(options: RunOptions): Promise<RunStarted> { this.ensureTransport(); return this.sendRPC("rodar.iniciar", options as unknown as Record<string, unknown>); }
-  async listRuns(filter: EventFilter = {}): Promise<RunList> { this.ensureTransport(); return this.sendRPC("rodar.listar", filter as Record<string, unknown>); }
-  async stopRun(idOrAgent: { id?: string; agente?: string }): Promise<void> { await this.sendRPC("rodar.parar", idOrAgent); }
-  async decideRun(id: string, resposta: string, mensagem?: string): Promise<void> { await this.sendRPC("rodar.decidir", { id, resposta, mensagem }); }
-  async getLimits(): Promise<Limits> { this.ensureTransport(); return this.sendRPC("limites.obter", {}); }
+  async listHarnesses(): Promise<any[]> { await this.ensureTransport(); return (await this.sendRPC("harness.listar", {})).harnesses || []; }
+  async run(options: RunOptions): Promise<RunStarted> { await this.ensureTransport(); return this.sendRPC("rodar.iniciar", options as unknown as Record<string, unknown>); }
+  async listRuns(filter: EventFilter = {}): Promise<RunList> { await this.ensureTransport(); return this.sendRPC("rodar.listar", filter as Record<string, unknown>); }
+  async stopRun(idOrAgent: { id?: string; agente?: string }): Promise<void> { await this.ensureTransport(); await this.sendRPC("rodar.parar", idOrAgent); }
+  async decideRun(id: string, resposta: string, mensagem?: string): Promise<void> { await this.ensureTransport(); await this.sendRPC("rodar.decidir", { id, resposta, mensagem }); }
+  async getLimits(): Promise<Limits> { await this.ensureTransport(); return this.sendRPC("limites.obter", {}); }
   async subscribeEvents(filter: EventFilter = {}, callbacks: Partial<Record<OrchestrationEventName, OrchestrationCallback>> = {}): Promise<void> {
-    this.ensureTransport();
+    await this.ensureTransport();
     for (const [name, callback] of Object.entries(callbacks)) if (callback) this.on(name, callback as (...args: any[]) => void);
     await this.sendRPC("eventos.assinar", filter as Record<string, unknown>);
   }
 
-  private ensureTransport(): void {
-    if (this.config.transport === "stdio" && !this.proc) this.initStdio();
+  private async ensureTransport(): Promise<void> {
+    if (!this.transportReady) {
+      this.transportReady = this.config.transport === "stdio" ? Promise.resolve(this.initStdio()) : this.initWebSocket();
+    }
+    await this.transportReady;
   }
 
   /**
@@ -61,9 +65,9 @@ export class Openheinerss extends EventEmitter {
     const opts = { ...this.config.options, ...options };
 
     if (this.config.transport === "stdio") {
-      this.initStdio();
+      await this.ensureTransport();
     } else {
-      await this.initWebSocket();
+      await this.ensureTransport();
     }
 
     const res = await this.sendRPC("session.create", {
@@ -124,6 +128,7 @@ export class Openheinerss extends EventEmitter {
    * Fecha os processos ou conexões
    */
   close(): void {
+    this.transportReady = undefined;
     if (this.proc) {
       this.proc.kill();
       this.proc = undefined;
@@ -187,9 +192,10 @@ export class Openheinerss extends EventEmitter {
         const err = new Error(msg.error.message);
         (err as any).code = msg.error.code;
         (err as any).data = msg.error.data;
-        throw err;
+        cb.reject(err);
+        return;
       }
-      cb(msg.result);
+      cb.resolve(msg.result);
       return;
     }
 
@@ -234,7 +240,7 @@ export class Openheinerss extends EventEmitter {
   private sendRPC(method: string, params: Record<string, unknown>): Promise<any> {
     return new Promise((resolve, reject) => {
       const id = this.reqId++;
-      this.pendingCallbacks.set(id, resolve);
+      this.pendingCallbacks.set(id, { resolve, reject });
 
       const payload = JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n";
 

@@ -15,6 +15,12 @@ class Agent
     public function __construct(array $options = [], string $binPath = "openheinerss")
     {
         $this->transport = new StdioTransport($binPath);
+        $this->transport->onMessage(function (array $message): void {
+            $name = $message['method'] ?? null;
+            if ($name !== null && isset($this->callbacks[$name])) {
+                ($this->callbacks[$name])($message['params'] ?? []);
+            }
+        });
         $this->initSession($options);
     }
 
@@ -74,9 +80,7 @@ class Agent
                 $method = $msg['method'];
                 $params = $msg['params'] ?? [];
 
-                if ($onEvent) {
-                    $onEvent($method, $params);
-                }
+                if ($onEvent) $onEvent($method, $params);
 
                 if ($method === 'agent.text') {
                     $fullText .= $params['delta'] ?? '';
@@ -117,10 +121,6 @@ class Agent
         $this->transport->send(["jsonrpc" => "2.0", "id" => $id, "method" => $method, "params" => $params]);
         while ($line = $this->transport->readLine()) {
             $msg = json_decode($line, true);
-            if (isset($msg['method'])) {
-                $name = $msg['method'];
-                if (isset($this->callbacks[$name])) ($this->callbacks[$name])($msg['params'] ?? []);
-            }
             if (($msg['id'] ?? null) === $id) {
                 if (isset($msg['error'])) throw new \RuntimeException($msg['error']['message']);
                 return $msg['result'] ?? null;
@@ -144,5 +144,15 @@ class Agent
     public function subscribeEvents(array|EventFilter $filter = [], array $callbacks = []): void {
         $this->callbacks = $callbacks;
         $this->request('eventos.assinar', $filter instanceof EventFilter ? $filter->toArray() : $filter);
+    }
+
+    /** Mantém o leitor de eventos ativo. Use em um processo que precisa observar eventos em segundo plano. */
+    public function listen(?float $seconds = null): void
+    {
+        $until = $seconds === null ? null : microtime(true) + $seconds;
+        while ($until === null || microtime(true) < $until) {
+            $remaining = $until === null ? null : max(0.0, $until - microtime(true));
+            $this->transport->pump($remaining === null ? null : min($remaining, 1.0));
+        }
     }
 }
