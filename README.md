@@ -117,7 +117,23 @@ openheinerss run --harness codex "Implemente testes unitários"
 openheinerss run --harness agy "Revise a arquitetura de módulos"
 ```
 
-### 4. Iniciar Servidor Maestro
+### 4. Trocar de motor com uma linha
+
+Crie `.openheinerss/motores.yaml` e associe cada papel a um perfil. O formato aceita
+`papel: motor/modelo` e, opcionalmente, `esforco=low|medium|high`:
+
+```yaml
+roteirista: codex/gpt-reserve
+revisor: claude-conta2/claude-sonnet-5-5
+rapido: opencode/opencode/big-pickle esforco=low
+```
+
+Liste os perfis e papéis com `openheinerss motores` e rode uma tarefa com:
+`openheinerss run --papel revisor "Revise este arquivo"`. Também é possível usar
+diretamente `--motor codex2`, `--motor cco-openrouter` ou `--motor cco-zen`, com
+`--modelo`/`--esforco` para substituir os padrões.
+
+### 5. Iniciar Servidor Maestro
 ```bash
 # Modo STDIO (para extensões de IDE e processos filhos):
 openheinerss serve --stdio
@@ -207,6 +223,5 @@ Acesse a documentação completa, detalhada e estruturada na pasta [`documentaca
 ## 📄 Licença
 
 Distribuído sob a licença MIT. Desenvolvido com orgulho pela organização [crom-org](https://github.com/crom-org).
-
 
 

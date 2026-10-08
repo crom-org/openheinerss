@@ -18,40 +18,44 @@ import (
 )
 
 func init() {
-	harness.Register("claude-code", protocol.HarnessCatalogItem{
-		ID:                 "claude-code",
-		DisplayName:        "Claude Code (Anthropic & Provedores Abertos)",
-		SupportedModes:     []string{"sdk", "cli"},
-		SupportedProtocols: []string{"anthropic"},
-		DefaultProviders: []protocol.ProviderInfo{
-			{
-				ID:          "claude-native",
-				Name:        "Anthropic Oficial (Assinatura)",
-				Endpoint:    "https://api.anthropic.com",
-				Models:      []string{"claude-3-7-sonnet-latest", "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"},
-				RequiresKey: true,
+	register := func(name string) {
+		harness.Register(name, protocol.HarnessCatalogItem{
+			ID:                 "claude-code",
+			DisplayName:        "Claude Code (Anthropic & Provedores Abertos)",
+			SupportedModes:     []string{"sdk", "cli"},
+			SupportedProtocols: []string{"anthropic"},
+			DefaultProviders: []protocol.ProviderInfo{
+				{
+					ID:          "claude-native",
+					Name:        "Anthropic Oficial (Assinatura)",
+					Endpoint:    "https://api.anthropic.com",
+					Models:      []string{"claude-3-7-sonnet-latest", "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"},
+					RequiresKey: true,
+				},
+				{
+					ID:          "openrouter",
+					Name:        "OpenRouter AI",
+					Endpoint:    "https://openrouter.ai/api",
+					Models:      []string{"anthropic/claude-3.7-sonnet", "qwen/qwen-2.5-coder-32b-instruct"},
+					RequiresKey: true,
+				},
+				{
+					ID:          "opencode-zen",
+					Name:        "OpenCode Zen (Modelos Gratuitos)",
+					Endpoint:    "https://opencode.ai/zen",
+					Models:      []string{"space-bunny-free"},
+					RequiresKey: false,
+				},
 			},
-			{
-				ID:          "openrouter",
-				Name:        "OpenRouter AI",
-				Endpoint:    "https://openrouter.ai/api",
-				Models:      []string{"anthropic/claude-3.7-sonnet", "qwen/qwen-2.5-coder-32b-instruct"},
-				RequiresKey: true,
-			},
-			{
-				ID:          "opencode-zen",
-				Name:        "OpenCode Zen (Modelos Gratuitos)",
-				Endpoint:    "https://opencode.ai/zen",
-				Models:      []string{"space-bunny-free"},
-				RequiresKey: false,
-			},
-		},
-	}, func(mode harness.Mode) (harness.Harness, error) {
-		if mode == "" || mode == harness.ModeMock {
-			mode = harness.ModeCLI
-		}
-		return NewClaudeCodeHarness(mode), nil
-	})
+		}, func(mode harness.Mode) (harness.Harness, error) {
+			if mode == "" || mode == harness.ModeMock {
+				mode = harness.ModeCLI
+			}
+			return NewClaudeCodeHarness(mode), nil
+		})
+	}
+	register("claude-code")
+	register("claude")
 }
 
 // ClaudeCodeHarness implementa o conector para o Claude Code nos modos SDK e CLI
@@ -227,7 +231,7 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			c.emit(harness.Event{
-				Type: harness.EventError,
+				Type:    harness.EventError,
 				Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()},
 			})
 			return
@@ -235,7 +239,7 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 
 		if err := cmd.Start(); err != nil {
 			c.emit(harness.Event{
-				Type: harness.EventError,
+				Type:    harness.EventError,
 				Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()},
 			})
 			return
