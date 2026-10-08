@@ -12,19 +12,21 @@ import (
 
 // Agente é o estado resumido de uma execução encontrada na pasta de logs.
 type Agente struct {
-	Nome        string `json:"nome"`
-	Projeto     string `json:"projeto,omitempty"`
-	Motor       string `json:"motor,omitempty"`
-	Modelo      string `json:"modelo,omitempty"`
-	Tentativa   int    `json:"tentativa"`
-	Estado      string `json:"estado"`
-	Inicio      string `json:"inicio,omitempty"`
-	Duracao     string `json:"duracao,omitempty"`
-	UltimaLinha string `json:"ultima_linha,omitempty"`
-	Codigo      *int   `json:"codigo,omitempty"`
-	PID         int    `json:"pid,omitempty"`
-	LogFile     string `json:"log,omitempty"`
-	MetaFile    string `json:"meta,omitempty"`
+	Nome        string   `json:"nome"`
+	Projeto     string   `json:"projeto,omitempty"`
+	Motor       string   `json:"motor,omitempty"`
+	Modelo      string   `json:"modelo,omitempty"`
+	Tentativa   int      `json:"tentativa"`
+	Estado      string   `json:"estado"`
+	Inicio      string   `json:"inicio,omitempty"`
+	Duracao     string   `json:"duracao,omitempty"`
+	UltimaLinha string   `json:"ultima_linha,omitempty"`
+	Codigo      *int     `json:"codigo,omitempty"`
+	PID         int      `json:"pid,omitempty"`
+	LogFile     string   `json:"log,omitempty"`
+	MetaFile    string   `json:"meta,omitempty"`
+	Pai         string   `json:"pai,omitempty"`
+	Filhos      []string `json:"filhos,omitempty"`
 }
 
 // ListAgents lista os agentes da pasta, inclusive execuções terminadas.
@@ -54,6 +56,10 @@ func ListAgents(agentsDir string, now time.Time) ([]Agente, error) {
 		logPath := filepath.Join(logs, name+".log")
 		a := Agente{Nome: name, Projeto: m.Projeto, Motor: m.Motor, Modelo: m.Modelo, Tentativa: m.Tentativa, Inicio: m.Inicio, PID: m.PID, LogFile: logPath, MetaFile: filepath.Join(logs, entry.Name())}
 		a.UltimaLinha = lastUsefulLine(logPath)
+		a.Pai = m.Pai
+		for _, f := range listarFilhos(logs, name) {
+			a.Filhos = append(a.Filhos, f.Nome)
+		}
 		if m.Fim != "" {
 			a.Estado = fmt.Sprintf("terminou código %d", valueOr(m.Codigo, 0))
 			a.Codigo = m.Codigo

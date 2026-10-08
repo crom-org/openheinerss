@@ -6,6 +6,14 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 
 ## [Não lançado]
 
+### Adicionado (orquestrador que espera os filhos)
+
+- `rodar` registra os agentes filhos (`OPENHEINERSS_PAI`/`OPENHEINERSS_PAI_LOGS` no ambiente do harness; `pai`, `branch` e `worktree` no `meta.json` do filho; `logs/<pai>.filhos/`). Quando o turno do pai termina com filhos vivos, espera o FIM deles (meta.json + PID, sem polling caro) e retoma a sessão do pai com o resumo de cada filho (FIM, código, branch, relatório). Turno que diz "aguardando…" sem filhos e com worktree suja também é retomado, com aviso para terminar em primeiro plano. Flags `--esperar-filhos`/`--wait-children` (padrão ligado, até 2 h) e `--rodadas-filhos`/`--child-rounds` (padrão 5). `agentes` mostra `pai=`/`filhos=`. Filho roda em sessão própria (`setsid`); pai interrompido para os filhos vivos. Nova linha nas regras padrão sobre agentes/comandos em segundo plano. Corrige orquestradores que davam FIM com os executores ainda rodando (orq-ponte-total, orq-negar-encerra).
+
+### Corrigido (alinhamento de `comandos`)
+
+- `openheinerss comandos <harness>` calcula a largura das colunas pelo maior nome (teto 40) e pelo número de runes, não de bytes: nomes longos como `/crom-tv-agentes-externos` e acentos não desalinham mais a tabela.
+
 ### Adicionado (catálogo de comandos por harness)
 
 - `openheinerss comandos <harness> [--json] [--cwd]` (alias `commands`), `comandos anotar <harness> </cmd> "<texto>"` e `comandos confirmar <harness> </cmd>`; no servidor, `harness.comandos`, `harness.comandos.anotar` e `harness.comandos.confirmar`; SDKs TS/Py/PHP `listCommands`, `annotateCommand`, `confirmCommand`. Cada harness base (claude-code, codex, opencode, aider, agy) tem o catálogo embutido com descrição em pt-BR e o repasse (`literal`, `traduzido`, `sem_equivalente`); instâncias herdam da `base:`. Comandos e skills instalados no harness (`.claude/commands`, `skills/`, `command/` do opencode, `prompts/` do codex) são descobertos em tempo de execução. Anotações e `confirmado` ficam em `comandos.yaml` (`~/.config/openheinerss/` e a pasta de `--config`/`OPENHEINERSS_CONFIG`), gravado preservando comentários. Pedido do usuário para a crom-central.

@@ -32,3 +32,6 @@ func stopAgentProcess(pid int) error {
 	}
 	return p.Kill()
 }
+
+// DesligarDoGrupo não tem efeito no Windows.
+func DesligarDoGrupo() {}

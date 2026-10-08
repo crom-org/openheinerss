@@ -80,6 +80,29 @@ Um agente interrompido por Ctrl-C deixa a worktree e o log para o `--retomar`. L
 `--cota-max 95` (ou `OPENHEINERSS_COTA_MAX`) para pular uma instância que já
 atingiu esse percentual e tentar sua `reserva`.
 
+### Agentes filhos (orquestrador que espera)
+
+Um `rodar` passa ao harness `OPENHEINERSS_PAI=<nome>` e `OPENHEINERSS_PAI_LOGS=<pasta de logs>`. Um
+`openheinerss rodar` lançado de dentro dele (agente filho, em primeiro ou segundo plano) grava `"pai"` no
+próprio `meta.json` (junto com `branch` e `worktree`), se registra em `logs/<pai>.filhos/<filho>` e roda
+numa sessão própria (`setsid`), para não morrer junto com o grupo do harness do pai.
+
+Quando o turno do pai termina bem e há filhos vivos, o `rodar` espera cada um dar FIM (lê o `meta.json`
+e testa o PID a cada 2 s; nada de consumo de CPU) e **retoma a sessão do pai** (`--resume` nativo do
+claude/codex; sem sessão nativa, reenvia o prompt) com a mensagem `--- RETOMADA AUTOMÁTICA (rodada N de M) ---`,
+que lista FIM, código, motivo, branch, worktree, relatório e log de cada filho. Se o turno diz que vai
+esperar ("aguardando os executores", "em segundo plano"…) sem filho nenhum e a worktree tem mudanças sem
+commit, o pai é retomado com o aviso de que nada vai acordá-lo e deve terminar em primeiro plano.
+Sem filhos e sem esse caso, nada muda. Se o pai é interrompido, os filhos vivos são parados.
+
+- `--esperar-filhos sim|nao|<duração>` (alias `--wait-children`; env `OPENHEINERSS_ESPERAR_FILHOS`): padrão
+  ligado, espera até 2 h; vencido o prazo, retoma assim mesmo e marca os filhos como `AINDA RODANDO`.
+- `--rodadas-filhos N` (alias `--child-rounds`; env `OPENHEINERSS_RODADAS_FILHOS`): máximo de retomadas (padrão 5).
+- `openheinerss agentes` mostra `pai=` e `filhos=` (e os campos `pai`/`filhos` no `--json`).
+
+As regras padrão do prompt incluem: "Se lançar agentes filhos ou comandos em segundo plano, o openheinerss te
+acorda quando eles terminarem; não encerre dizendo que vai esperar sem ter lançado nada."
+
 ### Contas AGY como instâncias
 
 Contas não ficam no código. Os exemplos `examples/harnesses/agy-conta1.yaml` e
