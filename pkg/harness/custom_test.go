@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -305,11 +304,11 @@ func TestCustomStopMataOsFilhosDoProcesso(t *testing.T) {
 	cancel() // mesmo caminho do timeout do rodar
 	_ = h.Stop()
 	for i := 0; i < 50; i++ {
-		if err := syscall.Kill(pid, 0); err != nil {
+		if !processAliveForTest(pid) {
 			return
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	_ = syscall.Kill(pid, syscall.SIGKILL)
+	_ = killForTest(pid)
 	t.Fatalf("o filho %d sobrou depois do Stop", pid)
 }

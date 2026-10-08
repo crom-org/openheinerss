@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/crom-org/openheinerss/pkg/harness"
@@ -219,35 +218,6 @@ func salvarRelatorio(work, agents, name string) string {
 		return ""
 	}
 	return dest
-}
-
-// withFileLock executa fn segurando um flock exclusivo no arquivo de trava. A espera é cancelável:
-// tenta LOCK_NB a cada poucos milissegundos e desiste quando ctx é cancelado, mesmo com o detentor vivo.
-func withFileLock(ctx context.Context, path string, fn func() error) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	for {
-		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
-		if err == nil {
-			break
-		}
-		if err != syscall.EWOULDBLOCK && err != syscall.EINTR {
-			return err
-		}
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("esperando a trava %s: %w", filepath.Base(path), ctx.Err())
-		case <-time.After(10 * time.Millisecond):
-		}
-	}
-	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-	return fn()
 }
 
 // reserveSlot espera haver carga e vaga e, dentro da mesma trava, registra o meta.json do agente:
