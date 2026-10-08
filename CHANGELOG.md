@@ -4,6 +4,14 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). A 1.2.0 está preparada mas
 **não publicada** (sem tag, release ou pacote): a publicação depende do ok do dono do projeto.
 
+## Não publicado
+
+### Adicionado (meta.json, órfãos, checkpoints)
+
+- `meta.json` com `ultimo_evento_em`, `head`, `inicio_pid` e `checkpoints` (todos opcionais).
+- `agentes listar` mostra `órfão` (processo morto sem `fim`, ou PID reutilizado) e fecha o meta com código -1; `agentes parar` de órfão só fecha o meta; filho de pai morto aparece como `PAI MORTO`.
+- Checkpoint git-sombra por turno (`refs/openheinerss/<nome>/<n>`), `agentes checkpoints <nome>` e `agentes desfazer <nome> [n] [--forcar]`. Ver `docs/07-rodar.md`.
+
 ## [1.2.0] — não publicada
 
 Tudo o que mudou desde a v1.1.0. SDKs TypeScript, Python e PHP em **1.2.0**.

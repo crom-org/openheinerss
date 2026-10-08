@@ -157,6 +157,11 @@ type meta struct {
 	// FilhosFalhos e FilhosOrfaos são gravados no fim do pai.
 	FilhosFalhos []string `json:"filhos_falhos,omitempty"`
 	FilhosOrfaos []string `json:"filhos_orfaos,omitempty"`
+	// UltimoEventoEm (RFC3339), Head, InicioPID e Checkpoints: ver orfao.go e checkpoint_git.go.
+	UltimoEventoEm string       `json:"ultimo_evento_em,omitempty"`
+	Head           string       `json:"head,omitempty"`
+	InicioPID      string       `json:"inicio_pid,omitempty"`
+	Checkpoints    []Checkpoint `json:"checkpoints,omitempty"`
 }
 
 // nomeValido impede que o nome do agente saia da pasta de agentes (worktree, log e meta usam o nome em caminhos).
@@ -335,7 +340,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	if conta == "" {
 		conta = o.Motor
 	}
-	cur := meta{Projeto: filepath.Base(repo), Motor: o.Motor, Modelo: "padrão", Conta: conta, Tentativa: 1, Inicio: start.Format(time.RFC3339), PID: os.Getpid(), Servidor: o.ViaServidor, Pai: o.Pai}
+	cur := meta{Projeto: filepath.Base(repo), Motor: o.Motor, Modelo: "padrão", Conta: conta, Tentativa: 1, Inicio: start.Format(time.RFC3339), PID: os.Getpid(), InicioPID: inicioProcesso(os.Getpid()), Servidor: o.ViaServidor, Pai: o.Pai}
 	if o.Pai != "" && o.PaiLogs != "" {
 		cur.PaiLogs = o.PaiLogs
 	}
@@ -422,6 +427,8 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	}
 	defer cleanup()
 	cur.Worktree, cur.Branch = work, branchAtual(work)
+	turnos := novoRegistroTurnos(work, o.Name, &cur, metaPath, o.Now)
+	turnos.Marcar("base")
 	// Quem for lançado de dentro do harness (`openheinerss rodar` filho) sabe quem é o pai e onde se registrar.
 	if absLogs, err := filepath.Abs(logsDir); err == nil {
 		env := make(map[string]string, len(keys)+2)
@@ -583,6 +590,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		for {
 			select {
 			case ev := <-h.Events():
+				turnos.TocarEvento()
 				line := eventText(ev)
 				if line != "" {
 					write(line)
@@ -657,6 +665,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			case <-ctx.Done():
 				_ = h.Stop()
 				cancel()
+				turnos.Marcar("interrompido")
 				pararFilhos(logsDir, o.Name, o.Now())
 				// Interrompido (rodar.parar ou Ctrl-C): fecha meta e log para ninguém achar que ainda roda.
 				return finish(130, "interrompido", candidate, true), ctx.Err()
@@ -670,6 +679,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		}
 		_ = h.Stop()
 		cancel()
+		turnos.Marcar(fmt.Sprintf("tentativa %d", attempts))
 		if !failed {
 			msg, err := posTurno(ctx, o, logsDir, work, textBuf, filhos, write)
 			if err != nil {

@@ -26,6 +26,7 @@ func TestAliasesDeComandosDoCLI(t *testing.T) {
 		{"agentes listar", "agentes list"},
 		{"agentes ver", "agentes show"},
 		{"agentes parar", "agentes stop"},
+		{"agentes desfazer", "agentes undo"},
 		{"harness list", "harness listar"},
 		{"harness add", "harness adicionar"},
 		{"harness test", "harness testar"},

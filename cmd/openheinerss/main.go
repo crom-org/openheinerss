@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -223,6 +224,9 @@ func newAgentesCmd() *cobra.Command {
 			if a.Orfao {
 				fmt.Printf(" ÓRFÃO(pai terminou)")
 			}
+			if a.PaiMorto {
+				fmt.Printf(" PAI MORTO")
+			}
 			fmt.Printf(" última=%s\n", a.UltimaLinha)
 		}
 		return nil
@@ -249,10 +253,59 @@ func newAgentesCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		if err := orchestrator.StopAgent(dir, args[0], time.Now()); err != nil {
+		orfao, err := orchestrator.PararAgente(dir, args[0], time.Now())
+		if err != nil {
 			return err
 		}
+		if orfao {
+			fmt.Printf("Agente %s era órfão (processo já morto): meta fechado (código -1), nenhum sinal enviado\n", args[0])
+			return nil
+		}
 		fmt.Printf("Agente %s parado (código 130)\n", args[0])
+		return nil
+	}})
+	var forcar bool
+	desfazer := &cobra.Command{Use: "desfazer <nome> [n]", Aliases: []string{"undo"}, Short: "Volta a worktree do agente a um checkpoint (sem n: o anterior ao último)", Args: cobra.RangeArgs(1, 2), RunE: func(cmd *cobra.Command, args []string) error {
+		dir, err := pastaAgentes(agentsDir)
+		if err != nil {
+			return err
+		}
+		n := 0
+		if len(args) == 2 {
+			if n, err = strconv.Atoi(args[1]); err != nil || n <= 0 {
+				return fmt.Errorf("n inválido: %q", args[1])
+			}
+		}
+		cp, err := orchestrator.DesfazerAgente(dir, args[0], n, forcar)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Agente %s restaurado ao checkpoint %d (%s). O estado anterior ficou em um checkpoint %q: para refazer, use 'agentes desfazer %s <n>' com o n dele (veja 'agentes checkpoints %s').\n", args[0], cp.N, cp.Motivo, orchestrator.MotivoAntesDeDesfazer, args[0], args[0])
+		return nil
+	}}
+	desfazer.Flags().BoolVar(&forcar, "forcar", false, "Restaura mesmo com o agente rodando")
+	root.AddCommand(desfazer)
+	root.AddCommand(&cobra.Command{Use: "checkpoints <nome>", Short: "Lista os checkpoints git do agente (n, quando, motivo, resumo do diff)", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		dir, err := pastaAgentes(agentsDir)
+		if err != nil {
+			return err
+		}
+		wt := filepath.Join(dir, args[0])
+		itens, err := orchestrator.ResumoCheckpoints(wt, args[0])
+		if err != nil {
+			return err
+		}
+		if jsonOutput {
+			b, err := json.MarshalIndent(itens, "", "  ")
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(b))
+			return nil
+		}
+		for _, c := range itens {
+			fmt.Printf("%3d  %s  %-18s %s\n", c.N, c.Em, c.Motivo, c.Resumo)
+		}
 		return nil
 	}})
 	return root

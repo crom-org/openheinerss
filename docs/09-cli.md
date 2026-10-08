@@ -48,6 +48,8 @@ Aliases:
   agentes, agents
 
 Available Commands:
+  checkpoints Lista os checkpoints git do agente (n, quando, motivo, resumo do diff)
+  desfazer    Volta a worktree do agente a um checkpoint (sem n: o anterior ao último)
   listar      Lista os agentes e seus estados
   parar       Para somente o agente informado
   ver         Mostra o fim do log de um agente
@@ -389,6 +391,46 @@ Aliases:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+
+```
+
+## `openheinerss agentes checkpoints --help`
+
+```text
+Lista os checkpoints git do agente (n, quando, motivo, resumo do diff)
+
+Usage:
+  openheinerss agentes checkpoints <nome> [flags]
+
+Global Flags:
+      --agents-dir string      Alias em inglês de --pasta-agentes (default ".claude/agentes")
+      --config string          Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string    Alias de --config
+      --json                   Emite JSON
+      --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
+
+```
+
+## `openheinerss agentes desfazer --help`
+
+```text
+Volta a worktree do agente a um checkpoint (sem n: o anterior ao último)
+
+Usage:
+  openheinerss agentes desfazer <nome> [n] [flags]
+
+Aliases:
+  desfazer, undo
+
+Flags:
+      --forcar   Restaura mesmo com o agente rodando
+
+Global Flags:
+      --agents-dir string      Alias em inglês de --pasta-agentes (default ".claude/agentes")
+      --config string          Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string    Alias de --config
+      --json                   Emite JSON
+      --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
 
 ```
 
