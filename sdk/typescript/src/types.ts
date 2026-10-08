@@ -32,7 +32,7 @@ export interface RunOptions {
 }
 export interface RunStarted { geracao: string; id: string; agente: string; projeto: string; }
 export interface AgentInfo { id?: string; agente: string; projeto: string; estado: string; motor?: string; modelo?: string; tentativa?: number; inicio?: string; fim?: string; codigo?: number; pid?: number; log?: string; }
-export interface OrchestrationDecision { id: string; agente: string; projeto: string; pergunta: string; opcoes: string[]; }
+export interface OrchestrationDecision { geracao?: string; run?: string; id: string; agente: string; projeto: string; pergunta: string; opcoes: string[]; }
 export interface RunList { agentes: AgentInfo[]; decisoes: OrchestrationDecision[]; }
 export interface LimitsWindow { nome: string; percentual: number; reiniciaEm?: string; }
 export interface Limits { agora: string; instancias: Array<{ nome: string; base: string; janelas: LimitsWindow[]; }>; }

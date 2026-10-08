@@ -45,7 +45,8 @@ export class Openheinerss extends EventEmitter {
   async run(options: RunOptions): Promise<RunStarted> { await this.ensureTransport(); return this.sendRPC("rodar.iniciar", options as unknown as Record<string, unknown>); }
   async listRuns(filter: EventFilter = {}): Promise<RunList> { await this.ensureTransport(); return this.sendRPC("rodar.listar", filter as Record<string, unknown>); }
   async stopRun(idOrAgent: { id?: string; agente?: string }): Promise<void> { await this.ensureTransport(); await this.sendRPC("rodar.parar", idOrAgent); }
-  async decideRun(run: string, id: string, resposta: string, mensagem?: string): Promise<void> { await this.ensureTransport(); await this.sendRPC("rodar.decidir", { run, id, resposta, mensagem }); }
+  /** `run` (id da execução, vem em `orq.precisa_decisao`) é opcional; se vier, o servidor confere. */
+  async decideRun(id: string, resposta: string, mensagem?: string, run?: string): Promise<void> { await this.ensureTransport(); await this.sendRPC("rodar.decidir", { id, resposta, mensagem, run }); }
   async getLimits(): Promise<Limits> { await this.ensureTransport(); return this.sendRPC("limites.obter", {}); }
   async subscribeEvents(filter: EventFilter = {}, callbacks: Partial<Record<OrchestrationEventName, OrchestrationCallback>> = {}): Promise<void> {
     await this.ensureTransport();

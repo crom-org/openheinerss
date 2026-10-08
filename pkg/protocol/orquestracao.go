@@ -126,7 +126,7 @@ type RodarPararParams struct {
 // RodarDecidirParams responde um orq.precisa_decisao. Resposta: "permitir" ou "negar".
 type RodarDecidirParams struct {
 	Geracao  string `json:"geracao,omitempty"`
-	Run      string `json:"run"`
+	Run      string `json:"run,omitempty"` // id da execução; se vier, precisa bater com o da decisão
 	ID       string `json:"id"`
 	Resposta string `json:"resposta"`
 	Mensagem string `json:"mensagem,omitempty"`

@@ -259,6 +259,8 @@ Mesmas opções do `openheinerss rodar` (nomes em português, como em `run`), ma
 ```json
 {"jsonrpc":"2.0","id":2,"geracao":"geracao-a1b2c3","result":{"geracao":"geracao-a1b2c3","id":"rodar-1","agente":"etapa-1","projeto":"crom-tv"}}
 ```
+Se o servidor foi iniciado com `serve --max-agentes N`, `maxAgentes` vira no máximo `N` (0 ou ausente também vira `N`).
+
 Erros (`-32602`): nome ou motor vazio; agente com o mesmo nome já rodando neste servidor.
 
 ### `rodar.listar`
@@ -282,13 +284,13 @@ Para uma execução **lançada por este servidor**, por `id` ou `agente`. O fim 
 ```
 
 ### `rodar.decidir`
-Responde um `orq.precisa_decisao`. `resposta`: `"permitir"` ou `"negar"` (aceita também `sim`/`não`, `allow`/`deny`); `mensagem` é opcional. O agente fica parado até a resposta (ou até `rodar.parar`). `rodar.listar` mostra as decisões ainda pendentes para quem conectar depois. Rodando pelo CLI (sem servidor) as permissões são aprovadas automaticamente, como antes.
+Responde um `orq.precisa_decisao`. `resposta`: `"permitir"` ou `"negar"` (aceita também `sim`/`não`, `allow`/`deny`); `mensagem` é opcional. O agente fica parado até a resposta (ou até `rodar.parar`). `run` (id da execução) e `geracao` são opcionais; se enviados e não baterem com os da decisão/servidor, a resposta é recusada (`-32602`) e a decisão continua pendente. `rodar.listar` mostra as decisões ainda pendentes para quem conectar depois. Rodando pelo CLI (sem servidor) as permissões são aprovadas automaticamente, como antes.
 
 ```json
 {"jsonrpc":"2.0","id":5,"method":"rodar.decidir","params":{"geracao":"geracao-a1b2c3","run":"rodar-1","id":"dec-2","resposta":"permitir"}}
 ```
 ```json
-{"jsonrpc":"2.0","id":5,"geracao":"geracao-a1b2c3","result":{"id":"dec-2","run":"rodar-1","resposta":"permitir"}}
+{"jsonrpc":"2.0","id":5,"geracao":"geracao-a1b2c3","result":{"id":"dec-2","resposta":"permitir"}}
 ```
 
 ### `limites.obter` e `harness.listar`

@@ -505,9 +505,7 @@ func (o *Orq) iniciar(p protocol.RodarIniciarParams) (protocol.RodarIniciarResul
 	if p.Nome == "" || p.Motor == "" {
 		return protocol.RodarIniciarResult{}, fmt.Errorf("rodar.iniciar exige nome e motor")
 	}
-	if o.maxAgents > 0 && (p.MaxAgentes <= 0 || p.MaxAgentes > o.maxAgents) {
-		p.MaxAgentes = o.maxAgents
-	}
+	p.MaxAgentes = o.limitarAgentes(p.MaxAgentes)
 	dir, projeto := resolverPasta(p.CWD, p.Pasta)
 	if p.Projeto != "" {
 		projeto = p.Projeto
@@ -566,6 +564,14 @@ func (o *Orq) iniciar(p protocol.RodarIniciarParams) (protocol.RodarIniciarResul
 	return protocol.RodarIniciarResult{Geracao: o.geracao, ID: j.id, Agente: p.Nome, Projeto: projeto}, nil
 }
 
+// limitarAgentes aplica o teto de serve --max-agentes ao maxAgentes pedido pelo cliente.
+func (o *Orq) limitarAgentes(pedido int) int {
+	if o.maxAgents > 0 && (pedido <= 0 || pedido > o.maxAgents) {
+		return o.maxAgents
+	}
+	return pedido
+}
+
 func max64(a, b int64) int64 {
 	if a > b {
 		return a
@@ -619,9 +625,6 @@ func (o *Orq) perguntar(ctx context.Context, j *job, q orchestrator.Pergunta) (b
 }
 
 func (o *Orq) decidir(p protocol.RodarDecidirParams) error {
-	if p.Run == "" {
-		return fmt.Errorf("rodar.decidir exige o id da execução no campo \"run\"")
-	}
 	if p.Geracao != "" && p.Geracao != o.geracao {
 		return fmt.Errorf("geração %q não corresponde a este servidor", p.Geracao)
 	}
@@ -633,19 +636,18 @@ func (o *Orq) decidir(p protocol.RodarDecidirParams) error {
 	default:
 		return fmt.Errorf("resposta %q inválida: use \"permitir\" ou \"negar\"", p.Resposta)
 	}
+	// Confere o run antes de remover, sob a mesma trava: uma resposta com run errado
+	// não consome a decisão de outra execução. Run vazio (cliente antigo) é aceito.
 	o.mu.Lock()
 	d := o.decisoes[p.ID]
+	if d != nil && p.Run != "" && d.params.Run != p.Run {
+		o.mu.Unlock()
+		return fmt.Errorf("decisão %q não pertence à execução %q", p.ID, p.Run)
+	}
 	delete(o.decisoes, p.ID)
 	o.mu.Unlock()
 	if d == nil {
 		return fmt.Errorf("decisão %q não encontrada (já respondida ou expirada)", p.ID)
-	}
-	if d.params.Run != p.Run {
-		// Recoloca a decisão para que o cliente correto ainda possa respondê-la.
-		o.mu.Lock()
-		o.decisoes[p.ID] = d
-		o.mu.Unlock()
-		return fmt.Errorf("decisão %q não pertence à execução %q", p.ID, p.Run)
 	}
 	d.ch <- decisaoResp{allow, p.Mensagem}
 	return nil

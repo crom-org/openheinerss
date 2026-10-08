@@ -292,7 +292,8 @@ func TestOrqFiltrosDeAssinatura(t *testing.T) {
 	var dec protocol.OrqDecisaoParams
 	_ = json.Unmarshal(todos.proximo(protocol.EventOrqPrecisaDecisao, protocol.EventOrqInicio, protocol.EventOrqProgresso), &dec)
 	_ = certo.proximo(protocol.EventOrqPrecisaDecisao, protocol.EventOrqInicio, protocol.EventOrqProgresso)
-	todos.resultado(protocol.MethodRodarDecidir, protocol.RodarDecidirParams{Run: dec.Run, ID: dec.ID, Resposta: "permitir"}, nil)
+	// Sem run nem geração (cliente antigo): continua aceito.
+	todos.resultado(protocol.MethodRodarDecidir, protocol.RodarDecidirParams{ID: dec.ID, Resposta: "permitir"}, nil)
 	_ = todos.proximo(protocol.EventOrqFim, protocol.EventOrqProgresso)
 	_ = certo.proximo(protocol.EventOrqFim, protocol.EventOrqProgresso)
 	outro.semEvento(200 * time.Millisecond)

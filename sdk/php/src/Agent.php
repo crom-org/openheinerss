@@ -139,8 +139,9 @@ class Agent
     public function stopRun(?string $id = null, ?string $agente = null): void {
         $this->request('rodar.parar', array_filter(['id' => $id, 'agente' => $agente]));
     }
-    public function decideRun(string $run, string $id, string $resposta, ?string $mensagem = null): void {
-        $this->request('rodar.decidir', array_filter(['run' => $run, 'id' => $id, 'resposta' => $resposta, 'mensagem' => $mensagem]));
+    /** $run (id da execução, vem em orq.precisa_decisao) é opcional; se vier, o servidor confere. */
+    public function decideRun(string $id, string $resposta, ?string $mensagem = null, ?string $run = null): void {
+        $this->request('rodar.decidir', array_filter(['id' => $id, 'resposta' => $resposta, 'mensagem' => $mensagem, 'run' => $run]));
     }
     public function getLimits(): array { return $this->request('limites.obter', []); }
     /** @param array<string, callable(array): void> $callbacks */
