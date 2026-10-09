@@ -83,6 +83,46 @@ func TestAtualizarConsultaAtivaCacheiaSemCredencialNoResultado(t *testing.T) {
 	}
 }
 
+func TestAtualizarNaoReutilizaCacheCodexSemJanelas(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	codex := filepath.Join(home, ".codex")
+	if err := os.MkdirAll(codex, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(codex, "auth.json"), []byte(`{"tokens":{"access_token":"token-anonimo"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		_, _ = w.Write([]byte(`{"rate_limits":{"primary":{"used_percent":39,"window_minutes":300,"resets_at":4102444800}}}`))
+	}))
+	defer srv.Close()
+	t.Setenv("OPENHEINERSS_CODEX_USAGE_URL", srv.URL)
+	cache := filepath.Join(t.TempDir(), "cache")
+	if err := os.MkdirAll(cache, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := gravarCache(filepath.Join(cache, nomeCache("codex")), Instancia{
+		Nome: "codex", Base: "codex", DadoEm: time.Now().Format(time.RFC3339), Fonte: "consulta-ativa",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Atualizar(context.Background(), AtualizarOpcoes{CacheDir: cache, HTTPClient: srv.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatalf("cache sem janelas foi reutilizado: chamadas=%d", calls)
+	}
+	for _, i := range r.Instancias {
+		if i.Nome == "codex" && (i.Fonte != "consulta-ativa" || len(i.Janelas) != 1 || i.Janelas[0].Percentual != 39) {
+			t.Fatalf("consulta ativa não atualizou Codex: %+v", i)
+		}
+	}
+}
+
 func TestConsultaCodexWhamLêFixtureEEnviaAccountID(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -236,6 +276,7 @@ func TestAtualizar429RespeitaRetryAfterEUsaCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	got429 = true
+	t.Setenv("OPENHEINERSS_CLAUDE_MESSAGES_URL", srv.URL)
 	r, err := Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: cache, HTTPClient: srv.Client()})
 	if err != nil {
 		t.Fatal(err)
@@ -297,6 +338,53 @@ func TestAtualizar429ReservaClaudePelosCabecalhosUmaVez(t *testing.T) {
 	}
 	if usageCalls != 1 || messageCalls != 1 {
 		t.Fatalf("reserva repetida durante Retry-After: usage=%d messages=%d", usageCalls, messageCalls)
+	}
+}
+
+func TestAtualizar429EmBloqueioTentaReservaClaudeSeCacheDeCabecalhosVenceu(t *testing.T) {
+	_, _ = prepararClaudeAtivo(t, `{"claudeAiOauth":{"accessToken":"bom"}}`)
+	var usageCalls, messageCalls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/usage":
+			usageCalls++
+			t.Fatalf("não deveria consultar usage durante Retry-After")
+		case "/messages":
+			messageCalls++
+			w.Header().Set("anthropic-ratelimit-unified-5h-utilization", "0.39")
+			_, _ = w.Write([]byte(`{"id":"msg-anonimo"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	t.Setenv("OPENHEINERSS_CLAUDE_USAGE_URL", srv.URL+"/usage")
+	t.Setenv("OPENHEINERSS_CLAUDE_MESSAGES_URL", srv.URL+"/messages")
+	cache := filepath.Join(t.TempDir(), "cache")
+	cachePath := filepath.Join(cache, nomeCache("claude-code"))
+	if err := os.MkdirAll(cache, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := gravarCache(cachePath, Instancia{
+		Nome: "claude-code", Base: "claude-code", DadoEm: time.Now().Add(-6 * time.Minute).Format(time.RFC3339),
+		Fonte: "cabeçalhos", Janelas: []Janela{{Nome: "5h", Percentual: 12}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := gravarRetryAte(retryPath(cachePath), time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: cache, HTTPClient: srv.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if usageCalls != 0 || messageCalls != 1 {
+		t.Fatalf("reserva durante bloqueio: usage=%d messages=%d", usageCalls, messageCalls)
+	}
+	for _, i := range r.Instancias {
+		if i.Nome == "claude-code" && (i.Fonte != "cabeçalhos" || len(i.Janelas) != 1 || i.Janelas[0].Percentual != 39) {
+			t.Fatalf("reserva não substituiu cache vencido: %+v", i)
+		}
 	}
 }
 

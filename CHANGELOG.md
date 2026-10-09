@@ -5,7 +5,8 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 
 ## Não publicado
 
-- `limites --atualizar` usa uma chamada mínima de mensagens do Claude (haiku, `max_tokens=1`) para obter cabeçalhos de cota durante HTTP 429, com cache compartilhado por intervalo e motivo explícito quando a reserva falha; a idade do cache é recalculada ao ser reutilizada.
+- `limites --atualizar` não reutiliza cache sem janelas do Codex; durante o bloqueio HTTP 429 do uso Claude, tenta a reserva por cabeçalhos mesmo com `--forcar`, com intervalo mínimo compartilhado de cinco minutos e motivo das duas falhas.
+- `limites --atualizar` usa uma chamada mínima de mensagens do Claude (Haiku 4.5, `max_tokens=1`) para obter cabeçalhos de cota durante HTTP 429, com cache compartilhado por intervalo e motivo explícito quando a reserva falha; a idade do cache é recalculada ao ser reutilizada.
 - O parser do limite WHAM do Codex foi conferido com resposta real anonimizada, incluindo `primary_window`/`secondary_window`, `reset_at` e campos opcionais.
 - Instância `claude-code` usa sempre `~/.claude`, sem herdar `CLAUDE_CONFIG_DIR` do shell; a identidade acompanha o ambiente efetivo do filho.
 - `rodar --cota-max` só decide com limite atualizado nos últimos cinco minutos e tenta consulta ativa quando o dado passivo está velho.
