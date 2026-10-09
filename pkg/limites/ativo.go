@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -359,7 +360,7 @@ func requestJSONMethod(ctx context.Context, client *http.Client, method, rawURL 
 func consultaClaude(ctx context.Context, base Instancia, client *http.Client) (Instancia, error) {
 	dir := dirClaude(base)
 	credPath := filepath.Join(dir, ".credentials.json")
-	token, refresh, err := credenciaisClaude(credPath)
+	token, refresh, err := tokenClaudeValido(ctx, client, credPath)
 	if err != nil || token == "" {
 		return base, errors.New("credencial não encontrada")
 	}
@@ -387,7 +388,8 @@ func consultaClaude(ctx context.Context, base Instancia, client *http.Client) (I
 // chamador garante no máximo uma reserva por intervalo compartilhado por conta.
 func reservaClaude(ctx context.Context, base Instancia, client *http.Client) (Instancia, error) {
 	dir := dirClaude(base)
-	token, _, err := credenciaisClaude(filepath.Join(dir, ".credentials.json"))
+	credPath := filepath.Join(dir, ".credentials.json")
+	token, refresh, err := tokenClaudeValido(ctx, client, credPath)
 	if err != nil || token == "" {
 		return base, errors.New("credencial não encontrada")
 	}
@@ -406,20 +408,90 @@ func reservaClaude(ctx context.Context, base Instancia, client *http.Client) (In
 	if err != nil {
 		return base, errors.New("reserva Claude inválida")
 	}
-	v, headers, requestErr := requestJSONMethod(ctx, client, http.MethodPost, endpoint, strings.NewReader(string(body)), token, map[string]string{
-		"Content-Type":      "application/json",
-		"anthropic-version": "2023-06-01",
-		"anthropic-beta":    "oauth-2025-04-20",
-	})
+	envia := func(tk string) (map[string]interface{}, http.Header, error) {
+		return requestJSONMethod(ctx, client, http.MethodPost, endpoint, strings.NewReader(string(body)), tk, map[string]string{
+			"Content-Type":      "application/json",
+			"anthropic-version": "2023-06-01",
+			"anthropic-beta":    "oauth-2025-04-20",
+		})
+	}
+	v, headers, requestErr := envia(token)
+	if he, ok := requestErr.(*httpStatusError); ok && he.status == http.StatusUnauthorized && refresh != "" {
+		novo, refreshErr := renovarClaude(ctx, client, credPath, refresh)
+		if refreshErr != nil {
+			return base, errors.New("reserva: HTTP 401 e renovação OAuth falhou")
+		}
+		v, headers, requestErr = envia(novo)
+	}
 	if requestErr != nil && len(headers) == 0 {
 		return base, requestErr
 	}
 	i := instanciaUso(base, v, headers, "cabeçalhos")
 	if len(i.Janelas) == 0 {
-		return base, errors.New("reserva sem cabeçalhos de limite")
+		// Só NOMES de cabeçalhos entram no diagnóstico, nunca valores.
+		status := "HTTP 2xx"
+		if requestErr != nil {
+			status = requestErr.Error()
+		}
+		return base, fmt.Errorf("reserva sem cabeçalhos de limite (%s; cabeçalhos anthropic-*: %s)", status, nomesCabecalhosAnthropic(headers))
 	}
 	return i, nil
 }
+
+// nomesCabecalhosAnthropic lista apenas os nomes (sem valores) dos cabeçalhos anthropic-*.
+func nomesCabecalhosAnthropic(h http.Header) string {
+	var nomes []string
+	for k := range h {
+		if strings.HasPrefix(strings.ToLower(k), "anthropic-") {
+			nomes = append(nomes, strings.ToLower(k))
+		}
+	}
+	sort.Strings(nomes)
+	if len(nomes) == 0 {
+		return "nenhum"
+	}
+	return strings.Join(nomes, ",")
+}
+
+// tokenClaudeValido devolve o access token e, se ele já expirou (ou expira em
+// menos de 1 min), renova antes de qualquer chamada: token vencido faz o
+// servidor responder erro em vez de números e nunca chegava à renovação.
+func tokenClaudeValido(ctx context.Context, client *http.Client, path string) (access, refresh string, err error) {
+	access, refresh, err = credenciaisClaude(path)
+	if err != nil || refresh == "" {
+		return access, refresh, err
+	}
+	if exp := expiraEmClaude(path); !exp.IsZero() && time.Now().Add(time.Minute).After(exp) {
+		novo, rerr := renovarClaude(ctx, client, path, refresh)
+		if rerr != nil {
+			return "", refresh, errors.New("token expirado e renovação OAuth falhou")
+		}
+		_, refresh2, _ := credenciaisClaude(path)
+		if refresh2 != "" {
+			refresh = refresh2
+		}
+		return novo, refresh, nil
+	}
+	return access, refresh, nil
+}
+
+func expiraEmClaude(path string) time.Time {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return time.Time{}
+	}
+	var root map[string]interface{}
+	if json.Unmarshal(b, &root) != nil {
+		return time.Time{}
+	}
+	oauth, _ := root["claudeAiOauth"].(map[string]interface{})
+	ms, ok := num(oauth["expiresAt"])
+	if !ok || ms <= 0 {
+		return time.Time{}
+	}
+	return time.UnixMilli(int64(ms))
+}
+
 func consultaCodex(ctx context.Context, base Instancia, client *http.Client) (Instancia, error) {
 	home := dirCodex(base)
 	authPath := filepath.Join(home, "auth.json")

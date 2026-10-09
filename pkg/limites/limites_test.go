@@ -184,6 +184,45 @@ func prepararClaudeAtivo(t *testing.T, cred string) (string, string) {
 	return home, path
 }
 
+func TestAtualizarClaudeRenovaOAuth401TokenNaoExpirado(t *testing.T) {
+	prepararClaudeAtivo(t, `{"claudeAiOauth":{"accessToken":"velho","refreshToken":"renovar","expiresAt":4102444800000}}`)
+	var usageCalls, refreshCalls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/usage":
+			usageCalls++
+			if r.Header.Get("Authorization") == "Bearer velho" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set("anthropic-ratelimit-unified-5h-utilization", "0.12")
+			_, _ = w.Write([]byte(`{}`))
+		case "/token":
+			refreshCalls++
+			_, _ = w.Write([]byte(`{"access_token":"novo","expires_in":3600}`))
+		}
+	}))
+	defer srv.Close()
+	t.Setenv("OPENHEINERSS_CLAUDE_USAGE_URL", srv.URL+"/usage")
+	t.Setenv("OPENHEINERSS_CLAUDE_OAUTH_TOKEN_URL", srv.URL+"/token")
+	if _, err := Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: filepath.Join(t.TempDir(), "cache"), HTTPClient: srv.Client()}); err != nil {
+		t.Fatal(err)
+	}
+	if usageCalls != 2 || refreshCalls != 1 {
+		t.Fatalf("chamadas usage=%d refresh=%d", usageCalls, refreshCalls)
+	}
+}
+
+func TestNomesCabecalhosAnthropicSoNomes(t *testing.T) {
+	h := http.Header{}
+	h.Set("Anthropic-Ratelimit-Foo", "segredo-valor")
+	h.Set("Content-Type", "x")
+	got := nomesCabecalhosAnthropic(h)
+	if got != "anthropic-ratelimit-foo" || strings.Contains(got, "segredo") {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestAtualizarClaudeRenovaOAuth401EGravaMesmoFormato(t *testing.T) {
 	_, credPath := prepararClaudeAtivo(t, `{"claudeAiOauth":{"accessToken":"velho","refreshToken":"renovar","expiresAt":1,"subscriptionType":"pro"}}`)
 	var usageCalls, refreshCalls int
@@ -214,7 +253,7 @@ func TestAtualizarClaudeRenovaOAuth401EGravaMesmoFormato(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if usageCalls < 2 || refreshCalls != 1 {
+	if usageCalls != 1 || refreshCalls != 1 { // expirado: renova antes, sem gastar chamada com 401
 		t.Fatalf("chamadas usage=%d refresh=%d", usageCalls, refreshCalls)
 	}
 	if resultado.Instancias[0].Fonte != "cabeçalhos" {
