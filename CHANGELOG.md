@@ -3,7 +3,7 @@
 Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 
-## Não publicado
+## [1.6.0] — 2026-10-09
 
 - Torna `contaId` determinístico, faz `contas listar` usar o diretório padrão do
   harness, recusa apagar cwd/repositório, melhora erros da CLI e faz `config` e
