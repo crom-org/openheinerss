@@ -247,10 +247,10 @@ Executa o diagnóstico de dependências do ambiente.
 
 ## 4.1 Contas de login
 
-`contas.listar` lista instâncias e informa somente se arquivos de credencial conhecidos
+`contas.listar` lista instâncias globais e do projeto, informa a origem (`global`, `global-legado` ou `projeto`) e somente se arquivos de credencial conhecidos
 existem; seu conteúdo nunca é lido. `contas.adicionar` recebe `harness`, `nome` e opcionalmente
 `cwd`, cria a pasta privada e a instância e devolve `comandoLogin` para um terminal. O servidor
-não inicia login interativo; `iniciarLogin` fica reservado para fluxos de dispositivo. `contas.renomear`
+não inicia login interativo; `iniciarLogin` fica reservado para fluxos de dispositivo. A gravação é global por padrão; `projeto: true` grava no projeto. `contas.renomear`
 troca somente o nome e `contas.remover` exige `confirmar: true`; `apagarPasta: true` remove também
 a pasta de login.
 

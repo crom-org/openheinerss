@@ -6,6 +6,8 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 
 ## [1.3.0] — 2026-10-09
 
+- Instâncias globais são carregadas de `$XDG_CONFIG_HOME/openheinerss/harnesses` (ou do diretório nativo equivalente) e do legado `~/.openheinerss/harnesses`; o projeto vence nomes iguais mesmo quando o comando roda em outro repositório.
+- `contas adicionar` grava no global por padrão e aceita `--projeto`; `contas listar` mostra a origem, renomear/remover procuram nas camadas e `contas migrar --sim` copia as contas do projeto sem apagá-las. `harness add --global` grava uma instância global.
 - Novo comando `contas adicionar|listar|renomear|remover` com pastas privadas por harness,
   login nativo interativo, identidade e limites; `--sem-login`, confirmação e `--apagar-pasta`.
   O openheinerss nunca lê, digita ou armazena credenciais.

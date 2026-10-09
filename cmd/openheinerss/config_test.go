@@ -154,3 +154,33 @@ func TestFlagConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestHarnessGlobalEncontradoForaDoRepositorio(t *testing.T) {
+	if testing.Short() {
+		t.Skip("compila o binário")
+	}
+	bin := binarioTeste(t)
+	home, xdg, repo := t.TempDir(), t.TempDir(), t.TempDir()
+	global := filepath.Join(xdg, "openheinerss", "harnesses")
+	escrever(t, filepath.Join(global, "codex2.yaml"), "name: codex2\nbase: codex\nenv:\n  CODEX_HOME: ~/.codex-compartilhado\n")
+	if out, err := exec.Command("git", "init", "-q", repo).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	c := exec.Command(bin, "harness", "list")
+	c.Dir = repo
+	c.Env = []string{"HOME=" + home, "XDG_CONFIG_HOME=" + xdg, "PATH=" + os.Getenv("PATH")}
+	out, err := c.CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "codex2") {
+		t.Fatalf("codex2 global não foi encontrado fora do repositório: %v\n%s", err, out)
+	}
+
+	// Uma instância de mesmo nome no projeto vence a global e aparece na identidade.
+	escrever(t, filepath.Join(repo, ".openheinerss", "harnesses", "codex2.yaml"), "name: codex2\nbase: codex\nenv:\n  CODEX_HOME: ~/.codex-do-projeto\n")
+	c = exec.Command(bin, "identidade", "codex2", "--json")
+	c.Dir = repo
+	c.Env = []string{"HOME=" + home, "XDG_CONFIG_HOME=" + xdg, "PATH=" + os.Getenv("PATH")}
+	out, err = c.CombinedOutput()
+	if err != nil || !strings.Contains(string(out), filepath.Join(repo, ".openheinerss", "harnesses", "codex2.yaml")) {
+		t.Fatalf("projeto não venceu o global: %v\n%s", err, out)
+	}
+}

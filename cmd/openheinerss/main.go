@@ -1123,7 +1123,8 @@ func newHarnessCmd() *cobra.Command {
 		}
 		return nil
 	}})
-	root.AddCommand(&cobra.Command{Use: "add <arquivo>", Aliases: []string{"adicionar"}, Short: "Valida e copia um arquivo de harness para o projeto", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	var global bool
+	add := &cobra.Command{Use: "add <arquivo>", Aliases: []string{"adicionar"}, Short: "Valida e copia um arquivo de harness para o projeto ou global", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		if err := harness.LoadCustomFile(args[0]); err != nil {
 			return err
 		}
@@ -1132,6 +1133,9 @@ func newHarnessCmd() *cobra.Command {
 			return err
 		}
 		dir, err := pastaHarnesses(cwd)
+		if global {
+			dir, err = config.UserHarnessDir()
+		}
 		if err != nil {
 			return err
 		}
@@ -1149,7 +1153,9 @@ func newHarnessCmd() *cobra.Command {
 		}
 		fmt.Printf("Harness copiado para %s\n", target)
 		return nil
-	}})
+	}}
+	add.Flags().BoolVar(&global, "global", false, "Grava na configuração global do usuário")
+	root.AddCommand(add)
 	var prompt string
 	var todos, jsonOutput, incluirPrincipal bool
 	var retomar bool

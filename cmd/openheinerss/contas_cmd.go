@@ -16,12 +16,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func contasDir() (string, error) {
+func contasDirs() ([]string, string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
-	return pastaHarnesses(cwd)
+	if dir, err := config.ConfigDir(); err != nil {
+		return nil, "", err
+	} else if dir != "" {
+		h := filepath.Join(dir, "harnesses")
+		return []string{h}, h, nil
+	}
+	globais, err := config.UserHarnessDirs()
+	if err != nil {
+		return nil, "", err
+	}
+	return globais, filepath.Join(cwd, config.WorkspaceDirName, "harnesses"), nil
 }
 
 func confirmarConta(pergunta string, in *bufio.Reader) (bool, error) {
@@ -43,7 +53,7 @@ func exibirContas(items []contas.Conta, jsonOutput bool) error {
 		return nil
 	}
 	for _, c := range items {
-		fmt.Printf("%s base=%s contaId=%s contaDir=%s login=%t\n", c.Instancia, c.Base, c.ContaID, c.ContaDir, c.TemLogin)
+		fmt.Printf("%s origem=%s base=%s contaId=%s contaDir=%s login=%t\n", c.Instancia, c.Origem, c.Base, c.ContaID, c.ContaDir, c.TemLogin)
 	}
 	return nil
 }
@@ -52,11 +62,11 @@ func novaContasCmd() *cobra.Command {
 	var jsonOutput bool
 	root := &cobra.Command{Use: "contas", Aliases: []string{"accounts"}, Short: "Cria e administra contas de login dos harnesses"}
 	listar := &cobra.Command{Use: "listar", Aliases: []string{"list"}, Short: "Lista instâncias de conta sem ler credenciais", RunE: func(cmd *cobra.Command, args []string) error {
-		dir, err := contasDir()
+		globais, projeto, err := contasDirs()
 		if err != nil {
 			return err
 		}
-		items, err := contas.Listar(dir)
+		items, err := contas.ListarCamadas(globais, projeto)
 		if err != nil {
 			return err
 		}
@@ -65,14 +75,19 @@ func novaContasCmd() *cobra.Command {
 	listar.Flags().BoolVar(&jsonOutput, "json", false, "Emite JSON")
 	root.AddCommand(listar)
 	var semLogin bool
+	var projeto bool
 	adicionar := &cobra.Command{Use: "adicionar <harness> [nome]", Aliases: []string{"add"}, Short: "Cria a pasta e a instância e abre o login nativo", Args: cobra.RangeArgs(1, 2), RunE: func(cmd *cobra.Command, args []string) error {
 		nome := "principal"
 		if len(args) == 2 {
 			nome = args[1]
 		}
-		dir, err := contasDir()
+		globais, projetoDir, err := contasDirs()
 		if err != nil {
 			return err
+		}
+		dir := globais[0]
+		if projeto {
+			dir = projetoDir
 		}
 		if err := config.PastaPrivada(dir); err != nil {
 			return err
@@ -100,11 +115,26 @@ func novaContasCmd() *cobra.Command {
 		return exibirLimites(limites.Obter())
 	}}
 	adicionar.Flags().BoolVar(&semLogin, "sem-login", false, "Só cria a pasta e a instância")
+	adicionar.Flags().BoolVar(&projeto, "projeto", false, "Grava a instância no projeto atual (por padrão, grava no global)")
 	root.AddCommand(adicionar)
 	renomear := &cobra.Command{Use: "renomear <antigo> <novo>", Aliases: []string{"rename"}, Args: cobra.ExactArgs(2), Short: "Renomeia a instância sem mover o login", RunE: func(cmd *cobra.Command, args []string) error {
-		dir, err := contasDir()
+		globais, projeto, err := contasDirs()
 		if err != nil {
 			return err
+		}
+		items, err := contas.ListarCamadas(globais, projeto)
+		if err != nil {
+			return err
+		}
+		var dir string
+		for _, item := range items {
+			if item.Instancia == args[0] {
+				dir = filepath.Dir(item.Arquivo)
+				break
+			}
+		}
+		if dir == "" {
+			return fmt.Errorf("conta %q não encontrada", args[0])
 		}
 		c, err := contas.Renomear(dir, args[0], args[1])
 		if err != nil {
@@ -116,11 +146,11 @@ func novaContasCmd() *cobra.Command {
 	root.AddCommand(renomear)
 	var sim, apagar bool
 	remover := &cobra.Command{Use: "remover <nome>", Aliases: []string{"remove"}, Args: cobra.ExactArgs(1), Short: "Remove a instância e, opcionalmente, sua pasta de login", RunE: func(cmd *cobra.Command, args []string) error {
-		dir, err := contasDir()
+		globais, projeto, err := contasDirs()
 		if err != nil {
 			return err
 		}
-		items, err := contas.Listar(dir)
+		items, err := contas.ListarCamadas(globais, projeto)
 		if err != nil {
 			return err
 		}
@@ -146,7 +176,7 @@ func novaContasCmd() *cobra.Command {
 				return fmt.Errorf("remoção cancelada")
 			}
 		}
-		if _, err := contas.Remover(dir, alvo.Instancia); err != nil {
+		if _, err := contas.Remover(filepath.Dir(alvo.Arquivo), alvo.Instancia); err != nil {
 			return err
 		}
 		if apagar {
@@ -161,6 +191,35 @@ func novaContasCmd() *cobra.Command {
 	remover.Flags().BoolVar(&sim, "sim", false, "Confirma a remoção sem perguntar")
 	remover.Flags().BoolVar(&apagar, "apagar-pasta", false, "Apaga também a pasta de login (exige confirmação extra)")
 	root.AddCommand(remover)
+	var migrarSim bool
+	migrar := &cobra.Command{Use: "migrar", Short: "Copia as instâncias do projeto atual para o global", RunE: func(cmd *cobra.Command, args []string) error {
+		globais, projeto, err := contasDirs()
+		if err != nil {
+			return err
+		}
+		items, err := contas.Listar(projeto)
+		if err != nil {
+			return err
+		}
+		if len(items) == 0 {
+			fmt.Println("Nenhuma instância do projeto para migrar.")
+			return nil
+		}
+		if !migrarSim {
+			ok, err := confirmarConta(fmt.Sprintf("Copiar %d instância(s) para o global sem apagar o projeto?", len(items)), bufio.NewReader(os.Stdin))
+			if err != nil || !ok {
+				return fmt.Errorf("migração cancelada")
+			}
+		}
+		n, err := contas.Migrar(projeto, globais[0])
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Migradas %d instância(s) para %s; as do projeto foram preservadas.\n", n, globais[0])
+		return nil
+	}}
+	migrar.Flags().BoolVar(&migrarSim, "sim", false, "Confirma a migração sem perguntar")
+	root.AddCommand(migrar)
 	return root
 }
 

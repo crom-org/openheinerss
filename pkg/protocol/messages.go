@@ -101,11 +101,13 @@ type ContasAdicionarParams struct {
 	Nome         string `json:"nome"`
 	CWD          string `json:"cwd,omitempty"`
 	IniciarLogin bool   `json:"iniciarLogin,omitempty"`
+	Projeto      bool   `json:"projeto,omitempty"`
 }
 type ContasRenomearParams struct {
-	Antigo string `json:"antigo"`
-	Novo   string `json:"novo"`
-	CWD    string `json:"cwd,omitempty"`
+	Antigo  string `json:"antigo"`
+	Novo    string `json:"novo"`
+	CWD     string `json:"cwd,omitempty"`
+	Projeto bool   `json:"projeto,omitempty"`
 }
 type ContasRemoverParams struct {
 	Nome        string `json:"nome"`

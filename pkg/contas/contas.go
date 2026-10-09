@@ -22,6 +22,7 @@ type Conta struct {
 	ContaDir  string `json:"contaDir"`
 	TemLogin  bool   `json:"temLogin"`
 	Arquivo   string `json:"arquivo,omitempty"`
+	Origem    string `json:"origem"`
 }
 
 type Resultado struct {
@@ -180,6 +181,74 @@ func Listar(dir string) ([]Conta, error) {
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Instancia < items[j].Instancia })
 	return items, nil
+}
+
+// ListarCamadas mescla instâncias globais e do projeto. O projeto e a pasta
+// global principal vencem instâncias antigas com o mesmo nome.
+func ListarCamadas(globais []string, projeto string) ([]Conta, error) {
+	porNome := map[string]Conta{}
+	for i, dir := range globais {
+		items, err := Listar(dir)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range items {
+			if _, existe := porNome[c.Instancia]; existe {
+				continue
+			}
+			c.Origem = "global"
+			if i > 0 {
+				c.Origem = "global-legado"
+			}
+			porNome[c.Instancia] = c
+		}
+	}
+	if projeto != "" {
+		items, err := Listar(projeto)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range items {
+			c.Origem = "projeto"
+			porNome[c.Instancia] = c
+		}
+	}
+	items := make([]Conta, 0, len(porNome))
+	for _, c := range porNome {
+		items = append(items, c)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Instancia < items[j].Instancia })
+	return items, nil
+}
+
+// Migrar copia as instâncias do projeto para a pasta global sem apagar as
+// originais. Recusa colisões para nunca substituir uma conta existente.
+func Migrar(projeto, global string) (int, error) {
+	items, err := Listar(projeto)
+	if err != nil {
+		return 0, err
+	}
+	if err := os.MkdirAll(global, 0700); err != nil {
+		return 0, err
+	}
+	_ = os.Chmod(global, 0700)
+	for _, c := range items {
+		target := arquivoInstancia(global, filepath.Base(c.Arquivo))
+		if _, err := os.Stat(target); err == nil {
+			return 0, fmt.Errorf("a instância %q já existe no global", c.Instancia)
+		} else if !os.IsNotExist(err) {
+			return 0, err
+		}
+		b, err := os.ReadFile(c.Arquivo)
+		if err != nil {
+			return 0, err
+		}
+		if err := os.WriteFile(target, b, 0600); err != nil {
+			return 0, err
+		}
+		_ = os.Chmod(target, 0600)
+	}
+	return len(items), nil
 }
 
 func Adicionar(dir, harnessNome, apelido string) (Resultado, error) {
