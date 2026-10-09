@@ -113,7 +113,7 @@ Sem filhos e sem esse caso, nada muda. Se o pai é interrompido, os filhos vivos
   o filho com `ÓRFÃO(pai terminou)`; no `--json`, `pai`, `filhos`, `orfaos` e `orfao`.
 
 Códigos de FIM do `rodar`: 0 ok, 1 erro, 2 sem cota, 3 negado (`--negar-encerra`), 4 filho falhou
-(`--filhos-obrigatorios`), 130 interrompido.
+(`--filhos-obrigatorios`), 5 parado pelo detector (retomável com `--retomar`), 130 interrompido.
 
 As regras padrão do prompt incluem: "Se lançar agentes filhos ou comandos em segundo plano, o openheinerss te
 acorda quando eles terminarem; não encerre dizendo que vai esperar sem ter lançado nada."
@@ -173,3 +173,22 @@ do Claude. `--json` entrega o mesmo resultado para a Central, incluindo
 percentual, horário de reinício e idade do dado. Instâncias são declaradas em
 `.openheinerss/harnesses` com `base: codex`/`base: claude-code` e seus envs;
 nenhuma conta é embutida no programa.
+
+### Agente parado
+
+Enquanto o motor roda, o `rodar` confere a cada 60 s quatro sinais baratos (nenhum custa token): **S1** log sem escrita (mtime), **S2** worktree sem mudança (HEAD, hash do `git status --porcelain` e o maior mtime dos arquivos alterados), **S3** mesmo último trecho do log, **S4** CPU do motor e dos filhos (`/proc/<pid>/stat`, só Linux; abaixo de 5% de um núcleo entre duas leituras conta como "~0"). As linhas `[parado]` que o próprio detector escreve não contam como atividade.
+
+- S1+S2+S3 por `aviso` (padrão 10 min): linha `[parado] …` no log e, com `--eventos-log`, `orq.parado <nome> nivel=aviso …`.
+- O mesmo por `parar` (padrão 20 min) com `acao: parar` e CPU ~0: SIGTERM no grupo do motor, `meta.json` com `motivo` `"parado"` e fim com **código 5** (erro retomável: rode de novo com `--retomar`). Com a CPU ativa (build ou teste longo) só avisa, nunca para.
+- Só S3 com o log ainda ativo: aviso de **laço** ("mude de abordagem"); não interrompe.
+
+Configuração (o projeto vence o global, campo a campo; depois vêm as variáveis de ambiente `OPENHEINERSS_PARADO_AVISO_MIN`, `OPENHEINERSS_PARADO_PARAR_MIN`, `OPENHEINERSS_PARADO_ACAO` e os padrões):
+
+```yaml
+parado:
+  aviso_min: 10      # 0 desliga o detector
+  parar_min: 20      # 0 nunca interrompe
+  acao: aviso        # aviso (padrão) ou parar
+```
+
+As flags `--parado-aviso` e `--parado-parar` (duração, ex. `15m`; `0` desliga) vencem tudo; dar `--parado-parar` maior que zero liga `acao: parar`. O `rodar` grava a última checagem em `logs/<nome>.parado.json`: `agentes listar` mostra `parado` só com S1 (15 min, `OPENHEINERSS_LOG_PARADO_MIN`) mais S2 e S3 parados, e `lento` quando só o log está sem escrita (ou o detector não está olhando).

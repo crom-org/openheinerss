@@ -35,7 +35,7 @@ func TestListAgentsMostraEstadoDuracaoELinha(t *testing.T) {
 	}
 }
 
-func TestListAgentsMarcaLogParado(t *testing.T) {
+func TestListAgentsMarcaLogLento(t *testing.T) {
 	dir := t.TempDir()
 	logs := filepath.Join(dir, "logs")
 	if err := os.MkdirAll(logs, 0755); err != nil {
@@ -55,8 +55,8 @@ func TestListAgentsMarcaLogParado(t *testing.T) {
 		t.Fatal(err)
 	}
 	items, err := ListAgents(dir, time.Now())
-	if err != nil || len(items) != 1 || items[0].Estado != "parado" {
-		t.Fatalf("estado parado: err=%v itens=%+v", err, items)
+	if err != nil || len(items) != 1 || items[0].Estado != "lento" {
+		t.Fatalf("estado lento (só S1): err=%v itens=%+v", err, items)
 	}
 }
 
