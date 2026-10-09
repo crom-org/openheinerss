@@ -55,7 +55,7 @@ class Agent
                 "provider" => $options['provider'] ?? null,
                 "model"    => $options['model'] ?? null,
                 "cwd"      => $options['cwd'] ?? getcwd(),
-            ] + $this->sessionExtras($options)
+            ] + (empty($options['retomar']) ? [] : ['retomar' => (string) $options['retomar']]) + $this->sessionExtras($options)
         ]);
 
         while ($line = $this->transport->readLine()) {
@@ -177,7 +177,9 @@ class Agent
     private function request(string $method, array $params): mixed
     {
         $id = $this->reqId++;
-        $this->transport->send(["jsonrpc" => "2.0", "id" => $id, "method" => $method, "params" => $params]);
+        // O protocolo espera um objeto quando não há parâmetros; [] decodifica como slice no Go.
+        $wireParams = $params === [] ? (object) [] : $params;
+        $this->transport->send(["jsonrpc" => "2.0", "id" => $id, "method" => $method, "params" => $wireParams]);
         while ($line = $this->transport->readLine()) {
             $msg = json_decode($line, true);
             if (($msg['id'] ?? null) === $id) {
@@ -212,6 +214,8 @@ class Agent
         $this->request('rodar.decidir', $params);
     }
     public function getLimits(bool $atualizar = false, bool $forcar = false): array { return $this->request('limites.obter', $atualizar ? ['atualizar' => true, 'forcar' => $forcar] : []); }
+    /** Matriz de capacidades (instruções, skills, MCP, retomada, permissões); sem harness, as bases. */
+    public function capacidades(?string $harness = null): array { return $this->request('harness.capacidades', $harness ? ['harness' => $harness] : []); }
     public function identidade(string $instancia): array { return $this->request('instancia.identidade', ['instancia' => $instancia]); }
     public function listarContas(?string $cwd = null): array { return $this->request('contas.listar', array_filter(['cwd' => $cwd])); }
     public function adicionarConta(string $harness, string $nome, ?string $cwd = null, bool $iniciarLogin = false): array { return $this->request('contas.adicionar', array_filter(['harness' => $harness, 'nome' => $nome, 'cwd' => $cwd, 'iniciarLogin' => $iniciarLogin])); }

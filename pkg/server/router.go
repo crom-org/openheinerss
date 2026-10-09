@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/crom-org/openheinerss/pkg/capacidades"
 	"github.com/crom-org/openheinerss/pkg/comandos"
 	"github.com/crom-org/openheinerss/pkg/config"
 	"github.com/crom-org/openheinerss/pkg/contas"
@@ -296,7 +297,7 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (respo
 		if cwd == "" {
 			cwd, _ = os.Getwd()
 		}
-		res, err := orchestrator.Run(ctx, cwd, orchestrator.Options{Name: p.Nome, Motor: p.Motor, Model: p.Modelo, Effort: p.Esforco, PromptFile: p.Prompt, PromptText: p.Texto, Retomar: p.Retomar, AgentsDir: p.Pasta, BranchBase: p.BranchBase, MaxLoad: p.CargaMax, MaxAgents: p.MaxAgentes, Attempts: p.Tentativas, QuotaMax: p.CotaMax, HarnessArgs: p.HarnessArgs})
+		res, err := orchestrator.Run(ctx, cwd, orchestrator.Options{Name: p.Nome, Motor: p.Motor, Model: p.Modelo, Effort: p.Esforco, PromptFile: p.Prompt, PromptText: p.Texto, Retomar: p.Retomar.Continuar, SessaoNativa: p.Retomar.ID, SemTrocaConta: p.SemTrocaConta, AgentsDir: p.Pasta, BranchBase: p.BranchBase, MaxLoad: p.CargaMax, MaxAgents: p.MaxAgentes, Attempts: p.Tentativas, QuotaMax: p.CotaMax, HarnessArgs: p.HarnessArgs})
 		if err != nil {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), res)
 		}
@@ -316,6 +317,22 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (respo
 
 	case protocol.MethodHarnessListar:
 		return protocol.NewResponse(req.ID, protocol.CatalogListResult{Harnesses: harness.ListCatalog()})
+
+	case protocol.MethodHarnessCapacidades:
+		var p protocol.HarnessCapacidadesParams
+		if len(req.Params) > 0 {
+			if err := json.Unmarshal(req.Params, &p); err != nil {
+				return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para harness.capacidades", nil)
+			}
+		}
+		if p.Harness == "" {
+			return protocol.NewResponse(req.ID, map[string]interface{}{"harnesses": capacidades.Todas()})
+		}
+		res, err := capacidades.Para(p.Harness)
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, err.Error(), nil)
+		}
+		return protocol.NewResponse(req.ID, res)
 
 	case protocol.MethodHarnessComandos, protocol.MethodHarnessComandosAnotar, protocol.MethodHarnessComandosConfirmar:
 		var p protocol.HarnessComandosParams

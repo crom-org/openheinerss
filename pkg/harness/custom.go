@@ -743,3 +743,30 @@ func (t *tailBuffer) String() string {
 	defer t.mu.Unlock()
 	return string(t.b)
 }
+
+// BaseDe segue as instâncias custom (base:) até o harness embutido; um harness por comando é a própria base.
+func BaseDe(nome string) string {
+	nome = CanonicalName(nome)
+	for i := 0; i < 16; i++ {
+		spec, ok := CustomSpecFor(nome)
+		if !ok || spec.Command != "" || spec.Base == "" {
+			return nome
+		}
+		nome = spec.Base
+	}
+	return nome
+}
+
+// OpcoesRetomada traduz o id de uma conversa existente na opção que o adaptador de cada base usa para
+// o resume nativo (claude --resume, codex exec resume, opencode --session, agy --conversation).
+// O aider não tem id de sessão: recusa em vez de ignorar o pedido.
+func OpcoesRetomada(base, id string) (map[string]interface{}, error) {
+	if id == "" {
+		return nil, fmt.Errorf("id de retomada vazio")
+	}
+	chave := map[string]string{"claude-code": "claude_session_id", "codex": "codex_session_id", "opencode": "opencode_session_id", "agy": "conversation"}[base]
+	if chave == "" {
+		return nil, fmt.Errorf("retomada nativa não suportada por %q: use claude-code, codex, opencode ou agy (veja `openheinerss capacidades`)", base)
+	}
+	return map[string]interface{}{chave: id}, nil
+}

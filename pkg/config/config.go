@@ -67,6 +67,8 @@ type ProjectConfig struct {
 	DefaultMode    string `json:"default_mode" yaml:"default_mode"`
 	PermissionMode string `json:"permission_mode" yaml:"permission_mode"`
 	EventosLog     string `json:"eventos_log" yaml:"eventos_log"`
+	// CotaMax é o limiar (%) de uso de cota do rodar: ao passar dele, o executor troca de conta.
+	CotaMax float64 `json:"cota_max" yaml:"cota_max"`
 	// RegrasPadrao permite substituir o arquivo de regras padrão do runner.
 	// SemRegrasPadrao desliga as regras curtas embutidas e o arquivo configurado.
 	RegrasPadrao    string `json:"regras_padroes" yaml:"regras_padroes"`

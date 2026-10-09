@@ -183,6 +183,20 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 	} else if len(params.Options.MCP) > 0 {
 		options[harness.OptionMCP] = append([]string(nil), params.Options.MCP...)
 	}
+	if params.Retomar != "" {
+		// Um id de sessão do openheinerss vale pelo id nativo que ela gravou; qualquer outro é o id nativo.
+		nativo := params.Retomar
+		if id, ok := m.storage.IDNativo(params.CWD, params.Retomar); ok {
+			nativo = id
+		}
+		ro, rerr := harness.OpcoesRetomada(harness.BaseDe(params.Harness), nativo)
+		if rerr != nil {
+			return nil, &protocol.RPCError{Code: protocol.CodeInvalidParams, Message: rerr.Error()}
+		}
+		for k, v := range ro {
+			options[k] = v
+		}
+	}
 	classif, err := m.classificador(params.CWD, params.Options.ClassificarRisco)
 	if err != nil {
 		return nil, &protocol.RPCError{Code: protocol.CodeInvalidParams, Message: err.Error()}

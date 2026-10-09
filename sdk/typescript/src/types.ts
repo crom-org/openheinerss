@@ -19,6 +19,14 @@ export interface SessionOptions {
   mcp?: string[];
   /** Liga (true) ou desliga (false) o classificador de risco opcional; ausente segue o servidor (desligado). */
   classificarRisco?: boolean;
+  /** Continua uma conversa existente do harness: id nativo ou id de sessão do openheinerss (aider não suporta). */
+  retomar?: string;
+}
+export interface CapabilityItem { nome: string; estado: "sim" | "nao" | "nao_confirmado"; detalhe?: string; fonte?: string; }
+export interface HarnessCapabilities {
+  harness: string; base: string; cadeia: string[]; contaDir?: string; conferidoCom: string;
+  instrucoes: CapabilityItem[]; importaArquivo: CapabilityItem; skills: CapabilityItem[]; aceitaSkills: CapabilityItem;
+  mcp: CapabilityItem; retomar: CapabilityItem; permissoes: CapabilityItem;
 }
 export interface Identity { instancia: string; base: string; contaId: string; contaIdFonte?: string; configFonte?: string; contaDir: string; }
 export interface Conta { instancia: string; base: string; contaId: string; contaIdFonte?: string; contaDir: string; temLogin: boolean; }
@@ -43,7 +51,8 @@ export interface HarnessRegistration {
 
 export interface RunOptions {
   nome: string; motor: string; modelo?: string; esforco?: string; prompt?: string; texto?: string;
-  retomar?: boolean; pasta?: string; branchBase?: string; cargaMax?: number;
+  /** true continua o agente (preserva o log); string retoma a conversa nativa do harness (id nativo ou de sessão). */
+  retomar?: boolean | string; semTrocaConta?: boolean; pasta?: string; branchBase?: string; cargaMax?: number;
   maxAgentes?: number; tentativas?: number; cotaMax?: number; filhosObrigatorios?: boolean; cwd?: string; projeto?: string;
   /** Argumentos nativos extras do harness: vão intactos e na ordem, sem filtro. */
   harnessArgs?: string[];

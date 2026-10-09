@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,6 +28,14 @@ import (
 	"github.com/crom-org/openheinerss/pkg/protocol"
 )
 
+// avaliarCota é trocável nos testes; em produção usa o dado fresco de limites.
+var avaliarCota = limites.AvaliarCota
+
+func isCustom(nome string) bool {
+	_, ok := harness.CustomSpecFor(nome)
+	return ok
+}
+
 const continuation = "\n\n--- CONTINUAÇÃO ---\nUma execução anterior desta MESMA tarefa foi interrompida (erro ou cota). NÃO recomece do zero: rode `git status` e `git log --oneline -10`, leia RELATORIO-AGENTE.md e os arquivos já alterados nesta pasta (ou os relatórios em .claude/agentes/relatorios/ se for missão), confira o que já está pronto e termine SOMENTE o que falta, depois finalize como a tarefa pede."
 const missionRules = "\n\n--- MISSÃO SOMENTE LEITURA ---\nEsta é uma missão de inspeção. Não crie, altere, remova ou comite arquivos; não use worktree. Apenas leia e relate o que encontrar."
 const defaultPromptRules = "--- REGRAS PADRÃO DO AGENTE ---\nTrabalhe somente dentro da pasta do agente e da worktree desta missão.\nÉ proibido buscar fora da worktree: não use `find /`, `find ~`, `locate`, varreduras de disco ou buscas equivalentes fora dela.\nSe lançar agentes filhos ou comandos em segundo plano, o openheinerss te acorda quando eles terminarem; não encerre dizendo que vai esperar sem ter lançado nada."
@@ -45,7 +54,11 @@ type Options struct {
 	MaxLoad               float64
 	MaxAgents, Attempts   int
 	QuotaMax              float64
-	EventLog              string
+	// SemTrocaConta mantém o pulo de instância acima do limiar, mas não procura outra conta da mesma base.
+	SemTrocaConta bool
+	// SessaoNativa retoma a conversa existente do harness (id nativo ou id de sessão do openheinerss).
+	SessaoNativa string
+	EventLog     string
 	// HarnessArgs vai intacto, na ordem, para o processo do harness (--arg/--harness-arg).
 	HarnessArgs []string
 	Load        func() (float64, error)
@@ -124,6 +137,9 @@ type Evento struct {
 	Relatorio  string
 	Motivo     string // no EvFim: MotivoNegado, MotivoFilhoFalhou ou MotivoFilhosOrfaos
 	Filhos     []string
+	// TrocaDe e TrocaMotivo preenchem o EvInicio de uma tentativa que começou por troca de conta por cota.
+	TrocaDe     string
+	TrocaMotivo string
 }
 
 // Pergunta é um permission_request que precisa de decisão.
@@ -173,6 +189,20 @@ type meta struct {
 	Checkpoints    []Checkpoint `json:"checkpoints,omitempty"`
 	// ReiniciosContexto conta os recomeços em sessão nova por passar do limite de contexto.
 	ReiniciosContexto int `json:"reinicios_contexto,omitempty"`
+	// TrocasConta registra cada troca de instância feita por passar do limiar de cota.
+	TrocasConta []TrocaConta `json:"trocas_conta,omitempty"`
+	// SessaoNativa é a conversa retomada pelo harness (pedida em --sessao / retomar: "<id>").
+	SessaoNativa string `json:"sessao_nativa,omitempty"`
+}
+
+// TrocaConta é o registro de uma troca de conta por cota no meta.json.
+type TrocaConta struct {
+	De         string  `json:"de"`
+	Para       string  `json:"para"`
+	Motivo     string  `json:"motivo"`
+	Percentual float64 `json:"percentual"`
+	Limiar     float64 `json:"limiar"`
+	Em         string  `json:"em"`
 }
 
 // nomeValido impede que o nome do agente saia da pasta de agentes (worktree, log e meta usam o nome em caminhos).
@@ -287,6 +317,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	if o.QuotaMax <= 0 {
 		o.QuotaMax = envFloat("OPENHEINERSS_COTA_MAX", envFloat("COTA_MAX", 0))
 	}
+
 	// A raiz é a do REPOSITÓRIO (git-common-dir), mesmo quando chamado de dentro de uma worktree de agente.
 	repo, err := gitRoot(cwd)
 	if err != nil {
@@ -303,6 +334,9 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		}
 		if cfg.SemRegrasPadrao {
 			o.SemRegras = true
+		}
+		if o.QuotaMax <= 0 {
+			o.QuotaMax = cfg.CotaMax
 		}
 	}
 	if o.RegrasPadrao != "" && !filepath.IsAbs(o.RegrasPadrao) {
@@ -482,13 +516,24 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	for i := 0; i < len(candidates); i++ {
 		candidate := candidates[i]
 		attempts = i + 1
+		trocaDe, trocaMotivo := "", ""
 		if o.QuotaMax > 0 && turnoMsg == "" && !cx.pendente {
-			if percentual, ok := limites.PercentualFresco(ctx, candidate, 5*time.Minute); ok && percentual >= o.QuotaMax {
-				quotaSkipped = true
-				lastErr = fmt.Errorf("cota de %s em %.1f%% (limite %.1f%%)", candidate, percentual, o.QuotaMax)
-				write(fmt.Sprintf("pulando %s: %v\n", candidate, lastErr))
-				o.emit(Evento{Tipo: EvErro, Motor: candidate, Mensagem: lastErr.Error(), Cota: true})
-				continue
+			d := avaliarCota(ctx, candidate, o.QuotaMax, 5*time.Minute, func(n string) bool { return harness.Exists(n) || isCustom(n) })
+			if d.Conhecida && d.Acima {
+				motivo := fmt.Sprintf("cota de %s em %.1f%% (limite %.1f%%)", candidate, d.Percentual, o.QuotaMax)
+				if d.Alternativa != "" && !o.SemTrocaConta {
+					trocaDe = candidate
+					trocaMotivo = fmt.Sprintf("%s: troca para %s (%.1f%%)", motivo, d.Alternativa, d.AlternativaPercentual)
+					cur.TrocasConta = append(cur.TrocasConta, TrocaConta{De: candidate, Para: d.Alternativa, Motivo: trocaMotivo, Percentual: d.Percentual, Limiar: o.QuotaMax, Em: o.Now().Format(time.RFC3339)})
+					write("trocando de conta: " + trocaMotivo + "\n")
+					candidate = d.Alternativa
+				} else {
+					quotaSkipped = true
+					lastErr = errors.New(motivo)
+					write(fmt.Sprintf("pulando %s: %v\n", candidate, lastErr))
+					o.emit(Evento{Tipo: EvErro, Motor: candidate, Mensagem: lastErr.Error(), Cota: true})
+					continue
+				}
 			}
 		}
 		if err := waitLoad(ctx, o); err != nil {
@@ -540,7 +585,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		} else {
 			write(fmt.Sprintf("### tentativa %d (%s) motor %s\n", attempts, o.Now().Format("15:04"), candidate))
 		}
-		o.emit(Evento{Tipo: EvInicio, Motor: candidate, Modelo: modeloMeta, Tentativa: attempts, Worktree: work})
+		o.emit(Evento{Tipo: EvInicio, Motor: candidate, Modelo: modeloMeta, Tentativa: attempts, Worktree: work, TrocaDe: trocaDe, TrocaMotivo: trocaMotivo})
 		mode := harness.ModeCLI
 		if o.Mode != "" {
 			mode = harness.Mode(o.Mode)
@@ -563,6 +608,19 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		if resumeID != "" && resumeMotor == candidate {
 			options["codex_session_id"] = resumeID
 			options["claude_session_id"] = resumeID
+		} else if o.SessaoNativa != "" && attempts == 1 && trocaDe == "" {
+			// Só a primeira tentativa retoma: outra instância/conta não enxerga a conversa da anterior.
+			ro, rerr := harness.OpcoesRetomada(baseHarness(candidate), o.SessaoNativa)
+			if rerr != nil {
+				write("ERRO: " + rerr.Error() + "\n")
+				cancel()
+				return finish(1, rerr.Error(), candidate, false), rerr
+			}
+			for k, v := range ro {
+				options[k] = v
+			}
+			cur.SessaoNativa = o.SessaoNativa
+			_ = writeMeta(metaPath, cur)
 		}
 		cfg := harness.SessionConfig{SessionID: fmt.Sprintf("rodar-%s-%d", o.Name, attempts), CWD: work, Model: modelName, Options: options, Env: keys}
 		envio, regras := separarRegras(prompt)

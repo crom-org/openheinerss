@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { spawn, type ChildProcess } from "node:child_process";
-import type { SessionOptions, HarnessRegistration, PermissionRequest, ToolCall, ToolResult, RawLine, RunOptions, RunStarted, RunList, Limits, EventFilter, OrchestrationEventName, OrchestrationCallback, HarnessCommand, HarnessCommandList, Identity, Conta } from "./types.js";
+import type { SessionOptions, HarnessRegistration, PermissionRequest, ToolCall, ToolResult, RawLine, RunOptions, RunStarted, RunList, Limits, EventFilter, OrchestrationEventName, OrchestrationCallback, HarnessCommand, HarnessCommandList, Identity, Conta, HarnessCapabilities } from "./types.js";
 
 export * from "./types.js";
 export * from "./react.js";
@@ -56,6 +56,8 @@ export class Openheinerss extends EventEmitter {
   /** encerrar (opcional): numa negação, termina a execução (orq.fim código 3, motivo "negado"); ausente vale serve --negar-encerra. */
   async decideRun(id: string, resposta: string, mensagem?: string, run?: string, encerrar?: boolean): Promise<void> { await this.ensureTransport(); await this.sendRPC("rodar.decidir", { id, resposta, mensagem, run, encerrar }); }
   async getLimits(atualizar = false, forcar = false): Promise<Limits> { await this.ensureTransport(); return this.sendRPC("limites.obter", atualizar ? { atualizar: true, forcar } : {}); }
+  /** Matriz de capacidades (instruções, skills, MCP, retomada, permissões); sem harness, devolve as bases. */
+  async capacidades(harness?: string): Promise<HarnessCapabilities | { harnesses: HarnessCapabilities[] }> { await this.ensureTransport(); return this.sendRPC("harness.capacidades", harness ? { harness } : {}); }
   async identidade(instancia: string): Promise<Identity> { await this.ensureTransport(); return this.sendRPC("instancia.identidade", { instancia }); }
   async listarContas(cwd?: string): Promise<Conta[]> { await this.ensureTransport(); return this.sendRPC("contas.listar", cwd ? { cwd } : {}).then((r: Conta[]) => r); }
   async adicionarConta(harness: string, nome: string, cwd?: string, iniciarLogin = false): Promise<any> { await this.ensureTransport(); return this.sendRPC("contas.adicionar", { harness, nome, cwd, iniciarLogin }); }
@@ -92,6 +94,7 @@ export class Openheinerss extends EventEmitter {
       cwd: opts.cwd || (typeof process !== "undefined" ? process.cwd() : "/"),
       provider: opts.provider,
       model: opts.model,
+      retomar: opts.retomar,
       options: {
         permissionMode: opts.permissionMode || "ask",
         systemPrompt: opts.systemPrompt,

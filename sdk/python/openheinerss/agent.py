@@ -34,11 +34,14 @@ class Agent:
         sem_mcp: bool = False,
         mcp: Optional[list] = None,
         classificar_risco: Optional[bool] = None,
+        retomar: Optional[str] = None,
     ):
         """transport="stdio" (padrão) sobe `serve --stdio`; "websocket" (ou url=) conecta a um
         `serve --porta N` já rodando (host/port, padrão 127.0.0.1:OPENHEINERSS_PORTA|4820; origin opcional)."""
         # sem_mcp/mcp: quais servidores de mcp.json o harness recebe; classificar_risco: risco
         # opcional em tool_call/permission_request (desligado por padrão, só informa).
+        # retomar: id nativo da conversa do harness ou id de sessão do openheinerss (aider não suporta).
+        self._retomar = retomar
         self._extras_sessao: Dict[str, Any] = {}
         if sem_mcp:
             self._extras_sessao["semMcp"] = True
@@ -89,6 +92,8 @@ class Agent:
         options.update(getattr(self, "_extras_sessao", {}))
         if options:
             params["options"] = options
+        if getattr(self, "_retomar", None):
+            params["retomar"] = self._retomar
 
         response = self.transport.request({
             "jsonrpc": "2.0",
@@ -232,6 +237,10 @@ class Agent:
 
     def get_limits(self, atualizar: bool = False, forcar: bool = False) -> Dict[str, Any]:
         return self._request("limites.obter", {"atualizar": True, "forcar": forcar} if atualizar else {})
+
+    def capacidades(self, harness: Optional[str] = None) -> Dict[str, Any]:
+        """Matriz de capacidades (instruções, skills, MCP, retomada, permissões); sem harness, as bases."""
+        return self._request("harness.capacidades", {"harness": harness} if harness else {})
 
     def identidade(self, instancia: str) -> Dict[str, Any]:
         return self._request("instancia.identidade", {"instancia": instancia})

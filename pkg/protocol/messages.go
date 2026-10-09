@@ -1,5 +1,11 @@
 package protocol
 
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+)
+
 // Métodos de requisição do cliente para o servidor
 const (
 	MethodSessionCreate            = "session.create"
@@ -69,6 +75,9 @@ type SessionCreateParams struct {
 	Model    string            `json:"model,omitempty"`    // Nome do modelo
 	Env      map[string]string `json:"env,omitempty"`      // Variáveis de ambiente extras
 	Options  SessionOptions    `json:"options,omitempty"`
+	// Retomar continua uma conversa existente do harness: id nativo (claude/codex/opencode/agy) ou id de
+	// sessão do openheinerss, de onde se lê o id nativo gravado. O aider não tem id e recusa o pedido.
+	Retomar string `json:"retomar,omitempty"`
 }
 
 // SessionCreateResult retorno de session.create
@@ -243,24 +252,59 @@ type HarnessRegisterParams struct {
 
 // RunParams descreve uma missão no mesmo formato do comando openheinerss rodar.
 type RunParams struct {
-	Nome       string  `json:"nome"`
-	Motor      string  `json:"motor"`
-	Modelo     string  `json:"modelo,omitempty"`
-	Esforco    string  `json:"esforco,omitempty"`
-	Prompt     string  `json:"prompt,omitempty"` // arquivo de prompt
-	Texto      string  `json:"texto,omitempty"`  // prompt em texto (vale no lugar do arquivo)
-	Retomar    bool    `json:"retomar,omitempty"`
-	Pasta      string  `json:"pasta,omitempty"`
-	BranchBase string  `json:"branchBase,omitempty"`
-	CargaMax   float64 `json:"cargaMax,omitempty"`
-	MaxAgentes int     `json:"maxAgentes,omitempty"`
-	Tentativas int     `json:"tentativas,omitempty"`
-	CotaMax    float64 `json:"cotaMax,omitempty"`
+	Nome    string `json:"nome"`
+	Motor   string `json:"motor"`
+	Modelo  string `json:"modelo,omitempty"`
+	Esforco string `json:"esforco,omitempty"`
+	Prompt  string `json:"prompt,omitempty"` // arquivo de prompt
+	Texto   string `json:"texto,omitempty"`  // prompt em texto (vale no lugar do arquivo)
+	// Retomar aceita true (continuar o agente: preserva log e acrescenta o texto de continuação) ou
+	// uma string (id nativo da conversa do harness, ou id de sessão do openheinerss, a retomar).
+	Retomar    Retomada `json:"retomar,omitempty"`
+	Pasta      string   `json:"pasta,omitempty"`
+	BranchBase string   `json:"branchBase,omitempty"`
+	CargaMax   float64  `json:"cargaMax,omitempty"`
+	MaxAgentes int      `json:"maxAgentes,omitempty"`
+	Tentativas int      `json:"tentativas,omitempty"`
+	CotaMax    float64  `json:"cotaMax,omitempty"`
 	// HarnessArgs vai intacto, na ordem, para o processo do harness.
 	HarnessArgs []string `json:"harnessArgs,omitempty"`
 	// FilhosObrigatorios: o pai termina com código 4 ("filho falhou") se um filho falhar.
 	FilhosObrigatorios bool   `json:"filhosObrigatorios,omitempty"`
 	CWD                string `json:"cwd,omitempty"`
+	// SemTrocaConta: acima do limiar de cota, só pula a instância (sem procurar outra conta da mesma base).
+	SemTrocaConta bool `json:"semTrocaConta,omitempty"`
+}
+
+// Retomada é o campo retomar de run/rodar: booleano (continuar o agente) ou id da conversa a retomar.
+type Retomada struct {
+	Continuar bool
+	ID        string
+}
+
+func (r *Retomada) UnmarshalJSON(b []byte) error {
+	*r = Retomada{}
+	var v interface{}
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	switch x := v.(type) {
+	case nil:
+	case bool:
+		r.Continuar = x
+	case string:
+		r.ID = strings.TrimSpace(x)
+	default:
+		return fmt.Errorf("retomar deve ser booleano ou string com o id da conversa")
+	}
+	return nil
+}
+
+func (r Retomada) MarshalJSON() ([]byte, error) {
+	if r.ID != "" {
+		return json.Marshal(r.ID)
+	}
+	return json.Marshal(r.Continuar)
 }
 
 type LimitsParams struct {

@@ -33,6 +33,19 @@ class SDKIntegrationTest(unittest.TestCase):
                 else:
                     os.environ["OPENHEINERSS_CONFIG"] = antes
 
+    def test_capacidades_e_retomar(self):
+        agent = self.novo_agent()
+        try:
+            cap = agent.capacidades("codex")
+            self.assertEqual(cap["base"], "codex")
+            self.assertEqual(cap["retomar"]["estado"], "sim")
+            self.assertTrue(any(i["nome"] == "AGENTS.md" and i["estado"] == "sim" for i in cap["instrucoes"]))
+            self.assertEqual(len(agent.capacidades()["harnesses"]), 5)
+        finally:
+            agent.close()
+        with self.assertRaisesRegex(RuntimeError, "retomada nativa não suportada"):
+            Agent(harness="aider", bin_path=os.environ.get("OPENHEINERSS_BIN", "openheinerss"), retomar="qualquer")
+
     def test_comandos_do_harness(self):
         cfg = tempfile.mkdtemp(prefix="openheinerss-cmd-py-")
         agent = self.novo_agent(config=cfg)
