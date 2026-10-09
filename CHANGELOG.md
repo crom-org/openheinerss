@@ -3,6 +3,10 @@
 Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 
+## Não publicado
+
+- Corrigido build no Windows.
+
 ## [1.5.0] — 2026-10-09
 
 - `limites --atualizar` não reutiliza cache sem janelas do Codex; durante o bloqueio HTTP 429 do uso Claude, tenta a reserva por cabeçalhos mesmo com `--forcar`, com intervalo mínimo compartilhado de cinco minutos e motivo das duas falhas.
