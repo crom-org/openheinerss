@@ -610,6 +610,8 @@ func (o *Orq) deJob(j *job, e orchestrator.Evento) {
 		o.progresso(protocol.OrqProgressoParams{ID: j.id, Agente: j.nome, Projeto: j.projeto, Resumo: e.Resumo})
 	case orchestrator.EvErro:
 		o.emitir(protocol.EventOrqErro, j.projeto, j.nome, protocol.OrqErroParams{ID: j.id, Agente: j.nome, Projeto: j.projeto, Mensagem: e.Mensagem, Cota: e.Cota})
+	case orchestrator.EvMensagem:
+		o.emitir(protocol.EventOrqMensagem, j.projeto, j.nome, protocol.OrqMensagemParams{ID: j.id, Agente: j.nome, Projeto: j.projeto, Mensagem: e.MensagemID, Estado: e.MensagemEstado, Modo: e.MensagemModo})
 	case orchestrator.EvFilhosOrfaos:
 		o.emitir(protocol.EventOrqFilhosOrfaos, j.projeto, j.nome, protocol.OrqFilhosOrfaosParams{ID: j.id, Agente: j.nome, Projeto: j.projeto, Filhos: e.Filhos, Mensagem: e.Mensagem})
 	case orchestrator.EvFim:
@@ -695,6 +697,25 @@ func (o *Orq) parar(p protocol.RodarPararParams) error {
 	}
 	return fmt.Errorf("nenhuma execução lançada por este servidor com esse id/agente")
 }
+
+// mensagem põe o recado na caixa do agente vivo (lançado por este servidor ou por `rodar`) e devolve o recibo.
+func (o *Orq) mensagem(p protocol.RodarMensagemParams) (protocol.RodarMensagemResult, error) {
+	if p.Agente == "" {
+		return protocol.RodarMensagemResult{}, fmt.Errorf("rodar.mensagem exige agente")
+	}
+	dir, projeto := resolverPasta(p.CWD, p.Pasta)
+	if p.Projeto != "" {
+		projeto = p.Projeto
+	}
+	m, err := orchestrator.EnviarMensagem(dir, p.Agente, projeto, p.Texto, time.Now(), mensagemEspera)
+	if err != nil {
+		return protocol.RodarMensagemResult{}, err
+	}
+	return protocol.RodarMensagemResult{ID: m.ID, Agente: m.Agente, Projeto: projeto, Status: m.Recibo(), Recibo: m.Recibo(), Modo: m.Modo, Em: m.Em}, nil
+}
+
+// mensagemEspera é quanto o servidor espera o runner marcar a mensagem como entregue antes de responder.
+const mensagemEspera = 1500 * time.Millisecond
 
 func (o *Orq) listar(p protocol.RodarListarParams) protocol.RodarListarResult {
 	dir, projeto := resolverPasta(p.CWD, p.Pasta)

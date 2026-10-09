@@ -397,6 +397,17 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (respo
 		}
 		return protocol.NewResponse(req.ID, map[string]interface{}{"parando": true})
 
+	case protocol.MethodRodarMensagem:
+		var p protocol.RodarMensagemParams
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para rodar.mensagem", nil)
+		}
+		res, err := r.orq.mensagem(p)
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, err.Error(), nil)
+		}
+		return protocol.NewResponse(req.ID, res)
+
 	case protocol.MethodRodarDecidir:
 		var p protocol.RodarDecidirParams
 		if err := json.Unmarshal(req.Params, &p); err != nil {

@@ -415,3 +415,36 @@ func TestOrqViaStdio(t *testing.T) {
 		t.Fatalf("fim: %v", f)
 	}
 }
+
+func TestOrqMensagemParaAgenteVivo(t *testing.T) {
+	root := repoOrq(t, "mock-p")
+	c := conectar(t, novoServidorWS(t))
+	c.resultado(protocol.MethodEventosAssinar, protocol.EventosAssinarParams{CWD: root}, nil)
+	var ini protocol.RodarIniciarResult
+	c.resultado(protocol.MethodRodarIniciar, protocol.RodarIniciarParams{RunParams: protocol.RunParams{Nome: "mock-p", Motor: "mock", CWD: root, MaxAgentes: 99}}, &ini)
+	_ = c.proximo(protocol.EventOrqPrecisaDecisao, protocol.EventOrqInicio, protocol.EventOrqProgresso)
+
+	var rec protocol.RodarMensagemResult
+	c.resultado(protocol.MethodRodarMensagem, protocol.RodarMensagemParams{CWD: root, Agente: "mock-p", Texto: "faça X"}, &rec)
+	// O harness mock não aceita texto no meio do turno: o recibo fica pendente até a retomada.
+	if rec.ID == "" || rec.Agente != "mock-p" || rec.Status != "pendente" || rec.Recibo != "pendente" || rec.Em == "" {
+		t.Fatalf("recibo: %+v", rec)
+	}
+	var ev protocol.OrqMensagemParams
+	_ = json.Unmarshal(c.proximo(protocol.EventOrqMensagem, protocol.EventOrqProgresso, protocol.EventOrqPrecisaDecisao), &ev)
+	if ev.Mensagem != rec.ID || ev.Estado != "recebida" || ev.Agente != "mock-p" || ev.ID != ini.ID {
+		t.Fatalf("orq.mensagem: %+v", ev)
+	}
+	if r := c.chamar(protocol.MethodRodarMensagem, protocol.RodarMensagemParams{CWD: root, Agente: "nao-existe", Texto: "x"}); r.Error == nil {
+		t.Fatal("agente inexistente deveria falhar")
+	}
+	if r := c.chamar(protocol.MethodRodarMensagem, protocol.RodarMensagemParams{CWD: root, Agente: "mock-p"}); r.Error == nil {
+		t.Fatal("texto vazio deveria falhar")
+	}
+
+	c.resultado(protocol.MethodRodarParar, protocol.RodarPararParams{ID: ini.ID}, nil)
+	_ = c.proximo(protocol.EventOrqFim, protocol.EventOrqProgresso, protocol.EventOrqErro, protocol.EventOrqMensagem)
+	if r := c.chamar(protocol.MethodRodarMensagem, protocol.RodarMensagemParams{CWD: root, Agente: "mock-p", Texto: "tarde"}); r.Error == nil || !strings.Contains(r.Error.Message, "já terminou") {
+		t.Fatalf("agente terminado deveria dar erro claro: %+v", r.Error)
+	}
+}

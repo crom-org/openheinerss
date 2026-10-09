@@ -69,6 +69,8 @@ export interface DryRunResult {
 export interface RunStarted { geracao: string; id: string; agente: string; projeto: string; }
 export interface AgentInfo { id?: string; agente: string; projeto: string; estado: string; motor?: string; modelo?: string; tentativa?: number; inicio?: string; fim?: string; codigo?: number; pid?: number; log?: string; }
 export interface OrchestrationDecision { geracao?: string; run?: string; id: string; agente: string; projeto: string; pergunta: string; opcoes: string[]; }
+/** Recibo de rodar.mensagem. */
+export interface MessageReceipt { id: string; agente: string; projeto: string; status: "entregue" | "pendente"; recibo: "entregue" | "pendente"; modo?: "vivo" | "retomada"; em: string; }
 export interface RunList { agentes: AgentInfo[]; decisoes: OrchestrationDecision[]; }
 export interface LimitsWindow { nome: string; percentual: number; voltaEm?: string; }
 export interface Limits { agora: string; instancias: Array<{ nome: string; base: string; janelas: LimitsWindow[]; dadoEm?: string; idadeSegundos?: number; fonte: string; nota?: string; }>; }
@@ -78,7 +80,7 @@ export type CommandRelay = "literal" | "traduzido" | "sem_equivalente";
 /** Comando nativo do harness (harness.comandos), já mesclado com a anotação do usuário. */
 export interface HarnessCommand { nome: string; descricao: string; repasse: CommandRelay; detalhe?: string; origem: "embutido" | "descoberto" | "usuario"; anotacao?: string; confirmado: boolean; }
 export interface HarnessCommandList { harness: string; base: string; cadeia: string[]; desconhecido: CommandRelay; arquivo: string; comandos: HarnessCommand[]; }
-export type OrchestrationEventName = "orq.inicio" | "orq.progresso" | "orq.fim" | "orq.erro" | "orq.precisa_decisao" | "orq.filhos_orfaos" | "limites.atualizado";
+export type OrchestrationEventName = "orq.inicio" | "orq.progresso" | "orq.fim" | "orq.erro" | "orq.precisa_decisao" | "orq.filhos_orfaos" | "orq.mensagem" | "limites.atualizado";
 export type OrchestrationEvent = { method: OrchestrationEventName; params: Record<string, unknown> & { geracao: string }; };
 export type OrchestrationCallback = (params: Record<string, unknown>) => void;
 
@@ -135,4 +137,5 @@ export interface OpenheinerssEvents {
   "orq.erro": OrchestrationCallback;
   "orq.precisa_decisao": OrchestrationCallback;
   "orq.filhos_orfaos": OrchestrationCallback;
+  "orq.mensagem": OrchestrationCallback;
 }

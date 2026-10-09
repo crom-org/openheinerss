@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -147,4 +148,17 @@ func ListCatalog() []protocol.HarnessCatalogItem {
 	// Ordem estável: o catálogo sai igual em toda chamada (CLI, RPC e testes).
 	sort.Slice(items, func(a, b int) bool { return items[a].ID < items[b].ID })
 	return items
+}
+
+// OptionMensagensVivas liga, no adaptador, a entrada de mensagens durante o turno (opção do `rodar`).
+const OptionMensagensVivas = "mensagens_vivas"
+
+// ErrSemTurnoVivo: não há processo de turno aceitando mensagens agora (entre turnos ou já encerrado).
+var ErrSemTurnoVivo = errors.New("nenhum turno vivo para receber a mensagem")
+
+// MensageiroVivo é implementado por adaptadores que entregam texto ao processo no meio do turno.
+// EnviarVivo devolve nil quando o texto entrou no processo e ErrSemTurnoVivo quando não há turno vivo
+// (quem chama entrega depois, pela retomada da conversa).
+type MensageiroVivo interface {
+	EnviarVivo(id, texto string) error
 }

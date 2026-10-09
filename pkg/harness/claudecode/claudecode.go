@@ -3,6 +3,7 @@ package claudecode
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -61,17 +62,21 @@ func init() {
 
 // ClaudeCodeHarness implementa o conector para o Claude Code nos modos SDK e CLI
 type ClaudeCodeHarness struct {
-	mu       sync.Mutex
-	mode     harness.Mode
-	cfg      harness.SessionConfig
-	env      []string
-	events   chan harness.Event
-	cmd      *exec.Cmd
-	stdin    io.WriteCloser
-	ctx      context.Context
-	cancel   context.CancelFunc
-	stopped  bool
-	resumeID string
+	mu     sync.Mutex
+	mode   harness.Mode
+	cfg    harness.SessionConfig
+	env    []string
+	events chan harness.Event
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	// vivoStdin é o stdin do turno em curso quando as mensagens vivas estão ligadas; vivasPend guarda os
+	// uuids enviados que o claude ainda não confirmou (replay) como consumidos.
+	vivoStdin io.WriteCloser
+	vivasPend map[string]bool
+	ctx       context.Context
+	cancel    context.CancelFunc
+	stopped   bool
+	resumeID  string
 	// stderrTail guarda o fim do stderr do processo atual para explicar falhas.
 	stderrTail string
 }
@@ -316,6 +321,7 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 		}
 	}
 	args := buildCLIArgs(c.cfg, c.resumeOption(), c.cliPermissionMode(), text)
+	live := vivasLigadas(c.cfg)
 	cwd, env, ctxProc := c.cfg.CWD, c.env, c.ctx
 	go func() {
 		c.emit(harness.Event{
@@ -345,6 +351,13 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 			return
 		}
 
+		var liveIn io.WriteCloser
+		if live {
+			if liveIn, err = cmd.StdinPipe(); err != nil {
+				c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()}})
+				return
+			}
+		}
 		if err := cmd.Start(); err != nil {
 			c.emit(harness.Event{
 				Type:    harness.EventError,
@@ -354,6 +367,12 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 		}
 		c.mu.Lock()
 		c.cmd = cmd
+		if live {
+			c.vivoStdin, c.vivasPend = liveIn, map[string]bool{}
+			if err := escreverUsuario(liveIn, novoUUID(), text); err != nil {
+				c.vivoStdin = nil
+			}
+		}
 		c.mu.Unlock()
 		stderrDone := make(chan struct{})
 		go func() { defer close(stderrDone); c.readStderr(stderr) }()
@@ -377,8 +396,19 @@ func (c *ClaudeCodeHarness) SendPrompt(ctx context.Context, text string, attachm
 		stopped := c.stopped
 		tail := strings.TrimSpace(c.stderrTail)
 		c.stderrTail = ""
+		if live && c.vivoStdin == liveIn {
+			c.vivoStdin, c.vivasPend = nil, nil
+		}
 		c.mu.Unlock()
 		if stopped {
+			return
+		}
+		if turn.suprimido {
+			// O processo acabou antes do resultado da mensagem viva: fecha o turno que ficou em suspenso.
+			if err != nil {
+				c.emit(harness.Event{Type: harness.EventError, Payload: protocol.ErrorParams{SessionID: sessID, Message: err.Error()}})
+			}
+			c.emit(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessID, Reason: "completed"}})
 			return
 		}
 		// O evento "result" do stream já encerrou o turno; um segundo complete aqui
@@ -471,10 +501,15 @@ func (c *ClaudeCodeHarness) ResumeID() string {
 // cliTurn guarda o estado de um único `claude -p`.
 // cliTurn guarda o estado de um turno do claude -p. quotaRejected marca um rate_limit_event
 // "rejected": só vira falta de cota se o turno terminar sem resultado bem-sucedido.
-type cliTurn struct{ completed, quotaRejected bool }
+type cliTurn struct{ completed, quotaRejected, suprimido bool }
 
 func buildCLIArgs(cfg harness.SessionConfig, resume, permission, text string) []string {
 	args := []string{"--print", "--output-format", "stream-json", "--verbose"}
+	live := vivasLigadas(cfg)
+	if live {
+		// O prompt e as mensagens seguintes entram pelo stdin (uma linha JSON por mensagem).
+		args = append(args, "--input-format", "stream-json", "--replay-user-messages")
+	}
 	if cfg.Model != "" {
 		args = append(args, "--model", cfg.Model)
 	}
@@ -489,6 +524,9 @@ func buildCLIArgs(cfg harness.SessionConfig, resume, permission, text string) []
 	args = append(args, typedArgs(cfg)...)
 	// Argumentos nativos extras: intactos e na ordem, antes do prompt.
 	args = append(args, harness.HarnessArgs(cfg.Options)...)
+	if live {
+		return args
+	}
 	return append(args, "--", text)
 }
 
@@ -587,6 +625,11 @@ func (c *ClaudeCodeHarness) parseCLIEvent(data []byte, fallbackSession string, t
 		// A linha original segue como raw para quem quiser o detalhe.
 		c.emit(harness.RawEvent(sessionID, "claude-code", "stdout", line))
 	case "assistant", "user":
+		if u := stringField(msg, "uuid"); u != "" && boolField(msg, "isReplay") {
+			c.mu.Lock()
+			delete(c.vivasPend, u) // o claude consumiu a mensagem viva
+			c.mu.Unlock()
+		}
 		message, _ := msg["message"].(map[string]interface{})
 		c.parseContentBlocks(message["content"], sessionID, line)
 	case "result":
@@ -615,6 +658,12 @@ func (c *ClaudeCodeHarness) parseCLIEvent(data []byte, fallbackSession string, t
 		if isError {
 			reason = "process_error"
 		}
+		if c.fecharTurnoVivo() {
+			// Há mensagem viva ainda na fila do claude: vem outro resultado; este não encerra o turno.
+			turn.suprimido = true
+			return
+		}
+		turn.suprimido = false
 		c.emit(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: sessionID, Reason: reason}})
 	case "rate_limit_event":
 		info, _ := msg["rate_limit_info"].(map[string]interface{})
@@ -886,4 +935,61 @@ func (c *ClaudeCodeHarness) emit(evt harness.Event) {
 	case c.events <- evt:
 	default:
 	}
+}
+
+// vivasLigadas diz se o rodar pediu a entrada de mensagens durante o turno.
+func vivasLigadas(cfg harness.SessionConfig) bool {
+	on, _ := cfg.Options[harness.OptionMensagensVivas].(bool)
+	return on
+}
+
+// novoUUID gera um UUID v4 para identificar uma mensagem de entrada.
+func novoUUID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	b[6], b[8] = b[6]&0x0f|0x40, b[8]&0x3f|0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
+
+// escreverUsuario grava uma mensagem de usuário em stream-json no stdin do claude.
+func escreverUsuario(w io.Writer, uuid, text string) error {
+	data, _ := json.Marshal(map[string]interface{}{
+		"type": "user", "uuid": uuid,
+		"message": map[string]interface{}{"role": "user", "content": text},
+	})
+	_, err := fmt.Fprintf(w, "%s\n", data)
+	return err
+}
+
+// fecharTurnoVivo roda ao chegar o resultado de um turno: com mensagem viva ainda sem consumo devolve
+// true (o turno continua); sem ela fecha o stdin para o claude sair sozinho e devolve false.
+func (c *ClaudeCodeHarness) fecharTurnoVivo() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.vivoStdin == nil {
+		return false
+	}
+	if len(c.vivasPend) > 0 {
+		return true
+	}
+	_ = c.vivoStdin.Close()
+	c.vivoStdin = nil
+	return false
+}
+
+// EnviarVivo entrega a mensagem ao claude em execução (stream-json), sem esperar o fim do turno.
+func (c *ClaudeCodeHarness) EnviarVivo(id, texto string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.stopped || c.vivoStdin == nil {
+		return harness.ErrSemTurnoVivo
+	}
+	uuid := novoUUID()
+	c.vivasPend[uuid] = true
+	if err := escreverUsuario(c.vivoStdin, uuid, texto); err != nil {
+		delete(c.vivasPend, uuid)
+		c.vivoStdin = nil
+		return harness.ErrSemTurnoVivo
+	}
+	return nil
 }

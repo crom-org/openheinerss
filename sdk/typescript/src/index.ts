@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { spawn, type ChildProcess } from "node:child_process";
-import type { SessionOptions, HarnessRegistration, PermissionRequest, ToolCall, ToolResult, RawLine, RunOptions, RunStarted, RunList, Limits, EventFilter, OrchestrationEventName, OrchestrationCallback, HarnessCommand, HarnessCommandList, Identity, Conta, HarnessCapabilities, DryRunResult } from "./types.js";
+import type { SessionOptions, HarnessRegistration, PermissionRequest, ToolCall, ToolResult, RawLine, RunOptions, RunStarted, RunList, MessageReceipt, Limits, EventFilter, OrchestrationEventName, OrchestrationCallback, HarnessCommand, HarnessCommandList, Identity, Conta, HarnessCapabilities, DryRunResult } from "./types.js";
 
 export * from "./types.js";
 export * from "./react.js";
@@ -53,6 +53,8 @@ export class Openheinerss extends EventEmitter {
   async dryRun(options: RunOptions): Promise<DryRunResult> { await this.ensureTransport(); return this.sendRPC("rodar.seco", options as unknown as Record<string, unknown>); }
   async listRuns(filter: EventFilter = {}): Promise<RunList> { await this.ensureTransport(); return this.sendRPC("rodar.listar", filter as Record<string, unknown>); }
   async stopRun(idOrAgent: { id?: string; agente?: string }): Promise<void> { await this.ensureTransport(); await this.sendRPC("rodar.parar", idOrAgent); }
+  /** Entrega `texto` ao agente VIVO (rodar.mensagem). `status`/`recibo`: "entregue" ou "pendente". */
+  async sendMessage(agente: string, texto: string, filter: EventFilter = {}): Promise<MessageReceipt> { await this.ensureTransport(); return this.sendRPC("rodar.mensagem", { ...filter, agente, texto } as Record<string, unknown>); }
   /** `run` (id da execução, vem em `orq.precisa_decisao`) é opcional; se vier, o servidor confere. */
   /** encerrar (opcional): numa negação, termina a execução (orq.fim código 3, motivo "negado"); ausente vale serve --negar-encerra. */
   async decideRun(id: string, resposta: string, mensagem?: string, run?: string, encerrar?: boolean): Promise<void> { await this.ensureTransport(); await this.sendRPC("rodar.decidir", { id, resposta, mensagem, run, encerrar }); }
@@ -269,7 +271,7 @@ export class Openheinerss extends EventEmitter {
         case "agent.error":
           this.emit("error", p);
           break;
-        case "orq.inicio": case "orq.progresso": case "orq.fim": case "orq.erro": case "orq.precisa_decisao": case "orq.filhos_orfaos":
+        case "orq.inicio": case "orq.progresso": case "orq.fim": case "orq.erro": case "orq.precisa_decisao": case "orq.filhos_orfaos": case "orq.mensagem":
           this.emit(msg.method, p);
           break;
       }
