@@ -6,6 +6,13 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 
 ## Não publicado
 
+### Adicionado (identidade efetiva de conta)
+
+- `session.create` agora devolve `identidade` ligada ao `sessionId`, com instância, harness base,
+  `contaId` estável (SHA-256 do diretório de login canônico), origem da configuração e diretório.
+- Novo RPC `instancia.identidade` e CLI `openheinerss identidade <instancia> [--json]`.
+- SDKs TypeScript, Python e PHP expõem a identidade da criação e o método `identidade(instancia)`.
+
 ### Corrigido (sessionId dos eventos)
 
 - Os eventos `agent.*` do servidor sempre levam o `sessionId` de `session.create`; o id nativo do motor (ex.: Claude Code) vai em `nativeSessionId`. Antes o claude-code mandava o id nativo e a Central não casava os eventos.

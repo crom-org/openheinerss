@@ -15,6 +15,7 @@ const (
 	MethodHarnessRegister          = "harness.register"
 	MethodRun                      = "run"
 	MethodLimits                   = "limites"
+	MethodInstanceIdentity         = "instancia.identidade"
 )
 
 // MCPListParams parâmetros para mcp.list
@@ -68,11 +69,24 @@ type SessionCreateParams struct {
 
 // SessionCreateResult retorno de session.create
 type SessionCreateResult struct {
-	SessionID string `json:"sessionId"`
-	Harness   string `json:"harness"`
-	Mode      string `json:"mode"`
-	CWD       string `json:"cwd"`
-	Status    string `json:"status"` // "ready", "running"
+	SessionID  string   `json:"sessionId"`
+	Harness    string   `json:"harness"`
+	Mode       string   `json:"mode"`
+	CWD        string   `json:"cwd"`
+	Status     string   `json:"status"` // "ready", "running"
+	Identidade Identity `json:"identidade"`
+}
+
+type Identity struct {
+	Instancia   string `json:"instancia"`
+	Base        string `json:"base"`
+	ContaID     string `json:"contaId"`
+	ConfigFonte string `json:"configFonte,omitempty"`
+	ContaDir    string `json:"contaDir"`
+}
+
+type InstanceIdentityParams struct {
+	Instancia string `json:"instancia"`
 }
 
 type SessionResumeParams struct {

@@ -31,6 +31,7 @@ import (
 	_ "github.com/crom-org/openheinerss/pkg/harness/codex"
 	_ "github.com/crom-org/openheinerss/pkg/harness/mock"
 	_ "github.com/crom-org/openheinerss/pkg/harness/opencode"
+	"github.com/crom-org/openheinerss/pkg/identidade"
 	"github.com/crom-org/openheinerss/pkg/limites"
 	"github.com/crom-org/openheinerss/pkg/mcp"
 	"github.com/crom-org/openheinerss/pkg/motor"
@@ -179,7 +180,34 @@ Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC d
 	rootCmd.AddCommand(newAgentesCmd())
 	rootCmd.AddCommand(newComandosCmd())
 	rootCmd.AddCommand(newConfigCmd())
+	rootCmd.AddCommand(newIdentityCmd())
 	return rootCmd
+}
+
+func newIdentityCmd() *cobra.Command {
+	var jsonOutput bool
+	cmd := &cobra.Command{Use: "identidade <instancia>", Aliases: []string{"identity"}, Short: "Mostra a identidade efetiva de uma instância", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		res, err := identidade.Para(args[0], nil)
+		if err != nil {
+			return err
+		}
+		if jsonOutput {
+			b, err := json.MarshalIndent(res, "", "  ")
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(b))
+			return nil
+		}
+		fmt.Printf("instancia=%s base=%s contaId=%s contaDir=%s", res.Instancia, res.Base, res.ContaID, res.ContaDir)
+		if res.ConfigFonte != "" {
+			fmt.Printf(" configFonte=%s", res.ConfigFonte)
+		}
+		fmt.Println()
+		return nil
+	}}
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Imprime o resultado em JSON")
+	return cmd
 }
 
 // pastaAgentes resolve a pasta de agentes pela raiz do repositório (vale também dentro de worktrees).

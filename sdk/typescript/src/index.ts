@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { spawn, type ChildProcess } from "node:child_process";
-import type { SessionOptions, HarnessRegistration, PermissionRequest, ToolCall, ToolResult, RawLine, RunOptions, RunStarted, RunList, Limits, EventFilter, OrchestrationEventName, OrchestrationCallback, HarnessCommand, HarnessCommandList } from "./types.js";
+import type { SessionOptions, HarnessRegistration, PermissionRequest, ToolCall, ToolResult, RawLine, RunOptions, RunStarted, RunList, Limits, EventFilter, OrchestrationEventName, OrchestrationCallback, HarnessCommand, HarnessCommandList, Identity } from "./types.js";
 
 export * from "./types.js";
 export * from "./react.js";
@@ -22,6 +22,7 @@ export class Openheinerss extends EventEmitter {
   private transportReady?: Promise<void>;
   /** Geração do processo serve ao qual o cliente está conectado. */
   public generation?: string;
+  public sessionIdentity?: Identity;
   private config: ClientConfig;
 
   constructor(config: ClientConfig = {}) {
@@ -55,6 +56,7 @@ export class Openheinerss extends EventEmitter {
   /** encerrar (opcional): numa negação, termina a execução (orq.fim código 3, motivo "negado"); ausente vale serve --negar-encerra. */
   async decideRun(id: string, resposta: string, mensagem?: string, run?: string, encerrar?: boolean): Promise<void> { await this.ensureTransport(); await this.sendRPC("rodar.decidir", { id, resposta, mensagem, run, encerrar }); }
   async getLimits(): Promise<Limits> { await this.ensureTransport(); return this.sendRPC("limites.obter", {}); }
+  async identidade(instancia: string): Promise<Identity> { await this.ensureTransport(); return this.sendRPC("instancia.identidade", { instancia }); }
   async subscribeEvents(filter: EventFilter = {}, callbacks: Partial<Record<OrchestrationEventName, OrchestrationCallback>> = {}): Promise<void> {
     await this.ensureTransport();
     for (const [name, callback] of Object.entries(callbacks)) if (callback) this.on(name, callback as (...args: any[]) => void);
@@ -98,6 +100,7 @@ export class Openheinerss extends EventEmitter {
     });
 
     this.sessionId = res.sessionId;
+    this.sessionIdentity = res.identidade;
     return this.sessionId!;
   }
 

@@ -26,6 +26,8 @@ test("SDK TypeScript conversa com o servidor real", async () => {
     });
     const limits = await client.getLimits();
     assert.ok(Array.isArray(limits.instancias));
+    const identidade = await client.identidade("mock");
+    assert.equal(identidade.instancia, "mock");
     const run = await client.run({ nome: "teste-ts", motor: "mock", texto: "responda OK", cwd: await repoTemporario(), projeto: "teste-ts" });
     assert.match(run.id, /^rodar-/);
     await new Promise((resolve, reject) => { const t = setInterval(() => { if (decisao) { clearInterval(t); resolve(); } }, 10); setTimeout(() => { clearInterval(t); reject(new Error("timeout de decisão")); }, 3000); });

@@ -32,6 +32,7 @@ $agent->subscribeEvents(['projeto' => 'teste-php'], [
     'orq.precisa_decisao' => function (array $event) use (&$decisao): void { $decisao = $event; },
 ]);
 if (!isset($agent->getLimits()['instancias'])) throw new RuntimeException('limites ausentes');
+if (($agent->identidade('mock')['instancia'] ?? null) !== 'mock') throw new RuntimeException('identidade RPC ausente');
 $run = $agent->run(['nome' => 'teste-php', 'motor' => 'mock', 'texto' => 'responda OK', 'cwd' => repoTemporario(), 'projeto' => 'teste-php']);
 if (!str_starts_with($run['id'], 'rodar-')) throw new RuntimeException('rodar não iniciado');
 $fim = microtime(true) + 1.0;
@@ -45,6 +46,7 @@ $agent->prompt('responda OK', function (string $metodo, array $params) use (&$pe
     if ($metodo === 'agent.thinking') $pensamentos[] = $params['delta'] ?? '';
 });
 if (!$pensamentos) throw new RuntimeException('agent.thinking não recebido');
+if (($agent->identidade['instancia'] ?? null) !== 'mock') throw new RuntimeException('identidade da sessão ausente');
 if (!isset($agent->listRuns(['projeto' => 'teste-php'])['agentes'])) throw new RuntimeException('lista ausente');
 // Negar com encerrar: orq.fim código 3, motivo "negado", sem nova tentativa.
 $fimNegado = null;

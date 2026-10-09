@@ -12,6 +12,8 @@ class Agent
     private string $sessionId;
     private int $reqId = 1;
     public ?string $generation = null;
+    /** Identidade efetiva da sessão criada. */
+    public ?array $identidade = null;
     /** Teto de segurança (s) sem nenhuma mensagem durante prompt(); null desliga. */
     public ?float $promptTimeout = 3600.0;
     /** @var array<string, callable> */
@@ -64,6 +66,7 @@ class Agent
                 }
                 $this->generation = $msg['geracao'] ?? null;
                 $this->sessionId = $msg['result']['sessionId'];
+                $this->identidade = $msg['result']['identidade'] ?? null;
                 return;
             }
         }
@@ -209,6 +212,7 @@ class Agent
         $this->request('rodar.decidir', $params);
     }
     public function getLimits(): array { return $this->request('limites.obter', []); }
+    public function identidade(string $instancia): array { return $this->request('instancia.identidade', ['instancia' => $instancia]); }
     /** @param array<string, callable(array): void> $callbacks */
     public function subscribeEvents(array|EventFilter $filter = [], array $callbacks = []): void {
         $this->callbacks = array_merge($this->callbacks, $callbacks);
