@@ -150,6 +150,19 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 	mode = h.Mode()
 	params.Harness = h.Name()
 
+	// Recusa a retomada antes de procurar o binário: alguns harnesses, como o
+	// aider, não têm retomada nativa e essa deve ser a causa informada mesmo
+	// quando o CLI também não está instalado.
+	if params.Retomar != "" {
+		nativo := params.Retomar
+		if id, ok := m.storage.IDNativo(params.CWD, params.Retomar); ok {
+			nativo = id
+		}
+		if _, rerr := harness.OpcoesRetomada(harness.BaseDe(params.Harness), nativo); rerr != nil {
+			return nil, &protocol.RPCError{Code: protocol.CodeInvalidParams, Message: rerr.Error()}
+		}
+	}
+
 	// 1. Valida pré-requisitos do harness
 	prereq := h.ValidatePrerequisites(ctx)
 	if !prereq.Satisfied {
