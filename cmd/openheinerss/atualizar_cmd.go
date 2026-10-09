@@ -72,8 +72,8 @@ type processo struct {
 }
 
 type opcoesAtualizar struct {
-	Seco, SemReiniciar, DeFonte, Release, Voltar, JSON bool
-	Destino, Repo                                      string
+	Seco, SemReiniciar, DeFonte, Release, Voltar, Forcar, JSON bool
+	Destino, Repo                                              string
 }
 
 // ambienteAtualizar concentra o que os testes precisam trocar.
@@ -123,8 +123,8 @@ func newAtualizarCmd() *cobra.Command {
 		Aliases: []string{"update", "upgrade"},
 		Short:   "Atualiza o binário instalado e reinicia os 'serve' em execução (--voltar desfaz)",
 		Long: "Instala uma nova versão do Openheinerss de forma atômica (guarda a anterior em <destino>.anterior) " +
-			"e reinicia os 'serve' do usuário que usam esse binário, com os mesmos argumentos, ambiente e pasta. " +
-			"Agentes 'rodar' em andamento não são tocados: o comando só lista quais continuam na versão antiga.",
+			"e reinicia os 'serve' antigos, com os mesmos argumentos, ambiente e pasta. Se já estiver na última, " +
+			"não reinstala e só oferece reiniciar processos antigos. Agentes 'rodar' em andamento não são tocados.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.NoArgs,
@@ -148,6 +148,7 @@ func newAtualizarCmd() *cobra.Command {
 	f.BoolVar(&o.DeFonte, "de-fonte", false, "Compila do repositório local (padrão se a pasta atual for o repositório)")
 	f.BoolVar(&o.Release, "release", false, "Baixa o binário da última release do GitHub e confere o checksum")
 	f.BoolVar(&o.Voltar, "voltar", false, "Restaura o binário anterior (<destino>.anterior) e reinicia os 'serve'")
+	f.BoolVar(&o.Forcar, "forcar", false, "Reinstala mesmo quando a versão instalada já é a última")
 	f.BoolVar(&o.JSON, "json", false, "Saída em JSON (para a Central)")
 	f.StringVar(&o.Destino, "destino", "", "Binário a atualizar (padrão ~/.local/bin/openheinerss)")
 	f.StringVar(&o.Repo, "repo", "", "Repositório local para --de-fonte (padrão: pasta atual ou $OPENHEINERSS_REPO)")
@@ -245,8 +246,10 @@ func executarAtualizar(o opcoesAtualizar, env ambienteAtualizar) (*relatorioAtua
 	}
 
 	var novo string // arquivo temporário já pronto para instalar
+	precisaAtualizar := o.Forcar
 	if o.Voltar {
 		rel.Modo = "voltar"
+		precisaAtualizar = true
 		if _, err := os.Stat(anterior); err != nil {
 			return rel, fmt.Errorf("não há %s para restaurar", anterior)
 		}
@@ -269,7 +272,10 @@ func executarAtualizar(o opcoesAtualizar, env ambienteAtualizar) (*relatorioAtua
 		if fonte {
 			rel.Modo = "fonte"
 			rel.Disponivel = versaoDaFonte(repo)
-			rel.Passos = append(rel.Passos, "compilar "+repo+" (go build com ldflags de versão)")
+			precisaAtualizar = precisaAtualizar || !mesmaVersaoFonte(rel.Antes, rel.Disponivel)
+			if precisaAtualizar {
+				rel.Passos = append(rel.Passos, "compilar "+repo+" (go build com ldflags de versão)")
+			}
 		} else {
 			rel.Modo = "release"
 			tag, err := ultimaTag(env)
@@ -277,14 +283,21 @@ func executarAtualizar(o opcoesAtualizar, env ambienteAtualizar) (*relatorioAtua
 				return rel, fmt.Errorf("descobrir a última release: %w", err)
 			}
 			rel.Disponivel = tag
-			rel.Passos = append(rel.Passos, fmt.Sprintf("baixar a release %s (%s/%s) e conferir o checksum", tag, env.GOOS, env.GOARCH))
+			precisaAtualizar = precisaAtualizar || !mesmaVersaoRelease(rel.Antes, tag)
+			if precisaAtualizar {
+				rel.Passos = append(rel.Passos, fmt.Sprintf("baixar a release %s (%s/%s) e conferir o checksum", tag, env.GOOS, env.GOARCH))
+			}
 		}
-		rel.Passos = append(rel.Passos, "instalar de forma atômica; o atual vira "+anterior)
-		rel.ComoVoltar = "openheinerss atualizar --voltar"
-		if o.Destino != "" {
-			rel.ComoVoltar += " --destino " + destino
+		if !precisaAtualizar {
+			rel.Passos = append(rel.Passos, "já está na última ("+rel.Disponivel+")")
+		} else {
+			rel.Passos = append(rel.Passos, "instalar de forma atômica; o atual vira "+anterior)
+			rel.ComoVoltar = "openheinerss atualizar --voltar"
+			if o.Destino != "" {
+				rel.ComoVoltar += " --destino " + destino
+			}
 		}
-		if !o.Seco {
+		if !o.Seco && precisaAtualizar {
 			if err := os.MkdirAll(filepath.Dir(destino), 0o755); err != nil {
 				return rel, err
 			}
@@ -312,7 +325,7 @@ func executarAtualizar(o opcoesAtualizar, env ambienteAtualizar) (*relatorioAtua
 		}
 	}
 
-	if !o.Seco {
+	if !o.Seco && precisaAtualizar {
 		if o.Voltar {
 			if err := trocarComAnterior(destino, anterior); err != nil {
 				return rel, err
@@ -332,6 +345,9 @@ func executarAtualizar(o opcoesAtualizar, env ambienteAtualizar) (*relatorioAtua
 
 	// serve: reinicia (ou só planeja).
 	for _, p := range serves {
+		if !precisaAtualizar && p.Exe == destino {
+			continue
+		}
 		s := serveRel{PID: p.PID, Porta: portaDoServe(p), Comando: linhaComando(p), Diretório: p.Cwd}
 		switch {
 		case servidorStdio(p):
@@ -482,6 +498,32 @@ func versaoDaFonte(repo string) string {
 	}
 	c := gitSaida(repo, "rev-parse", "--short", "HEAD")
 	return fmt.Sprintf("%s (main local, commit %s)", v, c)
+}
+
+func mesmaVersaoRelease(instalada, disponivel string) bool {
+	instalada = strings.TrimSpace(strings.TrimPrefix(instalada, "v"))
+	disponivel = strings.TrimSpace(strings.TrimPrefix(disponivel, "v"))
+	if instalada == "" || strings.HasPrefix(instalada, "(") {
+		return false
+	}
+	return strings.Fields(instalada)[0] == strings.Fields(disponivel)[0]
+}
+
+func commitDaVersao(v string) string {
+	const marcador = "commit "
+	i := strings.Index(v, marcador)
+	if i < 0 {
+		return ""
+	}
+	return strings.Fields(v[i+len(marcador):])[0]
+}
+
+func mesmaVersaoFonte(instalada, disponivel string) bool {
+	ci, cd := commitDaVersao(instalada), commitDaVersao(disponivel)
+	if ci != "" && cd != "" {
+		return ci == cd
+	}
+	return mesmaVersaoRelease(instalada, disponivel)
 }
 
 func compilarFonte(repo, saida string) error {
@@ -644,10 +686,9 @@ func listarProcessos(root, destino string) []processo {
 		if err != nil {
 			continue
 		}
-		exe = strings.TrimSuffix(exe, " (deleted)")
-		if exe != destino {
-			continue
-		}
+		// O sufixo indica que o processo ainda executa o inode antigo após uma
+		// troca atômica. A listagem também inclui serves de outro binário: eles
+		// precisam ser oferecidos para reinício quando estão desatualizados.
 		cl, err := os.ReadFile(filepath.Join(dir, "cmdline"))
 		if err != nil || len(cl) == 0 {
 			continue
