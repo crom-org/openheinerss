@@ -1,5 +1,9 @@
 # Ponte: o openheinerss não esconde nada do harness
 
+## Pastas externas
+
+`pastas_permitidas`/`--permitir-pasta` é mesclado entre configuração global, projeto, instância e chamada. OpenCode recebe regras `permission.external_directory` via `OPENCODE_CONFIG_CONTENT`; Claude, Codex e agy recebem `--add-dir`. Aider não possui sandbox por pasta. Caminhos não liberados não são auto-aprovados e o erro recomenda `--permitir-pasta`.
+
 O openheinerss é só a ponte entre o cliente (CLI, SDKs, Central) e o harness. Regras que valem para todos os adaptadores:
 
 - **`harness_args` / `harnessArgs` / `--harness-arg` (`--arg`)**: argumentos nativos extras vão ao processo **intactos e na mesma ordem**, antes do prompt. Não há lista de permitidos nem filtro.

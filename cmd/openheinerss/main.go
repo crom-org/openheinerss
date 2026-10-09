@@ -620,19 +620,20 @@ func newInitCmd() *cobra.Command {
 
 func newRunCmd() *cobra.Command {
 	var (
-		role        string
-		motorName   string
-		harnessName string
-		modeName    string
-		provider    string
-		model       string
-		effort      string
-		resumeID    string
-		harnessArgs []string
-		interactive bool
-		semMCP      bool
-		mcpNomes    []string
-		classRisco  bool
+		role             string
+		motorName        string
+		harnessName      string
+		modeName         string
+		provider         string
+		model            string
+		effort           string
+		resumeID         string
+		harnessArgs      []string
+		pastasPermitidas []string
+		interactive      bool
+		semMCP           bool
+		mcpNomes         []string
+		classRisco       bool
 	)
 
 	cmd := &cobra.Command{
@@ -685,7 +686,7 @@ func newRunCmd() *cobra.Command {
 				if errors.As(err, &rpcErr) && rpcErr.Code == protocol.CodeSessionNotFound && harnessName != "" {
 					sessRes, err = manager.CreateSession(ctx, protocol.SessionCreateParams{
 						Harness: harnessName, Mode: modeName, CWD: cwd, Provider: provider, Model: model, Env: env, Retomar: resumeID,
-						Options: protocol.SessionOptions{Extra: extra, Effort: effort, HarnessArgs: harnessArgs, SemMCP: semMCP, MCP: mcpNomes},
+						Options: protocol.SessionOptions{Extra: extra, Effort: effort, HarnessArgs: harnessArgs, PastasPermitidas: pastasPermitidas, SemMCP: semMCP, MCP: mcpNomes},
 					})
 				}
 			} else {
@@ -696,7 +697,7 @@ func newRunCmd() *cobra.Command {
 					Provider: provider,
 					Model:    model,
 					Env:      env,
-					Options:  protocol.SessionOptions{Extra: extra, Effort: effort, HarnessArgs: harnessArgs, SemMCP: semMCP, MCP: mcpNomes},
+					Options:  protocol.SessionOptions{Extra: extra, Effort: effort, HarnessArgs: harnessArgs, PastasPermitidas: pastasPermitidas, SemMCP: semMCP, MCP: mcpNomes},
 				})
 			}
 			if err != nil {
@@ -838,6 +839,8 @@ func newRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&resumeID, "resume", "", "Alias em inglês de --retomar")
 	cmd.Flags().StringVar(&resumeID, "retomar", "", "Retoma pelo ID: sessão persistida do openheinerss ou id nativo da conversa (com --harness/--motor)")
 	addHarnessArgFlags(cmd, &harnessArgs)
+	cmd.Flags().StringSliceVar(&pastasPermitidas, "permitir-pasta", nil, "Pasta externa permitida (repetível)")
+	cmd.Flags().StringSliceVar(&pastasPermitidas, "allowed-dir", nil, "Alias em inglês de --permitir-pasta")
 	cmd.Flags().BoolVarP(&interactive, "interativo", "i", false, "Sessão interativa: lê um prompt por linha; linhas com / vão literalmente ao harness")
 	cmd.Flags().BoolVar(&interactive, "interactive", false, "Alias em inglês de --interativo")
 	addMCPFlags(cmd, &semMCP, &mcpNomes)
@@ -885,7 +888,7 @@ func newRodarCmd() *cobra.Command {
 	var maxAgentes, tentativas int
 	var cotaMax float64
 	var eventosLog string
-	var harnessArgs []string
+	var harnessArgs, pastasPermitidas []string
 	var esperarFilhos string
 	var rodadasFilhos int
 	var filhosObrigatorios bool
@@ -936,7 +939,7 @@ func newRodarCmd() *cobra.Command {
 			if cmd.Flags().Changed("parado-parar") {
 				pParar = &paradoParar
 			}
-			opts := orchestrator.Options{ParadoAviso: pAviso, ParadoParar: pParar, LimiteContexto: limiteCtx, AcaoContexto: acaoContexto, Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Mode: modo, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, SessaoNativa: sessao, SemTrocaConta: semTroca, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, WhenLoadBelow: cargaAbaixo, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog, HarnessArgs: harnessArgs, EsperarFilhos: espera, RodadasFilhos: rodadasFilhos, FilhosObrigatorios: filhosObrigatorios, Pai: os.Getenv(orchestrator.EnvPai), PaiLogs: os.Getenv(orchestrator.EnvPaiLogs)}
+			opts := orchestrator.Options{ParadoAviso: pAviso, ParadoParar: pParar, LimiteContexto: limiteCtx, AcaoContexto: acaoContexto, Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Mode: modo, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, SessaoNativa: sessao, SemTrocaConta: semTroca, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, WhenLoadBelow: cargaAbaixo, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog, HarnessArgs: harnessArgs, PastasPermitidas: pastasPermitidas, EsperarFilhos: espera, RodadasFilhos: rodadasFilhos, FilhosObrigatorios: filhosObrigatorios, Pai: os.Getenv(orchestrator.EnvPai), PaiLogs: os.Getenv(orchestrator.EnvPaiLogs)}
 			if seco && jsonOutput {
 				dry, e := orchestrator.Seco(cmd.Context(), cwd, opts)
 				if e != nil {
@@ -1026,6 +1029,8 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&filhosObrigatorios, "require-children", false, "Alias em inglês de --filhos-obrigatorios")
 	addMCPFlags(cmd, &semMCP, &mcpNomes)
 	addHarnessArgFlags(cmd, &harnessArgs)
+	cmd.Flags().StringSliceVar(&pastasPermitidas, "permitir-pasta", nil, "Pasta externa permitida (repetível)")
+	cmd.Flags().StringSliceVar(&pastasPermitidas, "allowed-dir", nil, "Alias em inglês de --permitir-pasta")
 	return cmd
 }
 

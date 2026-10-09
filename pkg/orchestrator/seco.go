@@ -19,20 +19,21 @@ import (
 // SecoResult é a descrição completa de uma execução que ainda não começou.
 // Valores de ambiente potencialmente secretos aparecem sempre como ***.
 type SecoResult struct {
-	Seco       bool              `json:"seco"`
-	Nome       string            `json:"nome"`
-	Instancia  string            `json:"instancia"`
-	Identidade protocol.Identity `json:"identidade"`
-	Base       string            `json:"base"`
-	Modelo     string            `json:"modelo"`
-	Esforco    string            `json:"esforco,omitempty"`
-	Worktree   string            `json:"worktree"`
-	Branch     string            `json:"branch"`
-	Prompt     string            `json:"prompt"`
-	Argv       []string          `json:"argv"`
-	Env        map[string]string `json:"env"`
-	Limites    SecoLimites       `json:"limites"`
-	TrocaConta SecoTrocaConta    `json:"trocaConta"`
+	Seco             bool              `json:"seco"`
+	Nome             string            `json:"nome"`
+	Instancia        string            `json:"instancia"`
+	Identidade       protocol.Identity `json:"identidade"`
+	Base             string            `json:"base"`
+	Modelo           string            `json:"modelo"`
+	Esforco          string            `json:"esforco,omitempty"`
+	Worktree         string            `json:"worktree"`
+	Branch           string            `json:"branch"`
+	Prompt           string            `json:"prompt"`
+	Argv             []string          `json:"argv"`
+	Env              map[string]string `json:"env"`
+	Limites          SecoLimites       `json:"limites"`
+	TrocaConta       SecoTrocaConta    `json:"trocaConta"`
+	PastasPermitidas []string          `json:"pastasPermitidas,omitempty"`
 }
 
 type SecoLimites struct {
@@ -111,6 +112,24 @@ func Seco(ctx context.Context, cwd string, opts Options) (SecoResult, error) {
 		prompt += continuation
 	}
 	baseHarnessName, model, effort, env, argv := secoComando(o)
+	inst := []string(nil)
+	if s, ok := harness.CustomSpecFor(o.Motor); ok {
+		inst = s.PastasPermitidas
+	}
+	permitidas, err := config.PastasPermitidasEfetivas(repo, append(append([]string(nil), o.PastasPermitidas...), inst...))
+	if err != nil {
+		return SecoResult{}, err
+	}
+	for _, dir := range permitidas {
+		switch baseHarnessName {
+		case "codex", "claude-code", "claude", "agy":
+			argv = append(argv[:len(argv)-1], "--add-dir", dir, argv[len(argv)-1])
+		}
+	}
+	if baseHarnessName == "opencode" && len(permitidas) > 0 {
+		b, _ := json.Marshal(map[string]interface{}{"permission": map[string]interface{}{"external_directory": mapaPermissoes(permitidas)}})
+		env["OPENCODE_CONFIG_CONTENT"] = string(b)
+	}
 	id, err := identidade.Para(o.Motor, env)
 	if err != nil {
 		return SecoResult{}, err
@@ -151,9 +170,17 @@ func Seco(ctx context.Context, cwd string, opts Options) (SecoResult, error) {
 		}
 	}
 	return SecoResult{Seco: true, Nome: o.Name, Instancia: o.Motor, Identidade: id, Base: baseHarnessName, Modelo: model, Esforco: effort,
-		Worktree: work, Branch: "agente/" + o.Name, Prompt: prompt, Argv: argv, Env: env,
+		Worktree: work, Branch: "agente/" + o.Name, Prompt: prompt, Argv: argv, Env: env, PastasPermitidas: permitidas,
 		Limites:    SecoLimites{MaxAgentes: o.MaxAgents, Tentativas: o.Attempts, CargaMaxima: o.MaxLoad, QuandoCargaAbaixo: o.WhenLoadBelow, CotaMax: o.QuotaMax, LimiteContexto: contexto.LimiteTokens, AcaoContexto: contexto.Acao},
 		TrocaConta: SecoTrocaConta{Decisao: decisao, Fonte: "cache local; sem consulta ativa", Instancia: o.Motor, Percentual: percentual, Cache: cache.Instancias}}, nil
+}
+
+func mapaPermissoes(dirs []string) map[string]string {
+	out := map[string]string{}
+	for _, d := range dirs {
+		out[strings.TrimRight(d, "/")+"/**"] = "allow"
+	}
+	return out
 }
 
 func secoComando(o Options) (string, string, string, map[string]string, []string) {

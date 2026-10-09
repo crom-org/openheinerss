@@ -382,6 +382,9 @@ func buildExecArgs(cfg harness.SessionConfig, threadID, prompt string, images ..
 	for _, kv := range harness.OptionStrings(cfg.Options, "config") {
 		args = append(args, "-c", kv)
 	}
+	for _, dir := range harness.OptionStrings(cfg.Options, "add_dirs") {
+		args = append(args, "--add-dir", dir)
+	}
 	for _, img := range images {
 		// Forma com "=": --image aceita lista e engoliria o próximo argumento.
 		args = append(args, "--image="+img)
