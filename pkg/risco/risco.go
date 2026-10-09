@@ -87,7 +87,7 @@ func Arquivos(cwd string) []string {
 	if cwd != "" {
 		out = append(out, filepath.Join(cwd, config.WorkspaceDirName, ArquivoNome))
 	}
-	if dir, err := os.UserConfigDir(); err == nil {
+	if dir, err := config.UserConfigDir(); err == nil {
 		out = append(out, filepath.Join(dir, "openheinerss", ArquivoNome))
 	}
 	if home, err := os.UserHomeDir(); err == nil {

@@ -65,7 +65,7 @@ func ArquivosConfigGlobais() ([]string, error) {
 		return []string{filepath.Join(dir, ConfigFileName)}, nil
 	}
 	var out []string
-	if cfg, err := os.UserConfigDir(); err == nil {
+	if cfg, err := UserConfigDir(); err == nil {
 		out = append(out, filepath.Join(cfg, "openheinerss", ConfigFileName))
 	}
 	if home, err := os.UserHomeDir(); err == nil {

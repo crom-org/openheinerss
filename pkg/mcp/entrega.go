@@ -34,7 +34,7 @@ func ArquivosGlobais() []string {
 	if home, err := os.UserHomeDir(); err == nil {
 		out = append(out, filepath.Join(home, config.WorkspaceDirName, config.McpFileName))
 	}
-	if dir, err := os.UserConfigDir(); err == nil {
+	if dir, err := config.UserConfigDir(); err == nil {
 		out = append(out, filepath.Join(dir, "openheinerss", config.McpFileName))
 	}
 	return out

@@ -16,6 +16,20 @@ const (
 	McpFileName        = "mcp.json"
 )
 
+// UserConfigDir resolve a pasta de configuração do usuário.
+//
+// O os.UserConfigDir do macOS usa ~/Library/Application Support e, por isso,
+// ignora XDG_CONFIG_HOME. Honramos a variável quando ela foi explicitamente
+// definida (também no Windows), o que permite escolher uma pasta portátil e
+// torna a configuração consistente entre os sistemas; sem ela, mantemos o
+// diretório nativo retornado pela biblioteca padrão.
+func UserConfigDir() (string, error) {
+	if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
+		return dir, nil
+	}
+	return os.UserConfigDir()
+}
+
 // ProjectConfig configurações do projeto local
 type ProjectConfig struct {
 	Version        string `json:"version" yaml:"version"`
