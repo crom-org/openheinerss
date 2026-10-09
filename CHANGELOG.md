@@ -9,6 +9,9 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 ### Corrigido (sessionId dos eventos)
 
 - Os eventos `agent.*` do servidor sempre levam o `sessionId` de `session.create`; o id nativo do motor (ex.: Claude Code) vai em `nativeSessionId`. Antes o claude-code mandava o id nativo e a Central não casava os eventos.
+### Adicionado (arquivo de estado e resumo velho)
+
+- `logs/<nome>.estado.md` gravado pelo `rodar` a cada turno, mandado ao motor na retomada, na troca de motor e no recomeço por limite de contexto no lugar do texto fixo. Resumo (`RELATORIO-AGENTE.md`) descartado se o HEAD mudou ou se passou de `OPENHEINERSS_RESUMO_MAX_TURNOS` (padrão 2) turnos; então vai o histórico. Ver `docs/07-rodar.md`.
 
 ### Adicionado (meta.json, órfãos, checkpoints)
 

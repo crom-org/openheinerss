@@ -94,8 +94,11 @@ func (c *ctxRun) aoPassar(o Options, projeto, motor string, write func(string)) 
 
 // textoContinuacao monta o que o motor recebe, além do prompt original, ao recomeçar em sessão nova
 // depois de passar do limite de contexto. É o ponto único para trocar a continuação (ex.: por um arquivo de estado).
-func (c *ctxRun) textoContinuacao() string {
-	t := continuation + fmt.Sprintf("\n\nObs.: a sessão anterior foi encerrada por passar do limite de contexto (%d tokens >= %d); esta é uma sessão nova, sem o histórico dela.", c.tokens, c.cfg.LimiteTokens)
+func (c *ctxRun) textoContinuacao(estado string) string {
+	if estado == "" {
+		estado = continuation
+	}
+	t := estado + fmt.Sprintf("\n\nObs.: a sessão anterior foi encerrada por passar do limite de contexto (%d tokens >= %d); esta é uma sessão nova, sem o histórico dela.", c.tokens, c.cfg.LimiteTokens)
 	c.pendente, c.avisou, c.tokens = false, false, 0 // a sessão nova começa limpa
 	return t
 }
