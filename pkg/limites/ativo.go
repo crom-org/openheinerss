@@ -604,6 +604,12 @@ func percentualUso(m map[string]interface{}) (float64, bool) {
 }
 
 func resetUso(m map[string]interface{}) (string, bool) {
+	// A resposta WHAM também traz reset_after_seconds. Ele é relativo ao
+	// instante da consulta e continua correto mesmo quando um fixture/cache foi
+	// capturado alguns minutos antes; prefira-o ao timestamp absoluto antigo.
+	if after, ok := num(m["reset_after_seconds"]); ok && after >= 0 {
+		return time.Now().Add(time.Duration(after) * time.Second).Format(time.RFC3339), true
+	}
 	f, ok := num(m["resets_at"])
 	if !ok {
 		f, ok = num(m["reset_at"])

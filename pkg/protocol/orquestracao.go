@@ -6,6 +6,7 @@ const (
 	MethodRodarListar    = "rodar.listar"
 	MethodRodarParar     = "rodar.parar"
 	MethodRodarDecidir   = "rodar.decidir"
+	MethodRodarSeco      = "rodar.seco"
 	MethodLimitesObter   = "limites.obter"
 	MethodHarnessListar  = "harness.listar"
 	MethodEventosAssinar = "eventos.assinar"

@@ -879,7 +879,7 @@ func addHarnessArgFlags(cmd *cobra.Command, dst *[]string) {
 
 func newRodarCmd() *cobra.Command {
 	var modelo, esforco, modo, prompt, texto, pasta, branchBase, conta, regras, arquivoChaves string
-	var retomar, semRegras, seco, semTroca bool
+	var retomar, semRegras, seco, semTroca, jsonOutput bool
 	var sessao string
 	var carga, cargaAbaixo float64
 	var maxAgentes, tentativas int
@@ -936,7 +936,15 @@ func newRodarCmd() *cobra.Command {
 			if cmd.Flags().Changed("parado-parar") {
 				pParar = &paradoParar
 			}
-			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{ParadoAviso: pAviso, ParadoParar: pParar, LimiteContexto: limiteCtx, AcaoContexto: acaoContexto, Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Mode: modo, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, SessaoNativa: sessao, SemTrocaConta: semTroca, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog, HarnessArgs: harnessArgs, EsperarFilhos: espera, RodadasFilhos: rodadasFilhos, FilhosObrigatorios: filhosObrigatorios, Pai: os.Getenv(orchestrator.EnvPai), PaiLogs: os.Getenv(orchestrator.EnvPaiLogs)})
+			opts := orchestrator.Options{ParadoAviso: pAviso, ParadoParar: pParar, LimiteContexto: limiteCtx, AcaoContexto: acaoContexto, Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Mode: modo, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, SessaoNativa: sessao, SemTrocaConta: semTroca, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, WhenLoadBelow: cargaAbaixo, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog, HarnessArgs: harnessArgs, EsperarFilhos: espera, RodadasFilhos: rodadasFilhos, FilhosObrigatorios: filhosObrigatorios, Pai: os.Getenv(orchestrator.EnvPai), PaiLogs: os.Getenv(orchestrator.EnvPaiLogs)}
+			if seco && jsonOutput {
+				dry, e := orchestrator.Seco(cmd.Context(), cwd, opts)
+				if e != nil {
+					return e
+				}
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(dry)
+			}
+			res, err := orchestrator.Run(cmd.Context(), cwd, opts)
 			if err != nil && res.Name == "" {
 				return err
 			}
@@ -1001,6 +1009,7 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().DurationVar(&paradoParar, "parado-parar", 0, "Interrompe (SIGTERM no motor, código 5, retomável) depois deste tempo parado (0 desliga; padrão 20m); vence parado: do config.yaml")
 	cmd.Flags().BoolVar(&seco, "seco", false, "Mostra o comando sem executá-lo")
 	cmd.Flags().BoolVar(&seco, "dry-run", false, "Alias em inglês de --seco")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Exibe o plano seco como JSON")
 	cmd.Flags().StringVar(&regras, "regras", "", "Arquivo de regras do prompt")
 	cmd.Flags().StringVar(&regras, "rules", "", "Alias em inglês de --regras")
 	cmd.Flags().BoolVar(&semRegras, "sem-regras", false, "Não acrescenta regras padrão ao prompt")

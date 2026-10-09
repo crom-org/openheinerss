@@ -260,13 +260,14 @@ type RunParams struct {
 	Texto   string `json:"texto,omitempty"`  // prompt em texto (vale no lugar do arquivo)
 	// Retomar aceita true (continuar o agente: preserva log e acrescenta o texto de continuação) ou
 	// uma string (id nativo da conversa do harness, ou id de sessão do openheinerss, a retomar).
-	Retomar    Retomada `json:"retomar,omitempty"`
-	Pasta      string   `json:"pasta,omitempty"`
-	BranchBase string   `json:"branchBase,omitempty"`
-	CargaMax   float64  `json:"cargaMax,omitempty"`
-	MaxAgentes int      `json:"maxAgentes,omitempty"`
-	Tentativas int      `json:"tentativas,omitempty"`
-	CotaMax    float64  `json:"cotaMax,omitempty"`
+	Retomar     Retomada `json:"retomar,omitempty"`
+	Pasta       string   `json:"pasta,omitempty"`
+	BranchBase  string   `json:"branchBase,omitempty"`
+	CargaMax    float64  `json:"cargaMax,omitempty"`
+	CargaAbaixo float64  `json:"quandoCargaAbaixo,omitempty"`
+	MaxAgentes  int      `json:"maxAgentes,omitempty"`
+	Tentativas  int      `json:"tentativas,omitempty"`
+	CotaMax     float64  `json:"cotaMax,omitempty"`
 	// HarnessArgs vai intacto, na ordem, para o processo do harness.
 	HarnessArgs []string `json:"harnessArgs,omitempty"`
 	// FilhosObrigatorios: o pai termina com código 4 ("filho falhou") se um filho falhar.

@@ -200,6 +200,8 @@ class Agent
     /** Marca o primeiro uso do comando como já confirmado. */
     public function confirmCommand(string $harness, string $comando): array { return $this->request('harness.comandos.confirmar', ['harness' => $harness, 'comando' => $comando]); }
     public function run(array|RunOptions $options): array { return $this->request('rodar.iniciar', $options instanceof RunOptions ? $options->toArray() : $options); }
+    /** Resolve uma execução sem criar worktree/log/meta nem iniciar o harness. */
+    public function dryRun(array|RunOptions $options): array { return $this->request('rodar.seco', $options instanceof RunOptions ? $options->toArray() : $options); }
     public function listRuns(array $filter = []): array { return $this->request('rodar.listar', $filter); }
     public function stopRun(?string $id = null, ?string $agente = null): void {
         $this->request('rodar.parar', array_filter(['id' => $id, 'agente' => $agente]));
