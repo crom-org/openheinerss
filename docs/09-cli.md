@@ -78,7 +78,7 @@ Use "openheinerss agentes [command] --help" for more information about a command
 ## `openheinerss atualizar --help`
 
 ```text
-Instala uma nova versão do Openheinerss de forma atômica (guarda a anterior em <destino>.anterior) e reinicia os 'serve' do usuário que usam esse binário, com os mesmos argumentos, ambiente e pasta. Agentes 'rodar' em andamento não são tocados: o comando só lista quais continuam na versão antiga.
+Instala uma nova versão do Openheinerss de forma atômica (guarda a anterior em <destino>.anterior) e reinicia os 'serve' antigos, com os mesmos argumentos, ambiente e pasta. Se já estiver na última, não reinstala e só oferece reiniciar processos antigos. Agentes 'rodar' em andamento não são tocados.
 
 Usage:
   openheinerss atualizar [flags]
@@ -89,6 +89,7 @@ Aliases:
 Flags:
       --de-fonte         Compila do repositório local (padrão se a pasta atual for o repositório)
       --destino string   Binário a atualizar (padrão ~/.local/bin/openheinerss)
+      --forcar           Reinstala mesmo quando a versão instalada já é a última
       --json             Saída em JSON (para a Central)
       --release          Baixa o binário da última release do GitHub e confere o checksum
       --repo string      Repositório local para --de-fonte (padrão: pasta atual ou $OPENHEINERSS_REPO)

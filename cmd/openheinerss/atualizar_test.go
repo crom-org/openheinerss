@@ -143,10 +143,10 @@ func TestAtualizarDeFonteReiniciaSoServeDoDestino(t *testing.T) {
 	if !strings.HasPrefix(rel.Antes, "1.0.0") || !strings.HasPrefix(rel.Depois, "2.0.0") {
 		t.Fatalf("antes/depois: %q → %q", rel.Antes, rel.Depois)
 	}
-	if len(f.sinais) != 1 || f.sinais[0] != 101 {
-		t.Fatalf("sinais: %v (só o serve 101 pode ser encerrado)", f.sinais)
+	if len(f.sinais) != 2 || f.sinais[0] != 101 || f.sinais[1] != 103 {
+		t.Fatalf("sinais: %v (os serves antigos 101 e 103 devem ser encerrados)", f.sinais)
 	}
-	if len(f.iniciou) != 1 || f.iniciou[0].Cwd != cwd || strings.Join(f.iniciou[0].Env, ",") != "A=1,OPENHEINERSS_PORTA=5555" {
+	if len(f.iniciou) != 2 || f.iniciou[0].Cwd != cwd || strings.Join(f.iniciou[0].Env, ",") != "A=1,OPENHEINERSS_PORTA=5555" {
 		t.Fatalf("relançamento: %+v", f.iniciou)
 	}
 	if len(rel.RodarAntigos) != 1 || rel.RodarAntigos[0].PID != 102 {
@@ -156,7 +156,7 @@ func TestAtualizarDeFonteReiniciaSoServeDoDestino(t *testing.T) {
 	for _, s := range rel.Serves {
 		estados[s.PID] = s.Estado
 	}
-	if estados[101] != "reiniciado" || estados[104] != "mantido" || len(estados) != 2 {
+	if estados[101] != "reiniciado" || estados[103] != "reiniciado" || estados[104] != "mantido" || len(estados) != 3 {
 		t.Fatalf("estados: %v", estados)
 	}
 	if !strings.HasPrefix(versaoDoBinario(dest+".anterior"), "1.0.0") {
@@ -169,7 +169,7 @@ func TestAtualizarDeFonteReiniciaSoServeDoDestino(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(versaoDoBinario(dest), "1.0.0") || len(f2.iniciou) != 1 {
+	if !strings.HasPrefix(versaoDoBinario(dest), "1.0.0") || len(f2.iniciou) != 2 {
 		t.Fatalf("voltar: %q %+v", versaoDoBinario(dest), f2.iniciou)
 	}
 }
@@ -259,5 +259,66 @@ func TestAtualizarRelease(t *testing.T) {
 	}
 	if rel.Disponivel != "v9.9.9" || !strings.HasPrefix(rel.Depois, "9.9.9") {
 		t.Fatalf("%+v", rel)
+	}
+}
+
+func TestAtualizarReleaseJaNaUltimaNaoBaixaNemReiniciaAtual(t *testing.T) {
+	pular(t)
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "openheinerss")
+	binFalso(t, dest, "1.9.0")
+	root := t.TempDir()
+	procFalso(t, root, 301, dest, nil, dir, dest, "serve")
+	procFalso(t, root, 302, "/opt/antigo/openheinerss", nil, dir, "/opt/antigo/openheinerss", "serve")
+	env := ambFalso(t, root, &fakes{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/latest") {
+			fmt.Fprint(w, `{"tag_name":"v1.9.0"}`)
+			return
+		}
+		http.Error(w, "não deveria baixar", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	env.APIURL = srv.URL + "/latest"
+
+	rel, err := executarAtualizar(opcoesAtualizar{Seco: true, Release: true, Destino: dest}, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rel.Passos) == 0 || !strings.Contains(strings.Join(rel.Passos, " "), "já está na última (v1.9.0)") {
+		t.Fatalf("plano: %+v", rel.Passos)
+	}
+	if len(rel.Serves) != 1 || rel.Serves[0].PID != 302 || rel.Serves[0].Estado != "reiniciar" {
+		t.Fatalf("serves desatualizados: %+v", rel.Serves)
+	}
+	if existe(dest+".anterior") || !strings.HasPrefix(versaoDoBinario(dest), "1.9.0") {
+		t.Fatal("a atualização seca alterou o destino")
+	}
+}
+
+func TestMesmaVersaoFonteComparaCommit(t *testing.T) {
+	if !mesmaVersaoFonte("v1.9.0 (commit abc123)", "v1.8.0 (main local, commit abc123)") {
+		t.Fatal("o mesmo commit deveria ser considerado atualizado")
+	}
+	if mesmaVersaoFonte("v1.9.0 (commit abc123)", "v1.9.0 (main local, commit def456)") {
+		t.Fatal("commits diferentes não deveriam ser considerados iguais")
+	}
+}
+
+func TestAtualizarForcarReinstalaMesmoNaMesmaVersao(t *testing.T) {
+	pular(t)
+	dest := filepath.Join(t.TempDir(), "openheinerss")
+	binFalso(t, dest, "dev")
+	repo := t.TempDir()
+	os.MkdirAll(filepath.Join(repo, "cmd", "openheinerss"), 0o755)
+	os.WriteFile(filepath.Join(repo, "go.mod"), []byte("module github.com/crom-org/openheinerss\n"), 0o644)
+	chamadas := 0
+	env := ambienteAtualizar{
+		ProcRoot: t.TempDir(), GOOS: "linux", GOARCH: "amd64",
+		Compilar: func(_, saida string) error { chamadas++; binFalso(t, saida, "2.0.0"); return nil },
+	}
+	rel, err := executarAtualizar(opcoesAtualizar{Forcar: true, DeFonte: true, Destino: dest, Repo: repo}, env)
+	if err != nil || chamadas != 1 || !strings.HasPrefix(rel.Depois, "2.0.0") {
+		t.Fatalf("forçar: err=%v chamadas=%d relatório=%+v", err, chamadas, rel)
 	}
 }

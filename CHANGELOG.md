@@ -5,6 +5,7 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 
 ## Não publicado
 
+- Corrige `atualizar`: reconhece quando a release ou o commit local já estão instalados, evita reinstalação desnecessária e oferece reiniciar somente `serve` antigos; `--forcar` reinstala explicitamente.
 - Adiciona `openheinerss agentes mensagem <agente> <texto>` e a RPC `rodar.mensagem {agente, texto}` (SDKs: `sendMessage` /
   `send_message`): entrega um recado ao agente VIVO lançado por `rodar`. O texto vai para a caixa de entrada
   `logs/<nome>.caixa/<id>.json` (0600, gravação atômica) e o runner do `rodar` vigia a caixa. No Claude a entrega é
