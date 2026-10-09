@@ -178,6 +178,7 @@ Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC d
 	rootCmd.AddCommand(newDocsCmd())
 	rootCmd.AddCommand(newAgentesCmd())
 	rootCmd.AddCommand(newComandosCmd())
+	rootCmd.AddCommand(newConfigCmd())
 	return rootCmd
 }
 
@@ -762,6 +763,8 @@ func newRodarCmd() *cobra.Command {
 	var filhosObrigatorios bool
 	var semMCP bool
 	var mcpNomes []string
+	var limiteContexto int
+	var acaoContexto string
 	cmd := &cobra.Command{
 		Use:     "rodar <nome> <instância|harness>",
 		Aliases: []string{"launch", "dispatch"},
@@ -793,7 +796,11 @@ func newRodarCmd() *cobra.Command {
 				// Agente filho: sessão própria, para não morrer junto com o grupo do harness do pai.
 				orchestrator.DesligarDoGrupo()
 			}
-			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Mode: modo, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog, HarnessArgs: harnessArgs, EsperarFilhos: espera, RodadasFilhos: rodadasFilhos, FilhosObrigatorios: filhosObrigatorios, Pai: os.Getenv(orchestrator.EnvPai), PaiLogs: os.Getenv(orchestrator.EnvPaiLogs)})
+			var limiteCtx *int
+			if cmd.Flags().Changed("limite-contexto") || cmd.Flags().Changed("context-limit") {
+				limiteCtx = &limiteContexto
+			}
+			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{LimiteContexto: limiteCtx, AcaoContexto: acaoContexto, Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Mode: modo, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog, HarnessArgs: harnessArgs, EsperarFilhos: espera, RodadasFilhos: rodadasFilhos, FilhosObrigatorios: filhosObrigatorios, Pai: os.Getenv(orchestrator.EnvPai), PaiLogs: os.Getenv(orchestrator.EnvPaiLogs)})
 			if err != nil && res.Name == "" {
 				return err
 			}
@@ -847,6 +854,10 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().Float64Var(&cotaMax, "quota-max", 0, "Alias em inglês de --cota-max")
 	cmd.Flags().StringVar(&eventosLog, "eventos-log", "", "Acrescenta FIM ao arquivo de eventos (desligado por padrão)")
 	cmd.Flags().StringVar(&eventosLog, "events-log", "", "Alias em inglês de --eventos-log")
+	cmd.Flags().IntVar(&limiteContexto, "limite-contexto", 0, "Limite de tokens de contexto da sessão (0 desliga); vence contexto: do config.yaml")
+	cmd.Flags().IntVar(&limiteContexto, "context-limit", 0, "Alias em inglês de --limite-contexto")
+	cmd.Flags().StringVar(&acaoContexto, "acao-contexto", "", "O que fazer ao passar do limite: aviso ou nova-sessao; vence contexto: do config.yaml")
+	cmd.Flags().StringVar(&acaoContexto, "context-action", "", "Alias em inglês de --acao-contexto")
 	cmd.Flags().BoolVar(&seco, "seco", false, "Mostra o comando sem executá-lo")
 	cmd.Flags().BoolVar(&seco, "dry-run", false, "Alias em inglês de --seco")
 	cmd.Flags().StringVar(&regras, "regras", "", "Arquivo de regras do prompt")
