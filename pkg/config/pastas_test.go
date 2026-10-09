@@ -24,10 +24,14 @@ func TestPastasPermitidasMesclaExpandeECano(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	extCanon, err := filepath.EvalSymlinks(ext)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got) != 3 {
 		t.Fatalf("pastas=%v", got)
 	}
-	for _, want := range []string{filepath.Join(home, "liberada"), ext, filepath.Join(home, "outra")} {
+	for _, want := range []string{filepath.Join(home, "liberada"), extCanon, filepath.Join(home, "outra")} {
 		found := false
 		for _, p := range got {
 			if p == want {
