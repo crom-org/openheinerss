@@ -8,8 +8,12 @@ O protocolo de comunicação entre o cliente e o binário Openheinerss é basead
 
 ### `instancia.identidade`
 Resolve uma instância sem criar sessão. A resposta identifica a configuração efetiva sem
-expor segredos: `contaId` é os primeiros 16 hex do SHA-256 do caminho absoluto, limpo e
-resolvido por symlink da pasta de login (`CLAUDE_CONFIG_DIR`, `CODEX_HOME` ou equivalente).
+expor segredos: `contaId` é um identificador estável e não reversível. Quando o CLI
+persiste um identificador real (`account_id`, `accountId`, `accountUuid` ou `email`),
+usa o primeiro campo disponível nessa ordem fixa, com SHA-256 truncado nos primeiros
+16 hex. Sem identificador real, usa o SHA-256 do caminho absoluto, limpo e resolvido
+por symlink da pasta de login (`CLAUDE_CONFIG_DIR`, `CODEX_HOME` ou equivalente).
+A resposta informa a origem em `contaIdFonte` (`id-real` ou `pasta`).
 `session.create` devolve o mesmo objeto em `identidade`, ligado atomicamente ao `sessionId`.
 
 ```json

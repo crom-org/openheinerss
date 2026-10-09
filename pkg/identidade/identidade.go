@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/crom-org/openheinerss/pkg/harness"
@@ -89,12 +90,20 @@ func identificadorArquivo(path string) string {
 
 func procurarIdentificador(v interface{}) string {
 	if m, ok := v.(map[string]interface{}); ok {
+		// A prioridade é parte do contrato: nunca dependa da ordem aleatória
+		// de iteração de um mapa JSON.
 		for _, k := range []string{"account_id", "accountId", "accountUuid", "email"} {
 			if s, ok := m[k].(string); ok && strings.TrimSpace(s) != "" {
 				return strings.TrimSpace(s)
 			}
 		}
-		for _, x := range m {
+		chaves := make([]string, 0, len(m))
+		for k := range m {
+			chaves = append(chaves, k)
+		}
+		sort.Strings(chaves)
+		for _, k := range chaves {
+			x := m[k]
 			if s := procurarIdentificador(x); s != "" {
 				return s
 			}

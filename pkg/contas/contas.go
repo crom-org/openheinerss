@@ -147,9 +147,20 @@ func ler(dir, path string) (Conta, bool, error) {
 		base = s.Name
 	}
 	key := LoginEnv(base)
-	login := expand(s.Env[key])
-	if s.Name == "" || login == "" {
+	if s.Name == "" {
 		return Conta{}, false, nil
+	}
+	login := strings.TrimSpace(s.Env[key])
+	if login == "" {
+		// A listagem não pode transformar env ausente em cwd. Reutilizamos a
+		// mesma resolução da identidade, inclusive o padrão do harness.
+		id, err := identidade.Para(s.Name, s.Env)
+		if err != nil {
+			return Conta{}, false, err
+		}
+		login = id.ContaDir
+	} else {
+		login = expand(login)
 	}
 	nome, err := NormalizarNome(s.Name)
 	if err != nil || nome != s.Name {
@@ -157,6 +168,79 @@ func ler(dir, path string) (Conta, bool, error) {
 	}
 	id, fonte := hashID(Base(base), login)
 	return Conta{Instancia: s.Name, Base: Base(base), ContaID: id, ContaIDFonte: fonte, ContaDir: login, TemLogin: temLogin(base, login), Arquivo: path}, true, nil
+}
+
+// ValidarPastaParaApagar limita --apagar-pasta a diretórios de conta
+// reconhecíveis e impede apagar o diretório atual ou uma raiz de repositório.
+func ValidarPastaParaApagar(base, dir, cwd, repo string) error {
+	canon := func(p string) (string, error) {
+		p, err := filepath.Abs(filepath.Clean(p))
+		if err != nil {
+			return "", err
+		}
+		if r, e := filepath.EvalSymlinks(p); e == nil {
+			p = filepath.Clean(r)
+		} else if !os.IsNotExist(e) {
+			return "", e
+		}
+		return p, nil
+	}
+	target, err := canon(dir)
+	if err != nil {
+		return err
+	}
+	for _, protegido := range []string{cwd, repo} {
+		if protegido == "" {
+			continue
+		}
+		p, err := canon(protegido)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(target, p)
+		if err == nil && (rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))) {
+			return fmt.Errorf("recusa apagar %s: é o diretório atual ou contém o projeto", dir)
+		}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	home, err = canon(home)
+	if err != nil {
+		return err
+	}
+	base = Base(base)
+	permitidos := []string{
+		filepath.Join(home, ".claude"),
+		filepath.Join(home, ".codex"),
+		filepath.Join(home, ".config", "opencode"),
+		filepath.Join(home, ".openheinerss", "accounts", base),
+	}
+	prefix := "." + base + "-"
+	if base == "claude-code" {
+		prefix = ".claude-"
+	}
+	if base == "opencode" {
+		prefix = ".opencode-"
+	}
+	permitidos = append(permitidos, filepath.Join(home, prefix+"*"))
+	permitido := false
+	for _, p := range permitidos[:len(permitidos)-1] {
+		p, _ = canon(p)
+		if target == p {
+			permitido = true
+			break
+		}
+	}
+	if !permitido {
+		parent := filepath.Dir(target)
+		permitido = parent == home && strings.HasPrefix(filepath.Base(target), prefix)
+	}
+	if !permitido {
+		return fmt.Errorf("recusa apagar %s: a pasta não é um diretório padrão de conta do openheinerss", dir)
+	}
+	return nil
 }
 
 func Listar(dir string) ([]Conta, error) {

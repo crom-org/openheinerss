@@ -133,6 +133,7 @@ Use "openheinerss comandos [command] --help" for more information about a comman
 Mostra a configuração efetiva (global + projeto)
 
 Usage:
+  openheinerss config [flags]
   openheinerss config [command]
 
 Available Commands:
@@ -307,6 +308,7 @@ Global Flags:
 Gerencia os servidores MCP (Model Context Protocol) do projeto
 
 Usage:
+  openheinerss mcp [flags]
   openheinerss mcp [command]
 
 Available Commands:
