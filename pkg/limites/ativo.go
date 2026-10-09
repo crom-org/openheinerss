@@ -29,6 +29,8 @@ type AtualizarOpcoes struct {
 
 const claudeOAuthClientID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 
+const intervaloReservaClaude = 5 * time.Minute
+
 type httpStatusError struct {
 	status int
 	header http.Header
@@ -69,11 +71,36 @@ func Atualizar(ctx context.Context, op AtualizarOpcoes) (Resultado, error) {
 		func() {
 			defer unlock()
 			if retryAte, ok := lerRetryAte(retryPath(cachePath)); ok && time.Now().Before(retryAte) {
-				if c, ok := lerCacheSemValidade(cachePath); ok {
-					if c.Fonte != "cabeçalhos" {
-						c.Fonte = "cache (429)"
-						c.Nota = fmt.Sprintf("HTTP 429; nova tentativa após %s", retryAte.Format(time.RFC3339))
+				if i.Base == "claude-code" {
+					// O bloqueio do endpoint de uso não bloqueia a reserva mínima.
+					// Ela tem seu próprio intervalo, compartilhado por processos via
+					// cache/lock, para não repetir uma mensagem a cada atualização.
+					if c, cacheOK := lerCache(cachePath, time.Now(), intervaloReservaClaude); cacheOK && c.Fonte == "cabeçalhos" {
+						*i = mesclar(*i, c)
+						return
 					}
+					if reservaAte, reservaBloqueada := lerRetryAte(reservaRetryPath(cachePath)); reservaBloqueada && time.Now().Before(reservaAte) {
+						aplicarFalha429(i, cachePath, retryAte, fmt.Sprintf("intervalo mínimo da reserva até %s", reservaAte.Format(time.RFC3339)))
+						return
+					}
+					_ = gravarRetryAte(reservaRetryPath(cachePath), time.Now().Add(intervaloReservaClaude))
+					reservado, reservaErr := reservaClaude(ctx, *i, op.HTTPClient)
+					if reservaErr == nil && len(reservado.Janelas) > 0 {
+						reservado.Nota = fmt.Sprintf("/api/oauth/usage respondeu HTTP 429; reserva mínima (Haiku 4.5, max_tokens=1), custo: 1 token de saída mais tokens de entrada")
+						*i = mesclar(*i, reservado)
+						_ = gravarCache(cachePath, reservado)
+						return
+					}
+					motivo := "reserva sem cabeçalhos de limite"
+					if reservaErr != nil {
+						motivo = erroSeguro(reservaErr)
+					}
+					aplicarFalha429(i, cachePath, retryAte, motivo)
+					return
+				}
+				if c, ok := lerCacheSemValidade(cachePath); ok {
+					c.Fonte = "cache (429)"
+					c.Nota = fmt.Sprintf("HTTP 429; nova tentativa após %s", retryAte.Format(time.RFC3339))
 					atualizarIdade(&c, time.Now())
 					*i = mesclar(*i, c)
 				} else {
@@ -98,17 +125,22 @@ func Atualizar(ctx context.Context, op AtualizarOpcoes) (Resultado, error) {
 				if he, ok := err.(*httpStatusError); ok && he.status == http.StatusTooManyRequests {
 					retryAte := time.Now().Add(retryAfter(he.header.Get("Retry-After")))
 					_ = gravarRetryAte(retryPath(cachePath), retryAte)
-					reservaMotivo := ""
+					reservaMotivo := "reserva sem cabeçalhos de limite"
 					if i.Base == "claude-code" {
-						reservado, reservaErr := reservaClaude(ctx, *i, op.HTTPClient)
-						if reservaErr == nil && len(reservado.Janelas) > 0 {
-							reservado.Nota = fmt.Sprintf("/api/oauth/usage respondeu HTTP 429; reserva mínima (haiku, max_tokens=1), custo: 1 token de saída mais tokens de entrada")
-							*i = mesclar(*i, reservado)
-							_ = gravarCache(cachePath, reservado)
-							return
-						}
-						if reservaErr != nil {
-							reservaMotivo = erroSeguro(reservaErr)
+						if reservaAte, reservaBloqueada := lerRetryAte(reservaRetryPath(cachePath)); reservaBloqueada && time.Now().Before(reservaAte) {
+							reservaMotivo = fmt.Sprintf("intervalo mínimo da reserva até %s", reservaAte.Format(time.RFC3339))
+						} else {
+							_ = gravarRetryAte(reservaRetryPath(cachePath), time.Now().Add(intervaloReservaClaude))
+							reservado, reservaErr := reservaClaude(ctx, *i, op.HTTPClient)
+							if reservaErr == nil && len(reservado.Janelas) > 0 {
+								reservado.Nota = fmt.Sprintf("/api/oauth/usage respondeu HTTP 429; reserva mínima (Haiku 4.5, max_tokens=1), custo: 1 token de saída mais tokens de entrada")
+								*i = mesclar(*i, reservado)
+								_ = gravarCache(cachePath, reservado)
+								return
+							}
+							if reservaErr != nil {
+								reservaMotivo = erroSeguro(reservaErr)
+							}
 						}
 					}
 					if c, cacheOK := lerCacheSemValidade(cachePath); cacheOK {
@@ -137,6 +169,17 @@ func Atualizar(ctx context.Context, op AtualizarOpcoes) (Resultado, error) {
 	}
 	resultado.Agora = time.Now().Format(time.RFC3339)
 	return resultado, nil
+}
+
+func aplicarFalha429(i *Instancia, cachePath string, retryAte time.Time, reservaMotivo string) {
+	if c, cacheOK := lerCacheSemValidade(cachePath); cacheOK {
+		c.Fonte = "cache (429)"
+		c.Nota = fmt.Sprintf("HTTP 429; nova tentativa após %s; reserva de cabeçalhos falhou: %s", retryAte.Format(time.RFC3339), reservaMotivo)
+		atualizarIdade(&c, time.Now())
+		*i = mesclar(*i, c)
+		return
+	}
+	i.Nota = fmt.Sprintf("HTTP 429; nova tentativa após %s; reserva de cabeçalhos falhou: %s", retryAte.Format(time.RFC3339), reservaMotivo)
 }
 
 // travarConta coordena processos diferentes que consultam a mesma conta.
@@ -187,6 +230,9 @@ func lerCache(path string, agora time.Time, intervalo time.Duration) (Instancia,
 	if !ok {
 		return Instancia{}, false
 	}
+	if len(janelasVigentes(i.Janelas, agora)) == 0 {
+		return Instancia{}, false
+	}
 	t, err := time.Parse(time.RFC3339, i.DadoEm)
 	if err != nil || agora.Sub(t) >= intervalo {
 		return Instancia{}, false
@@ -219,6 +265,8 @@ func lerCacheSemValidade(path string) (Instancia, bool) {
 }
 
 func retryPath(cachePath string) string { return cachePath + ".retry" }
+
+func reservaRetryPath(cachePath string) string { return cachePath + ".reserva.retry" }
 
 func lerRetryAte(path string) (time.Time, bool) {
 	b, err := os.ReadFile(path)
@@ -363,7 +411,7 @@ func reservaClaude(ctx context.Context, base Instancia, client *http.Client) (In
 	}
 	modelo := os.Getenv("OPENHEINERSS_CLAUDE_RESERVA_MODELO")
 	if modelo == "" {
-		modelo = "claude-3-5-haiku-20241022"
+		modelo = "claude-haiku-4-5-20251001"
 	}
 	body, err := json.Marshal(map[string]interface{}{
 		"model": modelo, "max_tokens": 1,
