@@ -122,6 +122,26 @@ Códigos de FIM do `rodar`: 0 ok, 1 erro, 2 sem cota, 3 negado (`--negar-encerra
 As regras padrão do prompt incluem: "Se lançar agentes filhos ou comandos em segundo plano, o openheinerss te
 acorda quando eles terminarem; não encerre dizendo que vai esperar sem ter lançado nada."
 
+### Mensagem para um agente vivo
+
+`openheinerss agentes mensagem <agente> <texto...>` (use `-` como texto para ler do stdin; `--json` imprime o recibo)
+e a RPC `rodar.mensagem` entregam um recado ao agente que o `rodar` ainda executa.
+
+- O recado é gravado em `logs/<nome>.caixa/<id>.json` (pasta 0700, arquivo 0600, gravação atômica). Só agente vivo
+  aceita: agente terminado ou inexistente devolve erro. A caixa de uma execução antiga é apagada ao iniciar um agente
+  de mesmo nome (sem `--retomar`).
+- O runner confere a caixa a cada 250 ms. **Claude** (`claude-code` e instâncias como `claude-conta2`): o `rodar`
+  usa `--input-format stream-json --replay-user-messages`; a mensagem entra no processo em andamento, entre as
+  chamadas de ferramenta, sem esperar o fim do turno (modo `vivo`). **Codex, opencode e demais motores** não têm
+  entrada durante o turno: o recado fica `pendente` e vai no começo de um novo turno da mesma conversa nativa
+  (`resume`) quando o turno atual termina (modo `retomada`); o agente só termina depois de entregar a caixa.
+- Log: `MENSAGEM recebida <id>`, `MENSAGEM entregue <id> (vivo|retomada)` ou, se o agente acabou antes,
+  `MENSAGEM <id> não entregue (agente terminou)`. O servidor emite `orq.mensagem` (`recebida`, `entregue` com `modo`,
+  `nao_entregue`).
+- O comando espera até 3 s (RPC: 1,5 s) a entrega e imprime o id e o status `entregue` ou `pendente`.
+  `agentes ver <nome>` mostra as pendentes.
+- Um agente que termina o turno sozinho (sem esperar) acaba ali: o recado precisa chegar durante o trabalho.
+
 ### Meta.json, órfãos e checkpoints
 
 O `meta.json` de cada agente ganhou campos opcionais (um meta antigo continua legível): `ultimo_evento_em` (RFC3339, atualizado a cada evento do motor, no máximo uma escrita a cada 5 s), `head` (sha do HEAD da worktree no fim de cada turno/tentativa), `inicio_pid` (horário de início do processo, campo 22 de `/proc/<pid>/stat`; vazio fora do Linux, para não confundir um PID reutilizado) e `checkpoints` (`n`, `ref`, `sha`, `em`, `motivo`).

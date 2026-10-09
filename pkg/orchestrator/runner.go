@@ -120,6 +120,8 @@ const (
 	EvErro      = "erro"
 	// EvFilhosOrfaos: o pai terminou com filhos ainda rodando (Filhos, Mensagem).
 	EvFilhosOrfaos = "filhos_orfaos"
+	// EvMensagem: uma mensagem da caixa chegou (MensagemEstado "recebida") ou foi entregue ("entregue").
+	EvMensagem = "mensagem"
 )
 
 // Evento é um fato da execução do rodar, no vocabulário do protocolo orq.*.
@@ -142,6 +144,8 @@ type Evento struct {
 	// TrocaDe e TrocaMotivo preenchem o EvInicio de uma tentativa que começou por troca de conta por cota.
 	TrocaDe     string
 	TrocaMotivo string
+	// MensagemID, MensagemEstado ("recebida", "entregue" ou "nao_entregue") e MensagemModo (ModoVivo/ModoRetomada) no EvMensagem.
+	MensagemID, MensagemEstado, MensagemModo string
 }
 
 // Pergunta é um permission_request que precisa de decisão.
@@ -384,6 +388,9 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	if err := rejectLiveMeta(agents, o.Name); err != nil {
 		return Result{}, err
 	}
+	if !o.Retomar {
+		_ = os.RemoveAll(caixaDir(agents, o.Name)) // recados de uma execução antiga não valem para esta
+	}
 	cancelMarker := filepath.Join(agents, "logs", o.Name+".cancelado")
 	if _, err := os.Stat(cancelMarker); err == nil {
 		_ = os.Remove(cancelMarker)
@@ -450,6 +457,12 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		prefix := ""
 		if nl {
 			prefix = "\n"
+		}
+		for _, m := range MensagensPendentes(agents, o.Name) {
+			marcarMensagem(agents, o.Name, m, MsgNaoEntregue, "", o.Now())
+			write(fmt.Sprintf("%sMENSAGEM %s não entregue (agente terminou)\n", prefix, m.ID))
+			prefix = ""
+			o.emit(Evento{Tipo: EvMensagem, MensagemID: m.ID, MensagemEstado: MsgNaoEntregue})
 		}
 		write(fmt.Sprintf("%sFIM %s código %d\n", prefix, o.Now().Format("15:04"), code))
 		if err := appendEventLog(o, filepath.Base(repo), o.Name, code, motorName); err != nil {
@@ -523,6 +536,8 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	resumeID, resumeMotor := "", ""
 	filhos := &rodadasFilhos{reportados: map[string]bool{}}
 	turnoMsg := "" // mensagem de retomada depois que os agentes filhos terminam
+	caixa := novaCaixaRun(agents, o, write)
+	turnoCaixa := false // a retomada pendente vem da caixa de entrada (não dos agentes filhos)
 	for i := 0; i < len(candidates); i++ {
 		candidate := candidates[i]
 		attempts = i + 1
@@ -590,7 +605,9 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			return finish(1, err.Error(), candidate, false), err
 		}
 		ran = true
-		if turnoMsg != "" {
+		if turnoMsg != "" && turnoCaixa {
+			write(fmt.Sprintf("\n### retomada (%s) motor %s: mensagem recebida\n", o.Now().Format("15:04"), candidate))
+		} else if turnoMsg != "" {
 			write(fmt.Sprintf("\n### retomada %d de %d (%s) motor %s: agentes filhos\n", filhos.feitas, o.RodadasFilhos, o.Now().Format("15:04"), candidate))
 		} else {
 			write(fmt.Sprintf("### tentativa %d (%s) motor %s\n", attempts, o.Now().Format("15:04"), candidate))
@@ -612,6 +629,9 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		hctx, cancel := context.WithCancel(ctx)
 		options := map[string]interface{}{"effort": effort}
 		options["rodar"] = true
+		if baseHarness(candidate) == "claude-code" {
+			options[harness.OptionMensagensVivas] = true
+		}
 		if len(o.HarnessArgs) > 0 {
 			options[harness.OptionHarnessArgs] = append([]string(nil), o.HarnessArgs...)
 		}
@@ -694,6 +714,8 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		// is_error); o texto livre do agente nunca é examinado.
 		errMsg, endReason := "", ""
 		parado.Ativo(true)
+		// A caixa é vigiada à parte do laço de eventos: um pedido de permissão pendente não a atrasa.
+		go caixa.vigiar(hctx, h)
 		for {
 			select {
 			case msg := <-parado.Parar():
@@ -815,13 +837,19 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			continue
 		}
 		if !failed {
+			if msg := caixa.retomada(); msg != "" {
+				// Recado chegado durante o turno e que o motor não aceita ao vivo: segue na mesma conversa.
+				turnoMsg, turnoCaixa = msg, true
+				i--
+				continue
+			}
 			msg, err := posTurno(ctx, o, logsDir, work, textBuf, filhos, write)
 			if err != nil {
 				pararFilhos(logsDir, o.Name, o.Now())
 				return finish(130, "interrompido", candidate, true), err
 			}
 			if msg != "" {
-				turnoMsg = msg
+				turnoMsg, turnoCaixa = msg, false
 				i-- // mesma instância, mesma tentativa: retoma a sessão
 				continue
 			}

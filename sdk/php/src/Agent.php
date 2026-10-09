@@ -207,6 +207,10 @@ class Agent
     public function stopRun(?string $id = null, ?string $agente = null): void {
         $this->request('rodar.parar', array_filter(['id' => $id, 'agente' => $agente]));
     }
+    /** Entrega $texto ao agente VIVO (rodar.mensagem); devolve id e status ("entregue" ou "pendente"). */
+    public function sendMessage(string $agente, string $texto, array $filter = []): array {
+        return $this->request('rodar.mensagem', array_merge($filter, ['agente' => $agente, 'texto' => $texto]));
+    }
     /**
      * $run (id da execução, vem em orq.precisa_decisao) é opcional; se vier, o servidor confere.
      * $encerrar: numa negação, termina a execução (orq.fim código 3, motivo "negado"); null vale serve --negar-encerra.

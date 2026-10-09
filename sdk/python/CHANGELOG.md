@@ -1,5 +1,9 @@
 # Changelog
 
+## Não publicado
+
+- `send_message(agente, texto)` / `sendMessage` (`rodar.mensagem`): entrega um recado ao agente vivo; o evento `orq.mensagem` passa a ser repassado.
+
 ## 1.7.0 — 2026-10-09
 - Versão do pacote alinhada ao release do Openheinerss; inclui a API de orquestração disponível nesta versão.
 

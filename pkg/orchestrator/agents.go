@@ -31,6 +31,8 @@ type Agente struct {
 	Orfaos []string `json:"orfaos,omitempty"`
 	// Orfao marca um filho vivo cujo pai já terminou.
 	Orfao bool `json:"orfao,omitempty"`
+	// MensagensPendentes conta os recados na caixa que o runner ainda não entregou.
+	MensagensPendentes int `json:"mensagens_pendentes,omitempty"`
 	// PaiMorto marca um filho cujo pai morreu sem dar FIM (o filho não é alterado).
 	PaiMorto bool `json:"pai_morto,omitempty"`
 	// Campos do meta.json úteis para quem acompanha o agente (detector de parado, arquivo de estado).
@@ -67,6 +69,7 @@ func ListAgents(agentsDir string, now time.Time) ([]Agente, error) {
 		a := Agente{Nome: name, Projeto: m.Projeto, Motor: m.Motor, Modelo: m.Modelo, Tentativa: m.Tentativa, Inicio: m.Inicio, PID: m.PID, LogFile: logPath, MetaFile: filepath.Join(logs, entry.Name())}
 		a.UltimaLinha = lastUsefulLine(logPath)
 		a.Pai = m.Pai
+		a.MensagensPendentes = len(MensagensPendentes(agentsDir, name))
 		a.UltimoEventoEm, a.Head, a.Checkpoints = m.UltimoEventoEm, m.Head, m.Checkpoints
 		if metaOrfao(m) {
 			// Processo morto sem FIM (ou PID reutilizado): fecha o meta e libera a vaga.

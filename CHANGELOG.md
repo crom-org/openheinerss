@@ -3,6 +3,17 @@
 Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 
+## Não publicado
+
+- Adiciona `openheinerss agentes mensagem <agente> <texto>` e a RPC `rodar.mensagem {agente, texto}` (SDKs: `sendMessage` /
+  `send_message`): entrega um recado ao agente VIVO lançado por `rodar`. O texto vai para a caixa de entrada
+  `logs/<nome>.caixa/<id>.json` (0600, gravação atômica) e o runner do `rodar` vigia a caixa. No Claude a entrega é
+  **dentro do turno** (`--input-format stream-json`, entra entre as chamadas de ferramenta); nos demais motores
+  (codex, opencode…) o recado vai no começo do próximo turno da mesma conversa nativa (retomada). O log ganha
+  `MENSAGEM recebida <id>` e `MENSAGEM entregue <id> (vivo|retomada)`; o servidor emite `orq.mensagem`. A resposta traz
+  `id` e `status`/`recibo` (`entregue` ou `pendente`); `agentes ver` lista as pendentes e `agentes --json` ganha
+  `mensagens_pendentes`. Agente terminado ou inexistente é erro claro.
+
 ## [1.9.0] — 2026-10-09
 
 - Adiciona `openheinerss atualizar [--seco] [--sem-reiniciar] [--de-fonte|--release] [--voltar] [--destino] [--json]`:

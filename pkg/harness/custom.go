@@ -774,3 +774,11 @@ func OpcoesRetomada(base, id string) (map[string]interface{}, error) {
 	}
 	return map[string]interface{}{chave: id}, nil
 }
+
+// EnviarVivo repassa a mensagem ao motor base quando ele aceita texto no meio do turno.
+func (o *overlayHarness) EnviarVivo(id, texto string) error {
+	if r, ok := o.base.(MensageiroVivo); ok {
+		return r.EnviarVivo(id, texto)
+	}
+	return ErrSemTurnoVivo
+}

@@ -7,6 +7,7 @@ const (
 	MethodRodarParar     = "rodar.parar"
 	MethodRodarDecidir   = "rodar.decidir"
 	MethodRodarSeco      = "rodar.seco"
+	MethodRodarMensagem  = "rodar.mensagem"
 	MethodLimitesObter   = "limites.obter"
 	MethodHarnessListar  = "harness.listar"
 	MethodEventosAssinar = "eventos.assinar"
@@ -40,6 +41,7 @@ const (
 	EventOrqErro           = "orq.erro"
 	EventOrqPrecisaDecisao = "orq.precisa_decisao"
 	EventOrqFilhosOrfaos   = "orq.filhos_orfaos"
+	EventOrqMensagem       = "orq.mensagem"
 	EventLimitesAtualizado = "limites.atualizado"
 )
 
@@ -91,6 +93,18 @@ type OrqFilhosOrfaosParams struct {
 	Projeto  string   `json:"projeto"`
 	Filhos   []string `json:"filhos"`
 	Mensagem string   `json:"mensagem"`
+}
+
+// OrqMensagemParams payload de orq.mensagem: Estado "recebida", "entregue" (com Modo "vivo" ou "retomada")
+// ou "nao_entregue" (o agente terminou antes da entrega). Mensagem é o id devolvido por rodar.mensagem.
+type OrqMensagemParams struct {
+	Geracao  string `json:"geracao"`
+	ID       string `json:"id,omitempty"`
+	Agente   string `json:"agente"`
+	Projeto  string `json:"projeto"`
+	Mensagem string `json:"mensagem"`
+	Estado   string `json:"estado"`
+	Modo     string `json:"modo,omitempty"`
 }
 
 // OrqErroParams payload de orq.erro.
@@ -161,6 +175,27 @@ type RodarListarResult struct {
 type RodarPararParams struct {
 	ID     string `json:"id,omitempty"`
 	Agente string `json:"agente,omitempty"`
+}
+
+// RodarMensagemParams entrega Texto ao agente VIVO lançado por `rodar` (CWD/Pasta como em rodar.listar).
+type RodarMensagemParams struct {
+	Agente  string `json:"agente"`
+	Texto   string `json:"texto"`
+	CWD     string `json:"cwd,omitempty"`
+	Pasta   string `json:"pasta,omitempty"`
+	Projeto string `json:"projeto,omitempty"`
+}
+
+// RodarMensagemResult: Status e Recibo valem "entregue" ou "pendente" (ficam pendentes até o runner
+// entregar; o orq.mensagem avisa quando isso acontece). Modo é "vivo" ou "retomada" quando entregue.
+type RodarMensagemResult struct {
+	ID      string `json:"id"`
+	Agente  string `json:"agente"`
+	Projeto string `json:"projeto"`
+	Status  string `json:"status"`
+	Recibo  string `json:"recibo"`
+	Modo    string `json:"modo,omitempty"`
+	Em      string `json:"em"`
 }
 
 // RodarDecidirParams responde um orq.precisa_decisao. Resposta: "permitir" ou "negar".

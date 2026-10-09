@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/crom-org/openheinerss/pkg/harness/process"
+	"io"
 	"net"
 	"os"
 	"os/signal"
@@ -353,6 +354,41 @@ func newAgentesCmd() *cobra.Command {
 			return err
 		}
 		fmt.Println(log)
+		if pend := orchestrator.MensagensPendentes(dir, args[0]); len(pend) > 0 {
+			fmt.Printf("\nMensagens pendentes (%d):\n", len(pend))
+			for _, m := range pend {
+				fmt.Printf("  %s  %s  %s\n", m.ID, m.Em, resumoMensagem(m.Texto))
+			}
+		}
+		return nil
+	}})
+	root.AddCommand(&cobra.Command{Use: "mensagem <nome> <texto...>", Aliases: []string{"message"}, Short: "Envia um recado ao agente vivo lançado por 'rodar' (use '-' no texto para ler do stdin)", Long: "Põe o texto na caixa de entrada do agente (logs/<nome>.caixa/). O runner do 'rodar' entrega: no Claude, dentro do turno (stream-json); nos demais motores, no começo do próximo turno da mesma conversa. Imprime o id e o status (entregue/pendente). Agente terminado é erro.", Args: cobra.MinimumNArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+		dir, err := pastaAgentes(agentsDir)
+		if err != nil {
+			return err
+		}
+		texto := strings.Join(args[1:], " ")
+		if texto == "-" {
+			b, err := io.ReadAll(cmd.InOrStdin())
+			if err != nil {
+				return err
+			}
+			texto = string(b)
+		}
+		m, err := orchestrator.EnviarMensagem(dir, args[0], "", texto, time.Now(), 3*time.Second)
+		if err != nil {
+			return err
+		}
+		if jsonOutput {
+			b, _ := json.MarshalIndent(map[string]interface{}{"id": m.ID, "agente": m.Agente, "status": m.Recibo(), "recibo": m.Recibo(), "modo": m.Modo, "em": m.Em}, "", "  ")
+			fmt.Println(string(b))
+			return nil
+		}
+		if m.Modo != "" {
+			fmt.Printf("Mensagem %s %s (%s)\n", m.ID, m.Recibo(), m.Modo)
+		} else {
+			fmt.Printf("Mensagem %s %s (o agente recebe no fim do turno, se o motor não aceitar ao vivo)\n", m.ID, m.Recibo())
+		}
 		return nil
 	}})
 	root.AddCommand(&cobra.Command{Use: "parar <nome>", Aliases: []string{"stop"}, Short: "Para somente o agente informado", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
@@ -1475,4 +1511,13 @@ Anotações ficam em ~/.config/openheinerss/comandos.yaml; com --config/` + conf
 		return mostrarComando(c)
 	}})
 	return root
+}
+
+// resumoMensagem encurta o texto de uma mensagem para uma linha.
+func resumoMensagem(t string) string {
+	r := []rune(strings.Join(strings.Fields(t), " "))
+	if len(r) > 80 {
+		return string(r[:80]) + "…"
+	}
+	return string(r)
 }

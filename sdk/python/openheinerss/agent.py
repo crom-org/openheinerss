@@ -232,6 +232,10 @@ class Agent:
     def stop_run(self, id: Optional[str] = None, agente: Optional[str] = None) -> None:
         self._request("rodar.parar", {k: v for k, v in {"id": id, "agente": agente}.items() if v})
 
+    def send_message(self, agente: str, texto: str, **filter: str) -> Dict[str, Any]:
+        """Entrega texto ao agente VIVO (rodar.mensagem); devolve id e status ("entregue" ou "pendente")."""
+        return self._request("rodar.mensagem", {**filter, "agente": agente, "texto": texto})
+
     def decide_run(self, id: str, resposta: str, mensagem: Optional[str] = None, run: Optional[str] = None, encerrar: Optional[bool] = None) -> None:
         # run (id da execução, vem em orq.precisa_decisao) é opcional; se vier, o servidor confere.
         # encerrar: numa negação, termina a execução (orq.fim código 3, motivo "negado"); None vale serve --negar-encerra.
@@ -263,7 +267,7 @@ class Agent:
 
     def subscribe_events(self, callback: Optional[Callable[[Dict[str, Any]], None]] = None, **filter: str) -> None:
         if callback:
-            for name in ("orq.inicio", "orq.progresso", "orq.fim", "orq.erro", "orq.precisa_decisao", "orq.filhos_orfaos", "limites.atualizado"):
+            for name in ("orq.inicio", "orq.progresso", "orq.fim", "orq.erro", "orq.precisa_decisao", "orq.filhos_orfaos", "orq.mensagem", "limites.atualizado"):
                 self.callbacks[name] = callback
         self._request("eventos.assinar", filter)
 
@@ -272,6 +276,7 @@ class Agent:
     annotateCommand = annotate_command
     confirmCommand = confirm_command
     listRuns = list_runs
+    sendMessage = send_message
     dryRun = dry_run
     stopRun = stop_run
     decideRun = decide_run

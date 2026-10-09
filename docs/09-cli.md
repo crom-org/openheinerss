@@ -57,6 +57,7 @@ Available Commands:
   checkpoints Lista os checkpoints git do agente (n, quando, motivo, resumo do diff)
   desfazer    Volta a worktree do agente a um checkpoint (sem n: o anterior ao último)
   listar      Lista os agentes e seus estados
+  mensagem    Envia um recado ao agente vivo lançado por 'rodar' (use '-' no texto para ler do stdin)
   parar       Para somente o agente informado
   ver         Mostra o fim do log de um agente
 
@@ -603,6 +604,27 @@ Usage:
 
 Aliases:
   listar, list
+
+Global Flags:
+      --agents-dir string      Alias em inglês de --pasta-agentes (default ".claude/agentes")
+      --config string          Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string    Alias de --config
+      --json                   Emite JSON
+      --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
+      --projeto string         Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
+
+```
+
+## `openheinerss agentes mensagem --help`
+
+```text
+Põe o texto na caixa de entrada do agente (logs/<nome>.caixa/). O runner do 'rodar' entrega: no Claude, dentro do turno (stream-json); nos demais motores, no começo do próximo turno da mesma conversa. Imprime o id e o status (entregue/pendente). Agente terminado é erro.
+
+Usage:
+  openheinerss agentes mensagem <nome> <texto...> [flags]
+
+Aliases:
+  mensagem, message
 
 Global Flags:
       --agents-dir string      Alias em inglês de --pasta-agentes (default ".claude/agentes")
