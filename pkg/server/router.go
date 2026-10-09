@@ -297,7 +297,7 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (respo
 		if cwd == "" {
 			cwd, _ = os.Getwd()
 		}
-		res, err := orchestrator.Run(ctx, cwd, orchestrator.Options{Name: p.Nome, Motor: p.Motor, Model: p.Modelo, Effort: p.Esforco, PromptFile: p.Prompt, PromptText: p.Texto, Retomar: p.Retomar.Continuar, SessaoNativa: p.Retomar.ID, SemTrocaConta: p.SemTrocaConta, AgentsDir: p.Pasta, BranchBase: p.BranchBase, MaxLoad: p.CargaMax, MaxAgents: p.MaxAgentes, Attempts: p.Tentativas, QuotaMax: p.CotaMax, HarnessArgs: p.HarnessArgs})
+		res, err := orchestrator.Run(ctx, cwd, orchestrator.Options{Name: p.Nome, Motor: p.Motor, Model: p.Modelo, Effort: p.Esforco, PromptFile: p.Prompt, PromptText: p.Texto, Retomar: p.Retomar.Continuar, SessaoNativa: p.Retomar.ID, SemTrocaConta: p.SemTrocaConta, AgentsDir: p.Pasta, BranchBase: p.BranchBase, MaxLoad: p.CargaMax, MaxAgents: p.MaxAgentes, Attempts: p.Tentativas, QuotaMax: p.CotaMax, HarnessArgs: p.HarnessArgs, PastasPermitidas: p.PastasPermitidas})
 		if err != nil {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), res)
 		}
@@ -376,7 +376,7 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (respo
 		if cwd == "" {
 			cwd, _ = os.Getwd()
 		}
-		res, err := orchestrator.Seco(ctx, cwd, orchestrator.Options{Name: p.Nome, Motor: p.Motor, Model: p.Modelo, Effort: p.Esforco, PromptFile: p.Prompt, PromptText: p.Texto, Retomar: p.Retomar.Continuar, AgentsDir: p.Pasta, BranchBase: p.BranchBase, MaxLoad: p.CargaMax, WhenLoadBelow: p.CargaAbaixo, MaxAgents: p.MaxAgentes, Attempts: p.Tentativas, QuotaMax: p.CotaMax, HarnessArgs: p.HarnessArgs})
+		res, err := orchestrator.Seco(ctx, cwd, orchestrator.Options{Name: p.Nome, Motor: p.Motor, Model: p.Modelo, Effort: p.Esforco, PromptFile: p.Prompt, PromptText: p.Texto, Retomar: p.Retomar.Continuar, AgentsDir: p.Pasta, BranchBase: p.BranchBase, MaxLoad: p.CargaMax, WhenLoadBelow: p.CargaAbaixo, MaxAgents: p.MaxAgentes, Attempts: p.Tentativas, QuotaMax: p.CotaMax, HarnessArgs: p.HarnessArgs, PastasPermitidas: p.PastasPermitidas})
 		if err != nil {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
 		}

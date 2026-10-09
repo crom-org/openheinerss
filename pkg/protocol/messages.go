@@ -58,8 +58,9 @@ type SessionOptions struct {
 	HarnessArgs []string               `json:"harnessArgs,omitempty"`
 	Extra       map[string]interface{} `json:"extra,omitempty"`
 	// SemMCP desliga a entrega dos servidores de mcp.json ao harness; MCP escolhe quais (vazio = todos).
-	SemMCP bool     `json:"semMcp,omitempty"`
-	MCP    []string `json:"mcp,omitempty"`
+	SemMCP           bool     `json:"semMcp,omitempty"`
+	MCP              []string `json:"mcp,omitempty"`
+	PastasPermitidas []string `json:"pastasPermitidas,omitempty"`
 	// ClassificarRisco liga (true) ou desliga (false) o classificador de risco nesta sessão;
 	// ausente segue o padrão do servidor (desligado, salvo serve --classificar-risco).
 	ClassificarRisco *bool `json:"classificarRisco,omitempty"`
@@ -269,7 +270,8 @@ type RunParams struct {
 	Tentativas  int      `json:"tentativas,omitempty"`
 	CotaMax     float64  `json:"cotaMax,omitempty"`
 	// HarnessArgs vai intacto, na ordem, para o processo do harness.
-	HarnessArgs []string `json:"harnessArgs,omitempty"`
+	HarnessArgs      []string `json:"harnessArgs,omitempty"`
+	PastasPermitidas []string `json:"pastasPermitidas,omitempty"`
 	// FilhosObrigatorios: o pai termina com código 4 ("filho falhou") se um filho falhar.
 	FilhosObrigatorios bool   `json:"filhosObrigatorios,omitempty"`
 	CWD                string `json:"cwd,omitempty"`

@@ -82,6 +82,7 @@ class Agent
         // semMcp/mcp: quais servidores de mcp.json o harness recebe; classificarRisco: risco opcional (só informa).
         if (!empty($options['semMcp'])) $extra['semMcp'] = true;
         if (!empty($options['mcp'])) $extra['mcp'] = array_map('strval', array_values($options['mcp']));
+        if (!empty($options['pastasPermitidas'])) $extra['pastasPermitidas'] = array_map('strval', array_values($options['pastasPermitidas']));
         if (isset($options['classificarRisco'])) $extra['classificarRisco'] = (bool) $options['classificarRisco'];
         return $extra ? ['options' => $extra] : [];
     }

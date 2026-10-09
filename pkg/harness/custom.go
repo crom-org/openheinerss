@@ -22,26 +22,27 @@ import (
 
 // CustomSpec é o formato de .openheinerss/harnesses/*.yaml (JSON também é aceito).
 type CustomSpec struct {
-	Name        string            `json:"name" yaml:"name"`
-	Base        string            `json:"base,omitempty" yaml:"base,omitempty"`
-	DisplayName string            `json:"displayName,omitempty" yaml:"displayName,omitempty"`
-	Command     string            `json:"command,omitempty" yaml:"command,omitempty"`
-	Args        []string          `json:"args,omitempty" yaml:"args,omitempty"`
-	Env         map[string]string `json:"env,omitempty" yaml:"env,omitempty"`
-	Model       string            `json:"model,omitempty" yaml:"model,omitempty"`
-	Modelo      string            `json:"modelo,omitempty" yaml:"modelo,omitempty"`
-	Effort      string            `json:"effort,omitempty" yaml:"effort,omitempty"`
-	Mode        string            `json:"mode,omitempty" yaml:"mode,omitempty"`
-	Modo        string            `json:"modo,omitempty" yaml:"modo,omitempty"`
-	Prompt      string            `json:"prompt,omitempty" yaml:"prompt,omitempty"`
-	FinishRegex string            `json:"finishRegex,omitempty" yaml:"finishRegex,omitempty"`
-	QuotaRegex  string            `json:"quotaRegex,omitempty" yaml:"quotaRegex,omitempty"`
-	ErrorRegex  string            `json:"errorRegex,omitempty" yaml:"errorRegex,omitempty"`
-	ErroRegex   string            `json:"error_regex,omitempty" yaml:"error_regex,omitempty"`
-	ErroRegexPT string            `json:"erro_regex,omitempty" yaml:"erro_regex,omitempty"`
-	Reserva     []string          `json:"reserva,omitempty" yaml:"reserva,omitempty"`
-	EventLog    string            `json:"eventosLog,omitempty" yaml:"eventosLog,omitempty"`
-	Source      string            `json:"-" yaml:"-"`
+	Name             string            `json:"name" yaml:"name"`
+	Base             string            `json:"base,omitempty" yaml:"base,omitempty"`
+	DisplayName      string            `json:"displayName,omitempty" yaml:"displayName,omitempty"`
+	Command          string            `json:"command,omitempty" yaml:"command,omitempty"`
+	Args             []string          `json:"args,omitempty" yaml:"args,omitempty"`
+	Env              map[string]string `json:"env,omitempty" yaml:"env,omitempty"`
+	Model            string            `json:"model,omitempty" yaml:"model,omitempty"`
+	Modelo           string            `json:"modelo,omitempty" yaml:"modelo,omitempty"`
+	Effort           string            `json:"effort,omitempty" yaml:"effort,omitempty"`
+	Mode             string            `json:"mode,omitempty" yaml:"mode,omitempty"`
+	Modo             string            `json:"modo,omitempty" yaml:"modo,omitempty"`
+	Prompt           string            `json:"prompt,omitempty" yaml:"prompt,omitempty"`
+	FinishRegex      string            `json:"finishRegex,omitempty" yaml:"finishRegex,omitempty"`
+	QuotaRegex       string            `json:"quotaRegex,omitempty" yaml:"quotaRegex,omitempty"`
+	ErrorRegex       string            `json:"errorRegex,omitempty" yaml:"errorRegex,omitempty"`
+	ErroRegex        string            `json:"error_regex,omitempty" yaml:"error_regex,omitempty"`
+	ErroRegexPT      string            `json:"erro_regex,omitempty" yaml:"erro_regex,omitempty"`
+	Reserva          []string          `json:"reserva,omitempty" yaml:"reserva,omitempty"`
+	PastasPermitidas []string          `json:"pastas_permitidas,omitempty" yaml:"pastas_permitidas,omitempty"`
+	EventLog         string            `json:"eventosLog,omitempty" yaml:"eventosLog,omitempty"`
+	Source           string            `json:"-" yaml:"-"`
 }
 
 var customMu sync.RWMutex
@@ -254,6 +255,9 @@ func resolveSpec(s CustomSpec, seen map[string]bool) (CustomSpec, error) {
 	}
 	if s.Reserva != nil {
 		base.Reserva = append([]string(nil), s.Reserva...)
+	}
+	if s.PastasPermitidas != nil {
+		base.PastasPermitidas = append([]string(nil), s.PastasPermitidas...)
 	}
 	if s.EventLog != "" {
 		base.EventLog = s.EventLog

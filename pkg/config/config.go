@@ -73,6 +73,8 @@ type ProjectConfig struct {
 	// SemRegrasPadrao desliga as regras curtas embutidas e o arquivo configurado.
 	RegrasPadrao    string `json:"regras_padroes" yaml:"regras_padroes"`
 	SemRegrasPadrao bool   `json:"sem_regras_padroes" yaml:"sem_regras_padroes"`
+	// PastasPermitidas são caminhos externos que os agentes podem tocar.
+	PastasPermitidas []string `json:"pastas_permitidas" yaml:"pastas_permitidas"`
 }
 
 // LoadProject lê a configuração opcional do projeto. Arquivo ausente não é erro.

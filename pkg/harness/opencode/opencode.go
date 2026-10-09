@@ -151,9 +151,48 @@ func (o *OpenCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig) 
 		}
 		env = harness.SetEnv(env, "OPENCODE_CONFIG_CONTENT", string(data))
 	}
+	if dirs := harness.OpcaoLista(cfg.Options, "pastas_permitidas"); len(dirs) > 0 {
+		data, err := opencodeExternalDirectoryConfig(env, dirs)
+		if err != nil {
+			return fmt.Errorf("permissões de pasta: %w", err)
+		}
+		env = harness.SetEnv(env, "OPENCODE_CONFIG_CONTENT", string(data))
+	}
 	o.env = env
 
 	return nil
+}
+
+func opencodeExternalDirectoryConfig(env []string, dirs []string) ([]byte, error) {
+	var root map[string]interface{}
+	for _, item := range env {
+		if strings.HasPrefix(item, "OPENCODE_CONFIG_CONTENT=") {
+			v := strings.TrimPrefix(item, "OPENCODE_CONFIG_CONTENT=")
+			if v != "" {
+				var candidate map[string]interface{}
+				if json.Unmarshal([]byte(v), &candidate) == nil {
+					root = candidate
+				}
+			}
+		}
+	}
+	if root == nil {
+		root = map[string]interface{}{}
+	}
+	perm, _ := root["permission"].(map[string]interface{})
+	if perm == nil {
+		perm = map[string]interface{}{}
+		root["permission"] = perm
+	}
+	ext, _ := perm["external_directory"].(map[string]interface{})
+	if ext == nil {
+		ext = map[string]interface{}{}
+		perm["external_directory"] = ext
+	}
+	for _, d := range dirs {
+		ext[strings.TrimRight(d, "/")+"/**"] = "allow"
+	}
+	return json.Marshal(root)
 }
 
 func (o *OpenCodeHarness) SendPrompt(ctx context.Context, text string, attachments []protocol.Attachment) error {

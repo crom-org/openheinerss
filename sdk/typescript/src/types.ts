@@ -17,6 +17,7 @@ export interface SessionOptions {
   semMcp?: boolean;
   /** Entrega só estes servidores de mcp.json. */
   mcp?: string[];
+  pastasPermitidas?: string[];
   /** Liga (true) ou desliga (false) o classificador de risco opcional; ausente segue o servidor (desligado). */
   classificarRisco?: boolean;
   /** Continua uma conversa existente do harness: id nativo ou id de sessão do openheinerss (aider não suporta). */
@@ -56,12 +57,14 @@ export interface RunOptions {
   maxAgentes?: number; tentativas?: number; cotaMax?: number; filhosObrigatorios?: boolean; cwd?: string; projeto?: string; quandoCargaAbaixo?: number;
   /** Argumentos nativos extras do harness: vão intactos e na ordem, sem filtro. */
   harnessArgs?: string[];
+  pastasPermitidas?: string[];
 }
 export interface DryRunResult {
   seco: true; nome: string; instancia: string; identidade: Identity; base: string; modelo: string; esforco?: string;
   worktree: string; branch: string; prompt: string; argv: string[]; env: Record<string, string>;
   limites: { maxAgentes: number; tentativas: number; cargaMaxima: number; quandoCargaAbaixo: number; cotaMax: number; limiteContexto: number; acaoContexto?: string };
   trocaConta: { decisao: string; fonte: string; instancia: string; percentual?: number; cache?: unknown[] };
+  pastasPermitidas?: string[];
 }
 export interface RunStarted { geracao: string; id: string; agente: string; projeto: string; }
 export interface AgentInfo { id?: string; agente: string; projeto: string; estado: string; motor?: string; modelo?: string; tentativa?: number; inicio?: string; fim?: string; codigo?: number; pid?: number; log?: string; }

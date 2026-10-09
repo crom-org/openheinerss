@@ -546,7 +546,7 @@ func (o *Orq) iniciar(p protocol.RodarIniciarParams) (protocol.RodarIniciarResul
 	o.mu.Unlock()
 	o.observarSemVarrer(dir, projeto)
 
-	opts := orchestrator.Options{Name: p.Nome, Motor: p.Motor, Model: p.Modelo, Effort: p.Esforco, PromptFile: p.Prompt, PromptText: p.Texto, Retomar: p.Retomar.Continuar, SessaoNativa: p.Retomar.ID, SemTrocaConta: p.SemTrocaConta, AgentsDir: p.Pasta, BranchBase: p.BranchBase, MaxLoad: p.CargaMax, MaxAgents: p.MaxAgentes, Attempts: p.Tentativas, QuotaMax: p.CotaMax, FilhosObrigatorios: p.FilhosObrigatorios, ViaServidor: true}
+	opts := orchestrator.Options{Name: p.Nome, Motor: p.Motor, Model: p.Modelo, Effort: p.Esforco, PromptFile: p.Prompt, PromptText: p.Texto, Retomar: p.Retomar.Continuar, SessaoNativa: p.Retomar.ID, SemTrocaConta: p.SemTrocaConta, AgentsDir: p.Pasta, BranchBase: p.BranchBase, MaxLoad: p.CargaMax, MaxAgents: p.MaxAgentes, Attempts: p.Tentativas, QuotaMax: p.CotaMax, PastasPermitidas: p.PastasPermitidas, FilhosObrigatorios: p.FilhosObrigatorios, ViaServidor: true}
 	opts.OnEvent = func(e orchestrator.Evento) { o.deJob(j, e) }
 	opts.DecidirFim = func(ctx context.Context, q orchestrator.Pergunta) (bool, string, bool) { return o.perguntar(ctx, j, q) }
 	go func() {

@@ -359,6 +359,7 @@ Flags:
       --account string              Alias em inglês de --conta
       --agentes string              Alias de --pasta-agentes
       --agents-dir string           Alias em inglês de --pasta-agentes
+      --allowed-dir strings         Alias em inglês de --permitir-pasta
       --arg stringArray             Alias de --harness-arg (default [])
       --arquivo-chaves string       Arquivo opcional de variáveis secretas (não imprime valores)
       --base-branch string          Alias em inglês de --branch-base
@@ -394,6 +395,7 @@ Flags:
       --parado-aviso duration       Avisa se log, worktree e último evento ficarem parados por este tempo (0 desliga; padrão 10m); vence parado: do config.yaml
       --parado-parar duration       Interrompe (SIGTERM no motor, código 5, retomável) depois deste tempo parado (0 desliga; padrão 20m); vence parado: do config.yaml
       --pasta-agentes string        Pasta dos agentes (padrão .claude/agentes)
+      --permitir-pasta strings      Pasta externa permitida (repetível)
       --prompt string               Arquivo de prompt alternativo
       --quando-carga-abaixo float   Só começa quando a carga numérica ficar abaixo deste valor
       --quota-max float             Alias em inglês de --cota-max
@@ -436,6 +438,7 @@ Aliases:
   run, executar
 
 Flags:
+      --allowed-dir strings       Alias em inglês de --permitir-pasta
       --arg stringArray           Alias de --harness-arg (default [])
       --classificar-risco         Acrescenta risco (baixo|medio|alto) e motivo a tool_call e permission_request; só informa, nunca bloqueia
       --classify-risk             Alias em inglês de --classificar-risco
@@ -454,6 +457,7 @@ Flags:
       --motor string              Harness base ou instância custom definida pelo usuário
       --no-mcp                    Alias em inglês de --sem-mcp
       --papel string              Papel definido em .openheinerss/motores.yaml
+      --permitir-pasta strings    Pasta externa permitida (repetível)
       --provedor string           Alias em português de --provider
       --provider string           Provedor do modelo
       --resume string             Alias em inglês de --retomar

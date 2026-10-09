@@ -7,6 +7,10 @@ Agentes comuns recebem uma worktree `agente/<nome>`. O padrão da pasta é
 vale a branch atual/HEAD; sem commits ou com `--branch-base` inexistente o
 `rodar` falha com a causa no log e no `FIM`, nunca em silêncio).
 
+## Pastas externas permitidas
+
+Use `--permitir-pasta <dir>` repetidamente (ou `--allowed-dir`). Os caminhos são expandidos e canonizados e também podem vir de `pastas_permitidas` na configuração global, do projeto ou da instância. `--seco` mostra a lista e os argumentos nativos. Claude, Codex e agy recebem `--add-dir`; OpenCode recebe `permission.external_directory` em `OPENCODE_CONFIG_CONTENT`; aider não tem sandbox por pasta. Uma pasta não liberada gera `pasta fora da worktree não liberada: <dir>; use --permitir-pasta` no log e no FIM.
+
 **Raiz do repositório.** A pasta de agentes, os logs, os limites e o nome do
 projeto são sempre os do REPOSITÓRIO (`git rev-parse --git-common-dir`), mesmo
 quando o `rodar` (ou `agentes`) é chamado de dentro de uma worktree, inclusive

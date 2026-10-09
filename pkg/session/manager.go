@@ -191,6 +191,16 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 	if len(params.Options.HarnessArgs) > 0 {
 		options[harness.OptionHarnessArgs] = append(harness.HarnessArgs(options), params.Options.HarnessArgs...)
 	}
+	if len(params.Options.PastasPermitidas) > 0 {
+		options["pastas_permitidas"] = append([]string(nil), params.Options.PastasPermitidas...)
+		options["add_dirs"] = append([]string(nil), params.Options.PastasPermitidas...)
+	}
+	if permitidas, err := config.PastasPermitidasEfetivas(params.CWD, params.Options.PastasPermitidas); err != nil {
+		return nil, &protocol.RPCError{Code: protocol.CodeInvalidParams, Message: err.Error()}
+	} else if len(permitidas) > 0 {
+		options["pastas_permitidas"] = permitidas
+		options["add_dirs"] = permitidas
+	}
 	if params.Options.SemMCP {
 		options[harness.OptionSemMCP] = true
 	} else if len(params.Options.MCP) > 0 {

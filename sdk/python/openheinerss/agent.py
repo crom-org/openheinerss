@@ -8,7 +8,7 @@ from .transport import StdioTransport, WebSocketTransport
 class RunOptions(TypedDict, total=False):
     nome: str; motor: str; modelo: str; esforco: str; prompt: str; texto: str; retomar: bool
     pasta: str; branchBase: str; cargaMax: float; quandoCargaAbaixo: float; maxAgentes: int; tentativas: int; cotaMax: float; filhosObrigatorios: bool; cwd: str; projeto: str
-    harnessArgs: list
+    harnessArgs: list; pastasPermitidas: list
 
 class OrchestrationEvent(TypedDict):
     type: str
@@ -35,6 +35,7 @@ class Agent:
         mcp: Optional[list] = None,
         classificar_risco: Optional[bool] = None,
         retomar: Optional[str] = None,
+        pastas_permitidas: Optional[list] = None,
     ):
         """transport="stdio" (padrão) sobe `serve --stdio`; "websocket" (ou url=) conecta a um
         `serve --porta N` já rodando (host/port, padrão 127.0.0.1:OPENHEINERSS_PORTA|4820; origin opcional)."""
@@ -47,6 +48,8 @@ class Agent:
             self._extras_sessao["semMcp"] = True
         if mcp:
             self._extras_sessao["mcp"] = [str(n) for n in mcp]
+        if pastas_permitidas:
+            self._extras_sessao["pastasPermitidas"] = [str(n) for n in pastas_permitidas]
         if classificar_risco is not None:
             self._extras_sessao["classificarRisco"] = bool(classificar_risco)
         # Teto de segurança sem nenhum evento durante um prompt (None/0 desliga).

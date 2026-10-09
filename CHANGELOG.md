@@ -9,6 +9,10 @@
 Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 
+## Não publicado
+
+- Adiciona `rodar --permitir-pasta`/`pastasPermitidas` em RPC e SDKs, configuração global/projeto/instância, normalização de caminhos e tradução para permissões nativas dos motores. `--seco` exibe as pastas e rejeições externas do OpenCode ficam explícitas.
+
 ## [1.7.0] — 2026-10-09
 
 - Adiciona `rodar --seco --json`, a RPC `rodar.seco` e suporte equivalente nos SDKs,

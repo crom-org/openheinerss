@@ -103,6 +103,7 @@ export class Openheinerss extends EventEmitter {
         harnessArgs: opts.harnessArgs,
         semMcp: opts.semMcp,
         mcp: opts.mcp,
+        pastasPermitidas: opts.pastasPermitidas,
         classificarRisco: opts.classificarRisco,
       },
     });

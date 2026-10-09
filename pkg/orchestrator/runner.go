@@ -61,10 +61,11 @@ type Options struct {
 	SessaoNativa string
 	EventLog     string
 	// HarnessArgs vai intacto, na ordem, para o processo do harness (--arg/--harness-arg).
-	HarnessArgs []string
-	Load        func() (float64, error)
-	Sleep       func(time.Duration)
-	Now         func() time.Time
+	HarnessArgs      []string
+	PastasPermitidas []string
+	Load             func() (float64, error)
+	Sleep            func(time.Duration)
+	Now              func() time.Time
 	// OnEvent recebe os eventos de orquestração (opcional; o CLI não usa).
 	OnEvent func(Evento)
 	// ViaServidor marca execuções lançadas por `serve`: o PID do meta.json é o do servidor.
@@ -361,7 +362,15 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	}
 	// --seco não toca no disco: nada de pastas, travas ou meta.json.
 	if o.Seco {
-		fmt.Printf("SECO: %s\n", dryRunCommand(o))
+		dirs := append([]string(nil), o.PastasPermitidas...)
+		if s, ok := harness.CustomSpecFor(o.Motor); ok {
+			dirs = append(dirs, s.PastasPermitidas...)
+		}
+		if permitidas, e := config.PastasPermitidasEfetivas(repo, dirs); e == nil {
+			fmt.Printf("SECO: %s\n", dryRunCommand(o)+" [pastas permitidas: "+strings.Join(permitidas, ", ")+"]")
+		} else {
+			fmt.Printf("SECO: %s\n", dryRunCommand(o))
+		}
 		return Result{Name: o.Name, Code: 0}, nil
 	}
 	if err := os.MkdirAll(filepath.Join(agents, "logs"), 0755); err != nil {
@@ -606,6 +615,21 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		if len(o.HarnessArgs) > 0 {
 			options[harness.OptionHarnessArgs] = append([]string(nil), o.HarnessArgs...)
 		}
+		configInstancia := []string(nil)
+		if s, ok := harness.CustomSpecFor(candidate); ok {
+			configInstancia = s.PastasPermitidas
+		}
+		permitidas, pe := config.PastasPermitidasEfetivas(repo, append(append([]string(nil), o.PastasPermitidas...), configInstancia...))
+		if pe != nil {
+			lastErr = pe
+			write("ERRO: " + pe.Error() + "\n")
+			cancel()
+			continue
+		}
+		if len(permitidas) > 0 {
+			options["pastas_permitidas"] = permitidas
+			options["add_dirs"] = permitidas
+		}
 		if resumeID != "" && resumeMotor == candidate {
 			options["codex_session_id"] = resumeID
 			options["claude_session_id"] = resumeID
@@ -662,7 +686,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		}
 		var textBuf string
 		quota := quotaPattern(candidate)
-		failed, quotaHit, providerFailure, reiniciarCtx := false, false, false, false
+		failed, quotaHit, providerFailure, reiniciarCtx, pastaNegada := false, false, false, false, false
 		quotaNotice := ""
 		providerNotice := ""
 		providerRe := providerPattern(candidate)
@@ -712,6 +736,11 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 						errMsg = curto(line, 200)
 					}
 				}
+				if erroPastaExterna(line) {
+					pastaNegada = true
+					errMsg = "pasta fora da worktree não liberada: " + pastaNoErro(line) + "; use --permitir-pasta"
+					write("ERRO: " + errMsg + "\n")
+				}
 				// Harness custom já detecta a cota pelo próprio regex e avisa com este erro.
 				if e, ok := ev.Payload.(protocol.ErrorParams); ok && strings.HasPrefix(e.Message, "limite de cota detectado") {
 					quotaHit = true
@@ -746,7 +775,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				// Avisos no stderr (rede, MCP) chegam como erro mas não derrubam a tarefa;
 				// quem decide é o motivo do fim.
 				if ev.Type == harness.EventComplete {
-					failed = quotaHit || providerFailure
+					failed = quotaHit || providerFailure || pastaNegada
 					if c, ok := ev.Payload.(protocol.CompleteParams); ok && falhaNoFim[c.Reason] {
 						failed = true
 						endReason = c.Reason
@@ -905,6 +934,24 @@ func perguntaDe(q protocol.PermissionRequestParams) string {
 		s += " (risco " + q.Risk + ")"
 	}
 	return s + "?"
+}
+
+func erroPastaExterna(s string) bool {
+	l := strings.ToLower(s)
+	return (strings.Contains(l, "external_directory") || strings.Contains(l, "external directory") || strings.Contains(l, "outside the worktree") || strings.Contains(l, "permission denied")) && strings.Contains(l, "permission")
+}
+
+func pastaNoErro(s string) string {
+	if i := strings.Index(s, "external_directory ("); i >= 0 {
+		v := s[i+len("external_directory ("):]
+		if j := strings.IndexByte(v, ')'); j >= 0 {
+			return strings.TrimSpace(v[:j])
+		}
+	}
+	if i := strings.Index(s, ": "); i >= 0 {
+		return strings.TrimSpace(s[i+2:])
+	}
+	return "<caminho indicado pelo motor>"
 }
 
 func readPrompt(agents, name, explicit, text string) (string, error) {
