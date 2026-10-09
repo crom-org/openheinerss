@@ -3,7 +3,7 @@
 Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 
-## Não publicado
+## [1.10.0] — 2026-10-09
 
 - Corrige `atualizar`: reconhece quando a release ou o commit local já estão instalados, evita reinstalação desnecessária e oferece reiniciar somente `serve` antigos; `--forcar` reinstala explicitamente.
 - Adiciona `openheinerss agentes mensagem <agente> <texto>` e a RPC `rodar.mensagem {agente, texto}` (SDKs: `sendMessage` /
