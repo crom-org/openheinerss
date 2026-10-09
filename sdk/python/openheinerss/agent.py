@@ -7,7 +7,7 @@ from .transport import StdioTransport, WebSocketTransport
 
 class RunOptions(TypedDict, total=False):
     nome: str; motor: str; modelo: str; esforco: str; prompt: str; texto: str; retomar: bool
-    pasta: str; branchBase: str; cargaMax: float; maxAgentes: int; tentativas: int; cotaMax: float; filhosObrigatorios: bool; cwd: str; projeto: str
+    pasta: str; branchBase: str; cargaMax: float; quandoCargaAbaixo: float; maxAgentes: int; tentativas: int; cotaMax: float; filhosObrigatorios: bool; cwd: str; projeto: str
     harnessArgs: list
 
 class OrchestrationEvent(TypedDict):
@@ -219,6 +219,10 @@ class Agent:
     def run(self, options: Dict[str, Any]) -> Dict[str, Any]:
         return self._request("rodar.iniciar", options)
 
+    def dry_run(self, options: Dict[str, Any]) -> Dict[str, Any]:
+        """Resolve uma execução sem criar arquivos nem iniciar o harness."""
+        return self._request("rodar.seco", options)
+
     def list_runs(self, **filter: str) -> Dict[str, Any]:
         return self._request("rodar.listar", filter)
 
@@ -265,6 +269,7 @@ class Agent:
     annotateCommand = annotate_command
     confirmCommand = confirm_command
     listRuns = list_runs
+    dryRun = dry_run
     stopRun = stop_run
     decideRun = decide_run
     getLimits = get_limits

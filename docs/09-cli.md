@@ -377,6 +377,7 @@ Flags:
       --events-log string           Alias em inglês de --eventos-log
       --filhos-obrigatorios         Falha (código 4, motivo "filho falhou") se algum agente filho terminou com código ≠ 0, sem FIM ou ainda rodando
       --harness-arg stringArray     Argumento nativo extra para o harness, intacto e na ordem (repetível) (default [])
+      --json                        Exibe o plano seco como JSON
       --keys-file string            Alias em inglês de --arquivo-chaves
       --limite-contexto int         Limite de tokens de contexto da sessão (0 desliga); vence contexto: do config.yaml
       --max-agentes int             Máximo de agentes simultâneos

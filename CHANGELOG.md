@@ -3,6 +3,12 @@
 Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 
+## Não publicado
+
+- Adiciona `rodar --seco --json`, a RPC `rodar.seco` e suporte equivalente nos SDKs,
+  com identidade, prompt final, worktree/branch, argv/env mascarados, limites e decisão
+  de troca de conta baseada somente no cache local.
+
 ## [1.6.0] — 2026-10-09
 
 - Torna `contaId` determinístico, faz `contas listar` usar o diretório padrão do

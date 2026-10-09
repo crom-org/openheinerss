@@ -53,9 +53,15 @@ export interface RunOptions {
   nome: string; motor: string; modelo?: string; esforco?: string; prompt?: string; texto?: string;
   /** true continua o agente (preserva o log); string retoma a conversa nativa do harness (id nativo ou de sessão). */
   retomar?: boolean | string; semTrocaConta?: boolean; pasta?: string; branchBase?: string; cargaMax?: number;
-  maxAgentes?: number; tentativas?: number; cotaMax?: number; filhosObrigatorios?: boolean; cwd?: string; projeto?: string;
+  maxAgentes?: number; tentativas?: number; cotaMax?: number; filhosObrigatorios?: boolean; cwd?: string; projeto?: string; quandoCargaAbaixo?: number;
   /** Argumentos nativos extras do harness: vão intactos e na ordem, sem filtro. */
   harnessArgs?: string[];
+}
+export interface DryRunResult {
+  seco: true; nome: string; instancia: string; identidade: Identity; base: string; modelo: string; esforco?: string;
+  worktree: string; branch: string; prompt: string; argv: string[]; env: Record<string, string>;
+  limites: { maxAgentes: number; tentativas: number; cargaMaxima: number; quandoCargaAbaixo: number; cotaMax: number; limiteContexto: number; acaoContexto?: string };
+  trocaConta: { decisao: string; fonte: string; instancia: string; percentual?: number; cache?: unknown[] };
 }
 export interface RunStarted { geracao: string; id: string; agente: string; projeto: string; }
 export interface AgentInfo { id?: string; agente: string; projeto: string; estado: string; motor?: string; modelo?: string; tentativa?: number; inicio?: string; fim?: string; codigo?: number; pid?: number; log?: string; }

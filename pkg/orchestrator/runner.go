@@ -52,6 +52,7 @@ type Options struct {
 	Retomar               bool
 	AgentsDir, BranchBase string
 	MaxLoad               float64
+	WhenLoadBelow         float64
 	MaxAgents, Attempts   int
 	QuotaMax              float64
 	// SemTrocaConta mantém o pulo de instância acima do limiar, mas não procura outra conta da mesma base.

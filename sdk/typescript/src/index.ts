@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { spawn, type ChildProcess } from "node:child_process";
-import type { SessionOptions, HarnessRegistration, PermissionRequest, ToolCall, ToolResult, RawLine, RunOptions, RunStarted, RunList, Limits, EventFilter, OrchestrationEventName, OrchestrationCallback, HarnessCommand, HarnessCommandList, Identity, Conta, HarnessCapabilities } from "./types.js";
+import type { SessionOptions, HarnessRegistration, PermissionRequest, ToolCall, ToolResult, RawLine, RunOptions, RunStarted, RunList, Limits, EventFilter, OrchestrationEventName, OrchestrationCallback, HarnessCommand, HarnessCommandList, Identity, Conta, HarnessCapabilities, DryRunResult } from "./types.js";
 
 export * from "./types.js";
 export * from "./react.js";
@@ -50,6 +50,7 @@ export class Openheinerss extends EventEmitter {
   /** Marca o primeiro uso do comando como já confirmado. */
   async confirmCommand(harness: string, comando: string): Promise<HarnessCommand> { await this.ensureTransport(); return this.sendRPC("harness.comandos.confirmar", { harness, comando }); }
   async run(options: RunOptions): Promise<RunStarted> { await this.ensureTransport(); return this.sendRPC("rodar.iniciar", options as unknown as Record<string, unknown>); }
+  async dryRun(options: RunOptions): Promise<DryRunResult> { await this.ensureTransport(); return this.sendRPC("rodar.seco", options as unknown as Record<string, unknown>); }
   async listRuns(filter: EventFilter = {}): Promise<RunList> { await this.ensureTransport(); return this.sendRPC("rodar.listar", filter as Record<string, unknown>); }
   async stopRun(idOrAgent: { id?: string; agente?: string }): Promise<void> { await this.ensureTransport(); await this.sendRPC("rodar.parar", idOrAgent); }
   /** `run` (id da execução, vem em `orq.precisa_decisao`) é opcional; se vier, o servidor confere. */
