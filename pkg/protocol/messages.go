@@ -82,11 +82,12 @@ type SessionCreateResult struct {
 }
 
 type Identity struct {
-	Instancia   string `json:"instancia"`
-	Base        string `json:"base"`
-	ContaID     string `json:"contaId"`
-	ConfigFonte string `json:"configFonte,omitempty"`
-	ContaDir    string `json:"contaDir"`
+	Instancia    string `json:"instancia"`
+	Base         string `json:"base"`
+	ContaID      string `json:"contaId"`
+	ContaIDFonte string `json:"contaIdFonte,omitempty"`
+	ConfigFonte  string `json:"configFonte,omitempty"`
+	ContaDir     string `json:"contaDir"`
 }
 
 type InstanceIdentityParams struct {

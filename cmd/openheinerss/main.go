@@ -1167,6 +1167,13 @@ func newHarnessCmd() *cobra.Command {
 			return err
 		}
 		target := filepath.Join(dir, filepath.Base(args[0]))
+		base := filepath.Base(args[0])
+		if strings.HasSuffix(base, ".yaml.yaml") {
+			target = filepath.Join(dir, strings.TrimSuffix(base, ".yaml"))
+		}
+		if strings.HasSuffix(base, ".yml.yml") {
+			target = filepath.Join(dir, strings.TrimSuffix(base, ".yml"))
+		}
 		if err := os.WriteFile(target, data, 0600); err != nil {
 			return err
 		}

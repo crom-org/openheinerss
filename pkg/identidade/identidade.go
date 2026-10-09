@@ -3,6 +3,7 @@ package identidade
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,9 @@ import (
 )
 
 func Para(nome string, env map[string]string) (protocol.Identity, error) {
+	if strings.EqualFold(nome, "codex2") {
+		return protocol.Identity{}, fmt.Errorf("codex2 removido: é a mesma conta do codex; use codex")
+	}
 	nome = harness.CanonicalName(nome)
 	base, configurado, fonte, err := configuracao(nome, map[string]bool{})
 	if err != nil {
@@ -34,8 +38,63 @@ func Para(nome string, env map[string]string) (protocol.Identity, error) {
 	if err != nil {
 		return protocol.Identity{}, err
 	}
+	id, idFonte := IDPara(base, dir)
+	return protocol.Identity{Instancia: nome, Base: base, ContaID: id, ContaIDFonte: idFonte, ConfigFonte: fonte, ContaDir: dir}, nil
+}
+
+// IDPara usa o identificador real da conta quando o CLI o persiste localmente.
+// O valor original nunca é retornado; somente seu hash curto sai no contrato.
+func IDPara(base, dir string) (string, string) {
+	var arquivos []string
+	switch strings.ToLower(base) {
+	case "codex":
+		arquivos = []string{filepath.Join(dir, "auth.json")}
+	case "claude-code":
+		arquivos = []string{filepath.Join(dir, ".claude.json"), filepath.Join(dir, ".credentials.json")}
+	}
+	for _, path := range arquivos {
+		if id := identificadorArquivo(path); id != "" {
+			sum := sha256.Sum256([]byte(id))
+			return hex.EncodeToString(sum[:])[:16], "id-real"
+		}
+	}
 	sum := sha256.Sum256([]byte(dir))
-	return protocol.Identity{Instancia: nome, Base: base, ContaID: hex.EncodeToString(sum[:])[:16], ConfigFonte: fonte, ContaDir: dir}, nil
+	return hex.EncodeToString(sum[:])[:16], "pasta"
+}
+
+func identificadorArquivo(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var v interface{}
+	if json.Unmarshal(b, &v) != nil {
+		return ""
+	}
+	return procurarIdentificador(v)
+}
+
+func procurarIdentificador(v interface{}) string {
+	if m, ok := v.(map[string]interface{}); ok {
+		for _, k := range []string{"account_id", "accountId", "accountUuid", "email"} {
+			if s, ok := m[k].(string); ok && strings.TrimSpace(s) != "" {
+				return strings.TrimSpace(s)
+			}
+		}
+		for _, x := range m {
+			if s := procurarIdentificador(x); s != "" {
+				return s
+			}
+		}
+	}
+	if a, ok := v.([]interface{}); ok {
+		for _, x := range a {
+			if s := procurarIdentificador(x); s != "" {
+				return s
+			}
+		}
+	}
+	return ""
 }
 
 func configuracao(nome string, seen map[string]bool) (string, map[string]string, string, error) {

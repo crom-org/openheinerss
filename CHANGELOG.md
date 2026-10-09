@@ -3,6 +3,11 @@
 Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 
+## Não publicado
+
+- Corrige limites do Codex/Claude: parse do wham com janelas e `voltaEm`, identidade por ID real, cache compartilhado com trava e respeito a 429.
+- Remove a instância fixa `codex2`, corrige extensões duplicadas de harness e sinaliza contas que apontam para a mesma identidade.
+
 ## [1.4.1] — 2026-10-09
 
 - `limites --atualizar` renova o OAuth do Claude após HTTP 401, respeita `Retry-After` em HTTP 429 usando o último cache bom e nomeia as janelas com `voltaEm`.

@@ -162,7 +162,7 @@ func TestHarnessGlobalEncontradoForaDoRepositorio(t *testing.T) {
 	bin := binarioTeste(t)
 	home, xdg, repo := t.TempDir(), t.TempDir(), t.TempDir()
 	global := filepath.Join(xdg, "openheinerss", "harnesses")
-	escrever(t, filepath.Join(global, "codex2.yaml"), "name: codex2\nbase: codex\nenv:\n  CODEX_HOME: ~/.codex-compartilhado\n")
+	escrever(t, filepath.Join(global, "codex-compartilhado.yaml"), "name: codex-compartilhado\nbase: codex\nenv:\n  CODEX_HOME: ~/.codex-compartilhado\n")
 	if out, err := exec.Command("git", "init", "-q", repo).CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v\n%s", err, out)
 	}
@@ -170,17 +170,17 @@ func TestHarnessGlobalEncontradoForaDoRepositorio(t *testing.T) {
 	c.Dir = repo
 	c.Env = []string{"HOME=" + home, "XDG_CONFIG_HOME=" + xdg, "PATH=" + os.Getenv("PATH")}
 	out, err := c.CombinedOutput()
-	if err != nil || !strings.Contains(string(out), "codex2") {
-		t.Fatalf("codex2 global não foi encontrado fora do repositório: %v\n%s", err, out)
+	if err != nil || !strings.Contains(string(out), "codex-compartilhado") {
+		t.Fatalf("instância Codex global não foi encontrada fora do repositório: %v\n%s", err, out)
 	}
 
 	// Uma instância de mesmo nome no projeto vence a global e aparece na identidade.
-	escrever(t, filepath.Join(repo, ".openheinerss", "harnesses", "codex2.yaml"), "name: codex2\nbase: codex\nenv:\n  CODEX_HOME: ~/.codex-do-projeto\n")
-	c = exec.Command(bin, "identidade", "codex2", "--json")
+	escrever(t, filepath.Join(repo, ".openheinerss", "harnesses", "codex-compartilhado.yaml"), "name: codex-compartilhado\nbase: codex\nenv:\n  CODEX_HOME: ~/.codex-do-projeto\n")
+	c = exec.Command(bin, "identidade", "codex-compartilhado", "--json")
 	c.Dir = repo
 	c.Env = []string{"HOME=" + home, "XDG_CONFIG_HOME=" + xdg, "PATH=" + os.Getenv("PATH")}
 	out, err = c.CombinedOutput()
-	if err != nil || !strings.Contains(string(out), filepath.Join(repo, ".openheinerss", "harnesses", "codex2.yaml")) {
+	if err != nil || !strings.Contains(string(out), filepath.Join(repo, ".openheinerss", "harnesses", "codex-compartilhado.yaml")) {
 		t.Fatalf("projeto não venceu o global: %v\n%s", err, out)
 	}
 }

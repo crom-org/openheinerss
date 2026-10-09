@@ -27,7 +27,7 @@ Execução: `openheinerss harness test --todos --timeout 20s`.
 | nome | base | modo | resultado | tempo | tokens | motivo |
 |---|---|---|---|---:|---:|---|
 | codex | codex | cli | OK | 3,641 s | 13.279 | texto e fim de sucesso confirmados |
-| codex2 | codex | cli | OK | 4,317 s | 11.757 | texto e fim de sucesso confirmados |
+| codex | codex | cli | OK | 4,317 s | 11.757 | texto e fim de sucesso confirmados |
 | claude-conta2 | claude-code | cli | OK | 2,121 s | 18.595 | texto e fim de sucesso confirmados |
 | claude-conta2 | claude-code | sdk | falha | 20,017 s | 0 | tempo esgotado |
 | opencode | opencode | cli | OK | 7,612 s | 13.724 | texto e fim de sucesso confirmados |
@@ -35,7 +35,7 @@ Execução: `openheinerss harness test --todos --timeout 20s`.
 | aider | aider | cli | falha | 20,002 s | 0 | tempo esgotado; CLI instalado, sem mensagem de cota/login |
 | agy | agy | cli | OK | 7,480 s | 0 | texto e fim de sucesso confirmados; motor não informou uso |
 
-O modo JSON também foi exercitado com `--json --pular codex2,agy --timeout 5s`; ele produziu a mesma matriz em JSON. O filtro `--incluir-principal` foi exercitado separadamente: `claude-code` CLI respondeu OK em 4,729 s com 21.027 tokens; o modo SDK atingiu timeout em 5 s. Isso foi um teste explícito de uma única frase, não uma tarefa pesada.
+O modo JSON também foi exercitado com `--json --pular codex,agy --timeout 5s`; ele produziu a mesma matriz em JSON. O filtro `--incluir-principal` foi exercitado separadamente: `claude-code` CLI respondeu OK em 4,729 s com 21.027 tokens; o modo SDK atingiu timeout em 5 s. Isso foi um teste explícito de uma única frase, não uma tarefa pesada.
 
 ## Testes extras
 
@@ -62,7 +62,7 @@ Os timeouts de Claude SDK e Aider foram registrados como falha por timeout, não
 
 ## Rodada de 08/10 09:40 (depois da etapa 4a)
 
-`openheinerss harness test --todos --timeout 90s`: 7 de 8 OK — codex, codex2, claude-conta2 (CLI e SDK), opencode, opencode-gratis e agy.
+`openheinerss harness test --todos --timeout 90s`: 7 de 8 OK — codex, codex, claude-conta2 (CLI e SDK), opencode, opencode-gratis e agy.
 `aider` (configuração padrão do usuário) falhou por causa **externa**: o provedor recusou por créditos ("request requires more credits, or fewer max_tokens"); o openheinerss classificou como "sem cota" em 3,4 s.
 Como resolver: usar a instância `aider-gratis` (`.openheinerss/harnesses/aider-gratis.yaml`, modelo `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`), que respondeu de verdade (611 tokens enviados, 47 recebidos, depois de uma nova tentativa automática por sobrecarga do provedor), ou pôr créditos/outro modelo no aider.
 
@@ -77,7 +77,7 @@ Como resolver: usar a instância `aider-gratis` (`.openheinerss/harnesses/aider-
 | claude-conta2 | claude-code | cli | OK | 27,0 s | 6 |
 | claude-conta2 | claude-code | sdk | OK | 6,2 s | 6 |
 | codex | codex | cli | OK | 1 min 57 s | 13.935 |
-| codex2 | codex | cli | OK | 46,4 s | 12.425 |
+| codex | codex | cli | OK | 46,4 s | 12.425 |
 | opencode | opencode | cli | OK | 14,1 s | 13.817 |
 | opencode-gratis | opencode | cli | OK | 13,2 s | 13.649 |
 
@@ -94,7 +94,7 @@ Binário compilado do código da revisão final; máquina com carga ~5. Comando:
 | claude-conta2 | claude-code | cli | OK | 3,0 s | 6 |
 | claude-conta2 | claude-code | sdk | OK | 8,2 s | 6 |
 | codex | codex | cli | OK | 22,3 s | 13.277 |
-| codex2 | codex | cli | OK | 4,0 s | 12.451 |
+| codex | codex | cli | OK | 4,0 s | 12.451 |
 | opencode | opencode | cli | OK | 10,6 s | 13.886 |
 | opencode-gratis | opencode | cli | OK | 5,2 s | 13.553 |
 

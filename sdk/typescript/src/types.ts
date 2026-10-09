@@ -20,8 +20,8 @@ export interface SessionOptions {
   /** Liga (true) ou desliga (false) o classificador de risco opcional; ausente segue o servidor (desligado). */
   classificarRisco?: boolean;
 }
-export interface Identity { instancia: string; base: string; contaId: string; configFonte?: string; contaDir: string; }
-export interface Conta { instancia: string; base: string; contaId: string; contaDir: string; temLogin: boolean; }
+export interface Identity { instancia: string; base: string; contaId: string; contaIdFonte?: string; configFonte?: string; contaDir: string; }
+export interface Conta { instancia: string; base: string; contaId: string; contaIdFonte?: string; contaDir: string; temLogin: boolean; }
 export interface SessionCreateResult { sessionId: string; harness: string; mode: string; cwd: string; status: string; identidade: Identity; }
 
 /** Nível do classificador de risco opcional (só informa, nunca bloqueia). */

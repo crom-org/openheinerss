@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/crom-org/openheinerss/pkg/harness"
+	"github.com/crom-org/openheinerss/pkg/identidade"
 )
 
 type Janela struct {
@@ -34,6 +35,8 @@ type Instancia struct {
 	IdadeSegundos int64    `json:"idadeSegundos,omitempty"`
 	Nota          string   `json:"nota,omitempty"`
 	Fonte         string   `json:"fonte"`
+	ContaID       string   `json:"contaId,omitempty"`
+	ContaIDFonte  string   `json:"contaIdFonte,omitempty"`
 }
 
 type Resultado struct {
@@ -64,8 +67,21 @@ func Obter() Resultado {
 	agora := time.Now()
 	instancias := make([]Instancia, 0)
 	seen := map[string]bool{}
+	porConta := map[string]string{}
 	add := func(i Instancia) {
 		i.Janelas = janelasVigentes(i.Janelas, agora)
+		if i.ContaID != "" {
+			if outra, ok := porConta[i.ContaID]; ok && outra != i.Nome {
+				i.Nota = fmt.Sprintf("mesma conta que %s", outra)
+				for _, anterior := range instancias {
+					if anterior.Nome == outra && len(i.Janelas) == 0 {
+						i.Janelas, i.DadoEm, i.Fonte = anterior.Janelas, anterior.DadoEm, anterior.Fonte
+					}
+				}
+			} else {
+				porConta[i.ContaID] = i.Nome
+			}
+		}
 		if !seen[i.Nome] {
 			seen[i.Nome] = true
 			instancias = append(instancias, i)
@@ -82,7 +98,6 @@ func Obter() Resultado {
 	// As instâncias base são independentes do diretório atual. O ambiente ainda
 	// pode escolher outro diretório para a instância principal.
 	addCodex("codex", expandHome(os.Getenv("CODEX_HOME"), filepath.Join(userHome(), ".codex")))
-	addCodex("codex2", filepath.Join(userHome(), ".codex-compartilhado"))
 	for _, nome := range nomesCustom() {
 		spec, _ := harness.CustomSpecFor(nome)
 		base := spec.Base
@@ -260,10 +275,13 @@ func lerCodex(nome, home string, agora time.Time) (Instancia, bool) {
 		_ = f.Close()
 	}
 	if best == nil {
-		return Instancia{Nome: nome, Base: "codex", Nota: "sem dado: sem leitura de limite nos arquivos de sessão", Fonte: "log"}, true
+		i := Instancia{Nome: nome, Base: "codex", Nota: "sem dado: sem leitura de limite nos arquivos de sessão", Fonte: "log"}
+		i.ContaID, i.ContaIDFonte = identidade.IDPara("codex", home)
+		return i, true
 	}
 	em := parseTime(best.Timestamp, agora)
 	i := Instancia{Nome: nome, Base: "codex", DadoEm: em.Format(time.RFC3339), IdadeSegundos: int64(agora.Sub(em).Seconds())}
+	i.ContaID, i.ContaIDFonte = identidade.IDPara("codex", home)
 	i.Fonte = "log"
 	for _, w := range []*rateWindow{best.Payload.RateLimits.Primary, best.Payload.RateLimits.Secondary} {
 		if w == nil {
@@ -289,7 +307,9 @@ func lerClaude(nome, dir string, agora time.Time) (Instancia, bool) {
 	statusPath := filepath.Join(userHome(), ".config", "crom-painel", "statusline-"+contaClaude(nome, dir)+".json")
 	b, err := os.ReadFile(statusPath)
 	if err != nil {
-		return Instancia{Nome: nome, Base: "claude-code", Nota: "sem dado: statusline não encontrado", Fonte: "statusline"}, true
+		i := Instancia{Nome: nome, Base: "claude-code", Nota: "sem dado: statusline não encontrado", Fonte: "statusline"}
+		i.ContaID, i.ContaIDFonte = identidade.IDPara("claude-code", dir)
+		return i, true
 	}
 	var v struct {
 		Em         float64 `json:"em"`
@@ -299,13 +319,16 @@ func lerClaude(nome, dir string, agora time.Time) (Instancia, bool) {
 		} `json:"rate_limits"`
 	}
 	if json.Unmarshal(b, &v) != nil {
-		return Instancia{Nome: nome, Base: "claude-code", Nota: "sem dado: statusline inválido", Fonte: "statusline"}, true
+		i := Instancia{Nome: nome, Base: "claude-code", Nota: "sem dado: statusline inválido", Fonte: "statusline"}
+		i.ContaID, i.ContaIDFonte = identidade.IDPara("claude-code", dir)
+		return i, true
 	}
 	em := time.UnixMilli(int64(v.Em))
 	if v.Em < 1e12 {
 		em = time.Unix(int64(v.Em), 0)
 	}
 	i := Instancia{Nome: nome, Base: "claude-code", DadoEm: em.Format(time.RFC3339), IdadeSegundos: int64(agora.Sub(em).Seconds()), Fonte: "statusline"}
+	i.ContaID, i.ContaIDFonte = identidade.IDPara("claude-code", dir)
 	for _, x := range []struct {
 		name string
 		w    *rateWindow

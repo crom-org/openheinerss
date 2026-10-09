@@ -2,8 +2,6 @@
 package contas
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,17 +10,20 @@ import (
 	"strings"
 
 	"github.com/crom-org/openheinerss/pkg/harness"
+	"github.com/crom-org/openheinerss/pkg/identidade"
 	"gopkg.in/yaml.v3"
 )
 
 type Conta struct {
-	Instancia string `json:"instancia"`
-	Base      string `json:"base"`
-	ContaID   string `json:"contaId"`
-	ContaDir  string `json:"contaDir"`
-	TemLogin  bool   `json:"temLogin"`
-	Arquivo   string `json:"arquivo,omitempty"`
-	Origem    string `json:"origem"`
+	Instancia     string `json:"instancia"`
+	Base          string `json:"base"`
+	ContaID       string `json:"contaId"`
+	ContaIDFonte  string `json:"contaIdFonte,omitempty"`
+	ContaDir      string `json:"contaDir"`
+	TemLogin      bool   `json:"temLogin"`
+	Arquivo       string `json:"arquivo,omitempty"`
+	Origem        string `json:"origem"`
+	MesmaContaQue string `json:"mesmaContaQue,omitempty"`
 }
 
 type Resultado struct {
@@ -97,9 +98,8 @@ func ContaDir(base, nome string) (string, error) {
 
 func arquivoInstancia(dir, instancia string) string { return filepath.Join(dir, instancia+".yaml") }
 
-func hashID(dir string) string {
-	s := sha256.Sum256([]byte(dir))
-	return hex.EncodeToString(s[:])[:16]
+func hashID(base, dir string) (string, string) {
+	return identidade.IDPara(base, dir)
 }
 
 func expand(s string) string {
@@ -155,7 +155,8 @@ func ler(dir, path string) (Conta, bool, error) {
 	if err != nil || nome != s.Name {
 		return Conta{}, false, nil
 	}
-	return Conta{Instancia: s.Name, Base: Base(base), ContaID: hashID(login), ContaDir: login, TemLogin: temLogin(base, login), Arquivo: path}, true, nil
+	id, fonte := hashID(Base(base), login)
+	return Conta{Instancia: s.Name, Base: Base(base), ContaID: id, ContaIDFonte: fonte, ContaDir: login, TemLogin: temLogin(base, login), Arquivo: path}, true, nil
 }
 
 func Listar(dir string) ([]Conta, error) {
@@ -296,7 +297,8 @@ func Adicionar(dir, harnessNome, apelido string) (Resultado, error) {
 	if err := harness.RegisterCustom(s); err != nil {
 		return Resultado{}, err
 	}
-	return Resultado{Conta: Conta{Instancia: instancia, Base: base, ContaID: hashID(login), ContaDir: login, TemLogin: false, Arquivo: path}, ComandoLogin: LoginCommand(base)}, nil
+	id, fonte := hashID(base, login)
+	return Resultado{Conta: Conta{Instancia: instancia, Base: base, ContaID: id, ContaIDFonte: fonte, ContaDir: login, TemLogin: false, Arquivo: path}, ComandoLogin: LoginCommand(base)}, nil
 }
 
 func Renomear(dir, antigo, novo string) (Conta, error) {
