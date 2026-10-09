@@ -211,6 +211,7 @@ Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC d
 	rootCmd.AddCommand(newIdentityCmd())
 	rootCmd.AddCommand(newCapacidadesCmd())
 	rootCmd.AddCommand(novaContasCmd())
+	rootCmd.AddCommand(newAtualizarCmd())
 	return rootCmd
 }
 

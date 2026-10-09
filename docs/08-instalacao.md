@@ -18,6 +18,24 @@ Dentro de um clone, `./install.sh --local` ignora o release e compila o código 
 
 Quem usa o binário global precisa reinstalá-lo para receber esta versão (`./install.sh --local` ou o instalador de release). O binário global não é alterado por `make build`; executar `bin/openheinerss` usa sempre o build local.
 
+## Atualizar o que está instalado e rodando
+
+```bash
+openheinerss atualizar --seco          # mostra o plano, sem alterar nada
+openheinerss atualizar                 # compila do clone (se a pasta atual for o repositório) ou baixa a última release
+openheinerss atualizar --release       # força a release do GitHub (confere o checksum publicado)
+openheinerss atualizar --de-fonte --repo ~/openheinerss
+openheinerss atualizar --voltar        # restaura <destino>.anterior e reinicia os serve
+```
+
+O binário é gravado em arquivo temporário na mesma pasta e movido com `rename` (atômico); o anterior fica em
+`~/.local/bin/openheinerss.anterior` (`--destino` troca o caminho). Em Linux, os `openheinerss serve` do usuário
+que usam esse binário são encerrados com SIGTERM e relançados desacoplados (`setsid`) com os mesmos argumentos,
+ambiente e pasta, e o comando confere que a porta voltou a responder; `--sem-reiniciar` pula essa etapa. Agentes
+`rodar` em andamento nunca são tocados: o comando só lista quais continuam na versão antiga. `serve --stdio` também
+não é reiniciado (depende do processo pai). Em outros sistemas não há reinício automático. `--json` devolve o
+plano/resultado para a Central.
+
 ## Go
 
 Quem já usa o toolchain Go pode instalar a versão publicada do módulo:

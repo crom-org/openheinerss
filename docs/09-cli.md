@@ -14,6 +14,7 @@ Usage:
 
 Available Commands:
   agentes     Lista e controla agentes em execução
+  atualizar   Atualiza o binário instalado e reinicia os 'serve' em execução (--voltar desfaz)
   capacidades Mostra o que cada harness lê e aceita (instruções, skills, MCP, retomada, permissões)
   comandos    Lista os comandos nativos (/compact, /model…) de um harness ou instância e como são repassados
   config      Mostra a configuração efetiva (global + projeto)
@@ -70,6 +71,34 @@ Global Flags:
       --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 Use "openheinerss agentes [command] --help" for more information about a command.
+
+```
+
+## `openheinerss atualizar --help`
+
+```text
+Instala uma nova versão do Openheinerss de forma atômica (guarda a anterior em <destino>.anterior) e reinicia os 'serve' do usuário que usam esse binário, com os mesmos argumentos, ambiente e pasta. Agentes 'rodar' em andamento não são tocados: o comando só lista quais continuam na versão antiga.
+
+Usage:
+  openheinerss atualizar [flags]
+
+Aliases:
+  atualizar, update, upgrade
+
+Flags:
+      --de-fonte         Compila do repositório local (padrão se a pasta atual for o repositório)
+      --destino string   Binário a atualizar (padrão ~/.local/bin/openheinerss)
+      --json             Saída em JSON (para a Central)
+      --release          Baixa o binário da última release do GitHub e confere o checksum
+      --repo string      Repositório local para --de-fonte (padrão: pasta atual ou $OPENHEINERSS_REPO)
+      --seco             Mostra o plano sem alterar nada
+      --sem-reiniciar    Instala, mas não reinicia os 'serve' em execução
+      --voltar           Restaura o binário anterior (<destino>.anterior) e reinicia os 'serve'
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 

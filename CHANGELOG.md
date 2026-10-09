@@ -3,6 +3,13 @@
 Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 
+## Não publicado
+
+- Adiciona `openheinerss atualizar [--seco] [--sem-reiniciar] [--de-fonte|--release] [--voltar] [--destino] [--json]`:
+  instala a nova versão de forma atômica (a anterior fica em `<destino>.anterior`), reinicia os `serve` em
+  execução com os mesmos argumentos, ambiente e pasta, confere que a porta voltou e só lista os agentes `rodar`
+  que continuam na versão antiga. `--voltar` restaura o binário anterior.
+
 ## [1.7.0] — 2026-10-09
 
 - Adiciona `rodar --seco --json`, a RPC `rodar.seco` e suporte equivalente nos SDKs,
