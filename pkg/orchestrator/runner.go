@@ -77,6 +77,11 @@ type Options struct {
 	// nil/vazio = não dados (LimiteContexto 0 desliga). Veja contexto.go.
 	LimiteContexto *int
 	AcaoContexto   string
+	// ParadoAviso e ParadoParar (--parado-aviso/--parado-parar) vencem o config.yaml; nil = não dados
+	// (0 desliga). Dar ParadoParar > 0 liga a ação "parar". Veja parado.go.
+	ParadoAviso, ParadoParar *time.Duration
+	// ParadoIntervalo é o intervalo entre as checagens do detector (padrão 60 s).
+	ParadoIntervalo time.Duration
 }
 
 // CodigoNegado é o código de fim quando uma negação de permissão encerra a execução.
@@ -440,6 +445,11 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	turnos := novoRegistroTurnos(work, o.Name, &cur, metaPath, o.Now)
 	turnos.Marcar("base")
 	estado := novoEstadoAgente(logsDir, o.Name, work, repo, o.BranchBase, prompt, o.Now)
+	parado, err := iniciarParado(ctx, o, repo, work, logPath, logsDir, write)
+	if err != nil {
+		return abort(err)
+	}
+	defer parado.Fechar()
 	// Quem for lançado de dentro do harness (`openheinerss rodar` filho) sabe quem é o pai e onde se registrar.
 	if absLogs, err := filepath.Abs(logsDir); err == nil {
 		env := make(map[string]string, len(keys)+2)
@@ -600,8 +610,17 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		// Cota e sobrecarga só valem em canal de erro (evento de erro, stderr do motor, resultado com
 		// is_error); o texto livre do agente nunca é examinado.
 		errMsg, endReason := "", ""
+		parado.Ativo(true)
 		for {
 			select {
+			case msg := <-parado.Parar():
+				// O detector já mandou SIGTERM ao grupo do motor; fecha como erro retomável.
+				_ = h.Stop()
+				cancel()
+				turnos.Marcar("parado")
+				pararFilhos(logsDir, o.Name, o.Now())
+				cur.Motivo = MotivoParado
+				return finish(CodigoParado, MotivoParado+": "+curto(msg, 160), candidate, true), nil
 			case ev := <-h.Events():
 				turnos.TocarEvento()
 				line := eventText(ev)
@@ -690,6 +709,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			}
 		}
 	done:
+		parado.Ativo(false)
 		if resumable, ok := h.(interface{ ResumeID() string }); ok {
 			if id := resumable.ResumeID(); id != "" {
 				resumeID, resumeMotor = id, candidate

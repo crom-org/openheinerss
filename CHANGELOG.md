@@ -12,6 +12,10 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 ### Adicionado (arquivo de estado e resumo velho)
 
 - `logs/<nome>.estado.md` gravado pelo `rodar` a cada turno, mandado ao motor na retomada, na troca de motor e no recomeço por limite de contexto no lugar do texto fixo. Resumo (`RELATORIO-AGENTE.md`) descartado se o HEAD mudou ou se passou de `OPENHEINERSS_RESUMO_MAX_TURNOS` (padrão 2) turnos; então vai o histórico. Ver `docs/07-rodar.md`.
+### Adicionado (detector de agente parado)
+
+- O `rodar` cruza log sem escrita, worktree sem mudança, mesmo último evento e CPU (Linux) a cada 60 s: aviso `[parado] …` (e `orq.parado` no log de eventos) após 10 min; com `acao: parar` (ou `--parado-parar`), SIGTERM no motor após 20 min, `motivo` `"parado"` e **código de fim 5** (retomável). CPU ativa só avisa; log ativo com o mesmo evento é "laço" (só aviso).
+- Chave `parado:` no `config.yaml` (`aviso_min`, `parar_min`, `acao`; projeto vence global), flags `--parado-aviso`/`--parado-parar` e `OPENHEINERSS_PARADO_AVISO_MIN`/`_PARAR_MIN`/`_ACAO`. `agentes listar` passa a distinguir `parado` (S1+S2+S3) de `lento` (só o log sem escrita).
 
 ### Adicionado (meta.json, órfãos, checkpoints)
 

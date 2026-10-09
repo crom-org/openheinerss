@@ -143,7 +143,7 @@ func carregarInstancias(cwd string) error {
 	return harness.LoadCustom(cwd)
 }
 
-// codigoSaida faz o processo terminar com o código do FIM do rodar (0 ok, 1 erro, 2 sem cota, 3 negado, 4 filho falhou, 130 parado).
+// codigoSaida faz o processo terminar com o código do FIM do rodar (0 ok, 1 erro, 2 sem cota, 3 negado, 4 filho falhou, 5 parado pelo detector, 130 parado).
 type codigoSaida int
 
 func (c codigoSaida) Error() string { return fmt.Sprintf("código de saída %d", int(c)) }
@@ -765,6 +765,7 @@ func newRodarCmd() *cobra.Command {
 	var mcpNomes []string
 	var limiteContexto int
 	var acaoContexto string
+	var paradoAviso, paradoParar time.Duration
 	cmd := &cobra.Command{
 		Use:     "rodar <nome> <instância|harness>",
 		Aliases: []string{"launch", "dispatch"},
@@ -800,7 +801,14 @@ func newRodarCmd() *cobra.Command {
 			if cmd.Flags().Changed("limite-contexto") || cmd.Flags().Changed("context-limit") {
 				limiteCtx = &limiteContexto
 			}
-			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{LimiteContexto: limiteCtx, AcaoContexto: acaoContexto, Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Mode: modo, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog, HarnessArgs: harnessArgs, EsperarFilhos: espera, RodadasFilhos: rodadasFilhos, FilhosObrigatorios: filhosObrigatorios, Pai: os.Getenv(orchestrator.EnvPai), PaiLogs: os.Getenv(orchestrator.EnvPaiLogs)})
+			var pAviso, pParar *time.Duration
+			if cmd.Flags().Changed("parado-aviso") {
+				pAviso = &paradoAviso
+			}
+			if cmd.Flags().Changed("parado-parar") {
+				pParar = &paradoParar
+			}
+			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{ParadoAviso: pAviso, ParadoParar: pParar, LimiteContexto: limiteCtx, AcaoContexto: acaoContexto, Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Mode: modo, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog, HarnessArgs: harnessArgs, EsperarFilhos: espera, RodadasFilhos: rodadasFilhos, FilhosObrigatorios: filhosObrigatorios, Pai: os.Getenv(orchestrator.EnvPai), PaiLogs: os.Getenv(orchestrator.EnvPaiLogs)})
 			if err != nil && res.Name == "" {
 				return err
 			}
@@ -858,6 +866,8 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().IntVar(&limiteContexto, "context-limit", 0, "Alias em inglês de --limite-contexto")
 	cmd.Flags().StringVar(&acaoContexto, "acao-contexto", "", "O que fazer ao passar do limite: aviso ou nova-sessao; vence contexto: do config.yaml")
 	cmd.Flags().StringVar(&acaoContexto, "context-action", "", "Alias em inglês de --acao-contexto")
+	cmd.Flags().DurationVar(&paradoAviso, "parado-aviso", 0, "Avisa se log, worktree e último evento ficarem parados por este tempo (0 desliga; padrão 10m); vence parado: do config.yaml")
+	cmd.Flags().DurationVar(&paradoParar, "parado-parar", 0, "Interrompe (SIGTERM no motor, código 5, retomável) depois deste tempo parado (0 desliga; padrão 20m); vence parado: do config.yaml")
 	cmd.Flags().BoolVar(&seco, "seco", false, "Mostra o comando sem executá-lo")
 	cmd.Flags().BoolVar(&seco, "dry-run", false, "Alias em inglês de --seco")
 	cmd.Flags().StringVar(&regras, "regras", "", "Arquivo de regras do prompt")

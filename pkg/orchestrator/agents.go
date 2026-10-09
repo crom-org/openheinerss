@@ -85,17 +85,17 @@ func ListAgents(agentsDir string, now time.Time) ([]Agente, error) {
 			a.Estado = MotivoOrfao
 			a.Codigo = m.Codigo
 			a.Duracao = durationSince(m.Inicio, m.Fim)
+		} else if m.Fim != "" && m.Motivo == MotivoParado {
+			a.Estado = fmt.Sprintf("parado (código %d, retomável)", valueOr(m.Codigo, CodigoParado))
+			a.Codigo = m.Codigo
+			a.Duracao = durationSince(m.Inicio, m.Fim)
 		} else if m.Fim != "" {
 			a.Estado = fmt.Sprintf("terminou código %d", valueOr(m.Codigo, 0))
 			a.Codigo = m.Codigo
 			a.Duracao = durationSince(m.Inicio, m.Fim)
 		} else if estaVivo(m) {
 			a.PaiMorto = paiMorto(logs, m)
-			if staleLog(logPath, now) {
-				a.Estado = "parado"
-			} else {
-				a.Estado = "rodando"
-			}
+			a.Estado = estadoVivo(logs, name, logPath, now)
 			a.Orfao = paiTerminou(logs, m)
 			a.Duracao = durationSince(m.Inicio, now.Format(time.RFC3339))
 		} else {

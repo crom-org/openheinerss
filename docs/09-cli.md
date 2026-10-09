@@ -301,6 +301,8 @@ Flags:
       --no-default-rules            Alias em inglês de --sem-regras-padrao
       --no-mcp                      Alias em inglês de --sem-mcp
       --no-rules                    Alias em inglês de --sem-regras
+      --parado-aviso duration       Avisa se log, worktree e último evento ficarem parados por este tempo (0 desliga; padrão 10m); vence parado: do config.yaml
+      --parado-parar duration       Interrompe (SIGTERM no motor, código 5, retomável) depois deste tempo parado (0 desliga; padrão 20m); vence parado: do config.yaml
       --pasta-agentes string        Pasta dos agentes (padrão .claude/agentes)
       --prompt string               Arquivo de prompt alternativo
       --quando-carga-abaixo float   Só começa quando a carga numérica ficar abaixo deste valor
