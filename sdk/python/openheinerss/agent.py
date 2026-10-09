@@ -56,6 +56,7 @@ class Agent:
             self.transport = StdioTransport(bin_path)
         self.req_id = 1
         self.generation: Optional[str] = None
+        self.session_identity: Optional[Dict[str, Any]] = None
         self.callbacks: Dict[str, Callable[[Dict[str, Any]], None]] = {}
         self.transport.on_event = self._event
         self.session_id = self._create_session(
@@ -99,6 +100,7 @@ class Agent:
         if "error" in response:
             raise RuntimeError(response["error"]["message"])
         self.generation = response.get("geracao")
+        self.session_identity = response["result"].get("identidade")
         return response["result"]["sessionId"]
 
     def stream(self, text: str, timeout: Optional[float] = None) -> Generator[Dict[str, Any], None, None]:
@@ -230,6 +232,9 @@ class Agent:
 
     def get_limits(self) -> Dict[str, Any]:
         return self._request("limites.obter", {})
+
+    def identidade(self, instancia: str) -> Dict[str, Any]:
+        return self._request("instancia.identidade", {"instancia": instancia})
 
     def subscribe_events(self, callback: Optional[Callable[[Dict[str, Any]], None]] = None, **filter: str) -> None:
         if callback:

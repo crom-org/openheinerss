@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -39,6 +40,7 @@ type CustomSpec struct {
 	ErroRegexPT string            `json:"erro_regex,omitempty" yaml:"erro_regex,omitempty"`
 	Reserva     []string          `json:"reserva,omitempty" yaml:"reserva,omitempty"`
 	EventLog    string            `json:"eventosLog,omitempty" yaml:"eventosLog,omitempty"`
+	Source      string            `json:"-" yaml:"-"`
 }
 
 var customMu sync.RWMutex
@@ -135,6 +137,17 @@ func CustomSpecFor(name string) (CustomSpec, bool) {
 	return s, ok
 }
 
+func CanonicalName(name string) string {
+	customMu.RLock()
+	defer customMu.RUnlock()
+	for n := range customSpecs {
+		if strings.EqualFold(n, name) {
+			return n
+		}
+	}
+	return name
+}
+
 func resolveSpec(s CustomSpec, seen map[string]bool) (CustomSpec, error) {
 	if s.Name == "" {
 		return s, fmt.Errorf("harness custom: campo name é obrigatório")
@@ -171,6 +184,7 @@ func resolveSpec(s CustomSpec, seen map[string]bool) (CustomSpec, error) {
 	}
 	base.Name = s.Name
 	base.Base = s.Base
+	base.Source = s.Source
 	if s.DisplayName != "" {
 		base.DisplayName = s.DisplayName
 	}
@@ -273,6 +287,7 @@ func LoadCustomFile(path string) error {
 	if s.Name == "" {
 		s.Name = strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(filepathBase(path), ".yaml"), ".yml"), ".json")
 	}
+	s.Source, _ = filepath.Abs(path)
 	return RegisterCustom(s)
 }
 func filepathBase(p string) string {

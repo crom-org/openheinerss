@@ -10,6 +10,7 @@ import (
 	"github.com/crom-org/openheinerss/pkg/comandos"
 	"github.com/crom-org/openheinerss/pkg/doctor"
 	"github.com/crom-org/openheinerss/pkg/harness"
+	"github.com/crom-org/openheinerss/pkg/identidade"
 	"github.com/crom-org/openheinerss/pkg/limites"
 	"github.com/crom-org/openheinerss/pkg/mcp"
 	"github.com/crom-org/openheinerss/pkg/orchestrator"
@@ -54,6 +55,16 @@ func (r *Router) SetNegarEncerra(v bool) {
 func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (response protocol.Response) {
 	defer func() { response.Geracao = r.geracao }()
 	switch req.Method {
+	case protocol.MethodInstanceIdentity:
+		var p protocol.InstanceIdentityParams
+		if err := json.Unmarshal(req.Params, &p); err != nil || p.Instancia == "" {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para instancia.identidade", nil)
+		}
+		res, err := identidade.Para(p.Instancia, nil)
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, err.Error(), nil)
+		}
+		return protocol.NewResponse(req.ID, res)
 	case protocol.MethodSessionCreate:
 		var params protocol.SessionCreateParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {

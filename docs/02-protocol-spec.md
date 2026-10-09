@@ -6,6 +6,18 @@ O protocolo de comunicação entre o cliente e o binário Openheinerss é basead
 
 ## 1. Comandos do Cliente -> Openheinerss (Requests)
 
+### `instancia.identidade`
+Resolve uma instância sem criar sessão. A resposta identifica a configuração efetiva sem
+expor segredos: `contaId` é os primeiros 16 hex do SHA-256 do caminho absoluto, limpo e
+resolvido por symlink da pasta de login (`CLAUDE_CONFIG_DIR`, `CODEX_HOME` ou equivalente).
+`session.create` devolve o mesmo objeto em `identidade`, ligado atomicamente ao `sessionId`.
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"instancia.identidade","params":{"instancia":"claude-conta2"}}
+```
+
+Resultado: `{"instancia":"claude-conta2","base":"claude-code","contaId":"0123456789abcdef","configFonte":"/config/harnesses/claude-conta2.yaml","contaDir":"/home/user/.claude-conta2"}`.
+
 ### `session.create`
 Inicia uma nova sessão de agente com o harness escolhido.
 ```json

@@ -1,10 +1,8 @@
-# Relatório do agente
+# Relatório — identidade de conta
 
-- Corrigida a resolução da pasta de configuração: `XDG_CONFIG_HOME` explícito
-  agora é respeitado também no macOS e Windows; sem ele, permanece o caminho
-  nativo de `os.UserConfigDir`. Aplicado a comandos, contexto, MCP e risco.
-- Decisão: corrigir o código, pois os testes usam `XDG_CONFIG_HOME` para isolar
-  a configuração e esse contrato deve ser portátil entre sistemas.
-- Verificações: `go build ./...`, `go vet ./...`, `go test ./...`,
-  `go test -count=2 ./...` e `go test -race ./...` passaram (22 pacotes; 0
-  falhas). `go run ./cmd/openheinerss docs --check` também passou.
+- Implementado `identidade` efetiva no `session.create`, no RPC `instancia.identidade` e na CLI `openheinerss identidade <instancia> [--json]`.
+- `contaId` usa os 16 primeiros hex do SHA-256 do diretório absoluto, limpo e resolvido por symlink; nomes de instância não diferenciam maiúsculas/minúsculas. O modo retornado agora é o modo real do adaptador.
+- SDKs TypeScript, Python e PHP expõem a identidade da sessão e `identidade(instancia)`. Protocolo, SDKs, CLI gerado e CHANGELOG foram atualizados.
+- Testes de identidade usam apenas diretórios temporários e cobrem symlink, nomes equivalentes e pastas diferentes.
+
+Verificações: `go build ./...` OK; `go vet ./...` OK; `go test ./...` OK; `go test -count=2 ./...` OK (23 pacotes); `go test -race ./...` OK; `docs --check` OK; Python 23 testes OK; TypeScript 7 testes OK; PHP integração OK.

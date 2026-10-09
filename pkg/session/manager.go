@@ -13,6 +13,7 @@ import (
 
 	"github.com/crom-org/openheinerss/pkg/checkpoint"
 	"github.com/crom-org/openheinerss/pkg/harness"
+	"github.com/crom-org/openheinerss/pkg/identidade"
 	"github.com/crom-org/openheinerss/pkg/motor"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 	"github.com/crom-org/openheinerss/pkg/risco"
@@ -118,6 +119,10 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 	if params.Harness == "" {
 		params.Harness = "mock"
 	}
+	ident, err := identidade.Para(params.Harness, params.Env)
+	if err != nil {
+		return nil, &protocol.RPCError{Code: protocol.CodeInvalidParams, Message: err.Error()}
+	}
 
 	mode := harness.Mode(params.Mode)
 	if mode == "" {
@@ -131,6 +136,8 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 			Message: fmt.Sprintf("Harness '%s' não encontrado: %v", params.Harness, err),
 		}
 	}
+	mode = h.Mode()
+	params.Harness = h.Name()
 
 	// 1. Valida pré-requisitos do harness
 	prereq := h.ValidatePrerequisites(ctx)
@@ -223,11 +230,12 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 	_ = m.storage.Record(params.CWD, sessID, "system", nil, "", cfg)
 
 	return &protocol.SessionCreateResult{
-		SessionID: sessID,
-		Harness:   params.Harness,
-		Mode:      string(mode),
-		CWD:       params.CWD,
-		Status:    "ready",
+		SessionID:  sessID,
+		Harness:    params.Harness,
+		Mode:       string(mode),
+		CWD:        params.CWD,
+		Status:     "ready",
+		Identidade: ident,
 	}, nil
 }
 
@@ -268,6 +276,11 @@ func (m *Manager) ResumeSession(ctx context.Context, params protocol.SessionResu
 	if err != nil {
 		return nil, &protocol.RPCError{Code: protocol.CodeHarnessNotFound, Message: err.Error()}
 	}
+	mode = h.Mode()
+	ident, err := identidade.Para(cfg.Harness, cfg.Env)
+	if err != nil {
+		return nil, &protocol.RPCError{Code: protocol.CodeInvalidParams, Message: err.Error()}
+	}
 	if p := h.ValidatePrerequisites(ctx); !p.Satisfied {
 		return nil, &protocol.RPCError{Code: protocol.CodeHarnessDependencyMissing, Message: strings.Join(p.MissingItems, ", "), Data: protocol.ErrorData{SuggestedFix: p.SuggestedFix}}
 	}
@@ -290,7 +303,7 @@ func (m *Manager) ResumeSession(ctx context.Context, params protocol.SessionResu
 	m.sessions[s.ID] = s
 	m.mu.Unlock()
 	go m.forwardEvents(s)
-	return &protocol.SessionResumeResult{SessionID: s.ID, Harness: cfg.Harness, Mode: string(mode), CWD: cfg.CWD, Status: "ready"}, nil
+	return &protocol.SessionResumeResult{SessionID: s.ID, Harness: cfg.Harness, Mode: string(mode), CWD: cfg.CWD, Status: "ready", Identidade: ident}, nil
 }
 
 func (m *Manager) PromptSession(ctx context.Context, params protocol.SessionPromptParams) (*protocol.SessionPromptResult, error) {

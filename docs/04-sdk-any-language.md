@@ -10,6 +10,11 @@ confirmação do primeiro uso fica no cliente; o SDK só lê e grava o estado.
 
 `decideRun(id, resposta, mensagem?, run?)`: `run` (id da execução, vem em `orq.precisa_decisao`) é opcional e, se enviado, o servidor recusa a resposta quando ele não bate com o da decisão. Em `run`, `texto` é o prompt em texto e `prompt` é o caminho de um arquivo de prompt.
 
+As sessões expõem a identidade efetiva em `session.create`: `identidade` contém `instancia`,
+`base`, `contaId`, `configFonte` e `contaDir`. O método `identidade(instancia)` consulta a
+mesma informação sem criar sessão. No TypeScript ela fica também em `client.sessionIdentity`;
+em Python, em `agent.session_identity`; em PHP, em `$agent->identidade`.
+
 ## TypeScript
 
 O pacote em `sdk/typescript/` exporta `Openheinerss` e o hook React pelo próprio pacote `@openheinerss/sdk` (não há pacote separado `@openheinerss/react`). A configuração usa `options`, `wsEndpoint` e `transport`.

@@ -19,6 +19,7 @@ Available Commands:
   docs        Gera ou verifica o manual do CLI em docs/09-cli.md
   doctor      Verifica ferramentas, dependências e pré-requisitos do sistema
   harness     Lista, instala e testa harnesses
+  identidade  Mostra a identidade efetiva de uma instância
   init        Inicializa o diretório .openheinerss no repositório atual
   limites     Mostra as cotas locais das instâncias Codex e Claude
   mcp         Gerencia os servidores MCP (Model Context Protocol) do projeto
@@ -176,6 +177,26 @@ Global Flags:
       --configuracao string   Alias de --config
 
 Use "openheinerss harness [command] --help" for more information about a command.
+
+```
+
+## `openheinerss identidade --help`
+
+```text
+Mostra a identidade efetiva de uma instância
+
+Usage:
+  openheinerss identidade <instancia> [flags]
+
+Aliases:
+  identidade, identity
+
+Flags:
+      --json   Imprime o resultado em JSON
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
 
 ```
 
