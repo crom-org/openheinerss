@@ -1,0 +1,38 @@
+{
+  "plan_type": "plus",
+  "rate_limit": {
+    "allowed": true,
+    "limit_reached": false,
+    "primary_window": {
+      "used_percent": 37,
+      "limit_window_seconds": 18000,
+      "reset_after_seconds": 8629,
+      "reset_at": 1791534987
+    },
+    "secondary_window": {
+      "used_percent": 70,
+      "limit_window_seconds": 604800,
+      "reset_after_seconds": 431588,
+      "reset_at": 1791957946
+    }
+  },
+  "code_review_rate_limit": null,
+  "additional_rate_limits": null,
+  "model_usage": {},
+  "credits": {
+    "has_credits": false,
+    "unlimited": false,
+    "overage_limit_reached": false,
+    "balance": "0"
+  },
+  "spend_control": {
+    "reached": false,
+    "individual_limit": null
+  },
+  "rate_limit_reached_type": null,
+  "promo": null,
+  "rate_limit_reset_credits": {
+    "available_count": 1,
+    "applicable_available_count": 0
+  }
+}
