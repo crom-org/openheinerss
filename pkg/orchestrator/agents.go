@@ -31,6 +31,12 @@ type Agente struct {
 	Orfaos []string `json:"orfaos,omitempty"`
 	// Orfao marca um filho vivo cujo pai já terminou.
 	Orfao bool `json:"orfao,omitempty"`
+	// PaiMorto marca um filho cujo pai morreu sem dar FIM (o filho não é alterado).
+	PaiMorto bool `json:"pai_morto,omitempty"`
+	// Campos do meta.json úteis para quem acompanha o agente (detector de parado, arquivo de estado).
+	UltimoEventoEm string       `json:"ultimo_evento_em,omitempty"`
+	Head           string       `json:"head,omitempty"`
+	Checkpoints    []Checkpoint `json:"checkpoints,omitempty"`
 }
 
 // ListAgents lista os agentes da pasta, inclusive execuções terminadas.
@@ -61,17 +67,30 @@ func ListAgents(agentsDir string, now time.Time) ([]Agente, error) {
 		a := Agente{Nome: name, Projeto: m.Projeto, Motor: m.Motor, Modelo: m.Modelo, Tentativa: m.Tentativa, Inicio: m.Inicio, PID: m.PID, LogFile: logPath, MetaFile: filepath.Join(logs, entry.Name())}
 		a.UltimaLinha = lastUsefulLine(logPath)
 		a.Pai = m.Pai
+		a.UltimoEventoEm, a.Head, a.Checkpoints = m.UltimoEventoEm, m.Head, m.Checkpoints
+		if metaOrfao(m) {
+			// Processo morto sem FIM (ou PID reutilizado): fecha o meta e libera a vaga.
+			if fecharOrfao(logs, name, m, now) == nil {
+				code := codigoOrfao
+				m.Fim, m.Codigo, m.Motivo = now.Format(time.RFC3339), &code, MotivoOrfao
+			}
+		}
 		for _, f := range listarFilhos(logs, name) {
 			a.Filhos = append(a.Filhos, f.Nome)
 			if m.Fim != "" && lerFilho(f).Vivo {
 				a.Orfaos = append(a.Orfaos, f.Nome)
 			}
 		}
-		if m.Fim != "" {
+		if m.Fim != "" && m.Motivo == MotivoOrfao {
+			a.Estado = MotivoOrfao
+			a.Codigo = m.Codigo
+			a.Duracao = durationSince(m.Inicio, m.Fim)
+		} else if m.Fim != "" {
 			a.Estado = fmt.Sprintf("terminou código %d", valueOr(m.Codigo, 0))
 			a.Codigo = m.Codigo
 			a.Duracao = durationSince(m.Inicio, m.Fim)
-		} else if processAlive(m.PID) {
+		} else if estaVivo(m) {
+			a.PaiMorto = paiMorto(logs, m)
 			if staleLog(logPath, now) {
 				a.Estado = "parado"
 			} else {
@@ -80,7 +99,7 @@ func ListAgents(agentsDir string, now time.Time) ([]Agente, error) {
 			a.Orfao = paiTerminou(logs, m)
 			a.Duracao = durationSince(m.Inicio, now.Format(time.RFC3339))
 		} else {
-			a.Estado = "parado"
+			a.Estado = MotivoOrfao
 			a.Duracao = durationSince(m.Inicio, now.Format(time.RFC3339))
 		}
 		result = append(result, a)
@@ -186,37 +205,47 @@ func ShowAgentLog(agentsDir, name string, lines int) (string, error) {
 
 // StopAgent encerra apenas o processo registrado para o agente e seu grupo.
 func StopAgent(agentsDir, name string, now time.Time) error {
+	_, err := PararAgente(agentsDir, name, now)
+	return err
+}
+
+// PararAgente é o StopAgent que também diz se o agente era órfão (processo já morto, sem FIM): nesse caso
+// não manda sinal algum, só fecha o meta com código -1 e motivo "órfão".
+func PararAgente(agentsDir, name string, now time.Time) (orfao bool, err error) {
 	metaPath := filepath.Join(agentsDir, "logs", name+".meta.json")
 	b, err := os.ReadFile(metaPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			if err := os.MkdirAll(filepath.Dir(metaPath), 0755); err != nil {
-				return err
+				return false, err
 			}
 			// A fila/inicialização ainda não tem meta. A marca é consumida
 			// pelo Run sob a trava de vagas antes de criar a worktree.
 			if err := os.WriteFile(filepath.Join(agentsDir, "logs", name+".cancelado"), []byte(now.Format(time.RFC3339)+"\n"), 0600); err != nil {
-				return err
+				return false, err
 			}
-			return nil
+			return false, nil
 		}
-		return err
+		return false, err
 	}
 	var m meta
 	if err := json.Unmarshal(b, &m); err != nil {
-		return fmt.Errorf("ler meta de %s: %w", name, err)
+		return false, fmt.Errorf("ler meta de %s: %w", name, err)
 	}
 	if m.Fim != "" {
-		return fmt.Errorf("agente %s já terminou", name)
+		return false, fmt.Errorf("agente %s já terminou", name)
 	}
 	if m.PID <= 0 {
-		return fmt.Errorf("agente %s não tem PID válido", name)
+		return false, fmt.Errorf("agente %s não tem PID válido", name)
+	}
+	if !estaVivo(m) {
+		return true, fecharOrfao(filepath.Join(agentsDir, "logs"), name, m, now)
 	}
 	if m.Servidor {
-		return fmt.Errorf("agente %s foi lançado por um servidor (PID %d); pare-o com rodar.parar, não pelo PID", name, m.PID)
+		return false, fmt.Errorf("agente %s foi lançado por um servidor (PID %d); pare-o com rodar.parar, não pelo PID", name, m.PID)
 	}
 	if err := stopAgentProcess(m.PID); err != nil {
-		return fmt.Errorf("parar agente %s (PID %d): %w", name, m.PID, err)
+		return false, fmt.Errorf("parar agente %s (PID %d): %w", name, m.PID, err)
 	}
 	// Um rodar vivo trata o SIGTERM sozinho (SIGINT pode vir ignorado de um shell com `&`): fecha meta e log (FIM 130). Só escrevemos o fim
 	// quando ele não o fez (processo já morto ou que ignorou o sinal).
@@ -224,7 +253,7 @@ func StopAgent(agentsDir, name string, now time.Time) error {
 		if b, err := os.ReadFile(metaPath); err == nil {
 			var atual meta
 			if json.Unmarshal(b, &atual) == nil && atual.Fim != "" {
-				return nil
+				return false, nil
 			}
 		}
 		if !processAlive(m.PID) {
@@ -235,14 +264,14 @@ func StopAgent(agentsDir, name string, now time.Time) error {
 	code := 130
 	m.Fim, m.Codigo = now.Format(time.RFC3339), &code
 	if err := writeMeta(metaPath, m); err != nil {
-		return err
+		return false, err
 	}
 	logPath := filepath.Join(agentsDir, "logs", name+".log")
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer f.Close()
 	_, err = fmt.Fprintf(f, "\nFIM %s código 130\n", now.Format("15:04"))
-	return err
+	return false, err
 }

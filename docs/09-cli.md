@@ -15,6 +15,7 @@ Usage:
 Available Commands:
   agentes     Lista e controla agentes em execução
   comandos    Lista os comandos nativos (/compact, /model…) de um harness ou instância e como são repassados
+  config      Mostra a configuração efetiva (global + projeto)
   docs        Gera ou verifica o manual do CLI em docs/09-cli.md
   doctor      Verifica ferramentas, dependências e pré-requisitos do sistema
   harness     Lista, instala e testa harnesses
@@ -48,6 +49,8 @@ Aliases:
   agentes, agents
 
 Available Commands:
+  checkpoints Lista os checkpoints git do agente (n, quando, motivo, resumo do diff)
+  desfazer    Volta a worktree do agente a um checkpoint (sem n: o anterior ao último)
   listar      Lista os agentes e seus estados
   parar       Para somente o agente informado
   ver         Mostra o fim do log de um agente
@@ -93,6 +96,25 @@ Global Flags:
       --configuracao string   Alias de --config
 
 Use "openheinerss comandos [command] --help" for more information about a command.
+
+```
+
+## `openheinerss config --help`
+
+```text
+Mostra a configuração efetiva (global + projeto)
+
+Usage:
+  openheinerss config [command]
+
+Available Commands:
+  contexto    Mostra o limite de contexto efetivo e de onde vem cada campo
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
+Use "openheinerss config [command] --help" for more information about a command.
 
 ```
 
@@ -244,6 +266,7 @@ Aliases:
   rodar, launch, dispatch
 
 Flags:
+      --acao-contexto string        O que fazer ao passar do limite: aviso ou nova-sessao; vence contexto: do config.yaml
       --account string              Alias em inglês de --conta
       --agentes string              Alias de --pasta-agentes
       --agents-dir string           Alias em inglês de --pasta-agentes
@@ -254,6 +277,8 @@ Flags:
       --carga-maxima float          Carga máxima de 1 minuto; 0 desativa
       --child-rounds int            Alias em inglês de --rodadas-filhos
       --conta string                Conta/provedor da instância
+      --context-action string       Alias em inglês de --acao-contexto
+      --context-limit int           Alias em inglês de --limite-contexto
       --cota-max float              Pula instâncias com uso de cota igual ou acima deste percentual (0 desativa)
       --dry-run                     Alias em inglês de --seco
       --effort string               Alias em inglês de --esforco
@@ -264,6 +289,7 @@ Flags:
       --filhos-obrigatorios         Falha (código 4, motivo "filho falhou") se algum agente filho terminou com código ≠ 0, sem FIM ou ainda rodando
       --harness-arg stringArray     Argumento nativo extra para o harness, intacto e na ordem (repetível) (default [])
       --keys-file string            Alias em inglês de --arquivo-chaves
+      --limite-contexto int         Limite de tokens de contexto da sessão (0 desliga); vence contexto: do config.yaml
       --max-agentes int             Máximo de agentes simultâneos
       --max-agents int              Alias em inglês de --max-agentes
       --max-load float              Alias em inglês de --carga-maxima
@@ -392,6 +418,46 @@ Global Flags:
 
 ```
 
+## `openheinerss agentes checkpoints --help`
+
+```text
+Lista os checkpoints git do agente (n, quando, motivo, resumo do diff)
+
+Usage:
+  openheinerss agentes checkpoints <nome> [flags]
+
+Global Flags:
+      --agents-dir string      Alias em inglês de --pasta-agentes (default ".claude/agentes")
+      --config string          Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string    Alias de --config
+      --json                   Emite JSON
+      --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
+
+```
+
+## `openheinerss agentes desfazer --help`
+
+```text
+Volta a worktree do agente a um checkpoint (sem n: o anterior ao último)
+
+Usage:
+  openheinerss agentes desfazer <nome> [n] [flags]
+
+Aliases:
+  desfazer, undo
+
+Flags:
+      --forcar   Restaura mesmo com o agente rodando
+
+Global Flags:
+      --agents-dir string      Alias em inglês de --pasta-agentes (default ".claude/agentes")
+      --config string          Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string    Alias de --config
+      --json                   Emite JSON
+      --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
+
+```
+
 ## `openheinerss agentes listar --help`
 
 ```text
@@ -487,6 +553,27 @@ Global Flags:
       --configuracao string   Alias de --config
       --cwd string            Pasta do projeto onde procurar comandos/skills do harness (padrão: pasta atual)
       --json                  Emite JSON
+
+```
+
+## `openheinerss config contexto --help`
+
+```text
+Mostra a regra de contexto (contexto: no config.yaml) que o rodar usaria.
+Ordem: projeto.harnesses[instância] > projeto.harnesses[base] > projeto.padrao >
+global.harnesses[instância] > global.harnesses[base] > global.padrao, campo a campo.
+O projeto é <repo>/.openheinerss/config.yaml; o global é --config/OPENHEINERSS_CONFIG ou, sem eles,
+~/.config/openheinerss/config.yaml e ~/.openheinerss/config.yaml (este vence).
+
+Usage:
+  openheinerss config contexto [flags]
+
+Flags:
+      --harness string   Instância ou harness a resolver (padrão: o padrão e os citados no config)
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
 
 ```
 

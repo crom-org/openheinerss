@@ -104,6 +104,8 @@ Registra um harness ou instância em tempo de execução, sem gravar arquivo. Os
 
 Todos os eventos gerados pelos diferentes harnesses são normalizados para estes tipos:
 
+Todo evento `agent.*` leva em `sessionId` o id devolvido por `session.create`/`session.resume`. Quando o motor tem um id próprio da conversa (ex.: o `session_id` do Claude Code), ele vai à parte em `nativeSessionId`.
+
 ### `agent.thinking`
 Streaming do raciocínio interno do modelo (Extended Thinking / CoT).
 ```json

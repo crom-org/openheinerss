@@ -118,6 +118,45 @@ Códigos de FIM do `rodar`: 0 ok, 1 erro, 2 sem cota, 3 negado (`--negar-encerra
 As regras padrão do prompt incluem: "Se lançar agentes filhos ou comandos em segundo plano, o openheinerss te
 acorda quando eles terminarem; não encerre dizendo que vai esperar sem ter lançado nada."
 
+### Meta.json, órfãos e checkpoints
+
+O `meta.json` de cada agente ganhou campos opcionais (um meta antigo continua legível): `ultimo_evento_em` (RFC3339, atualizado a cada evento do motor, no máximo uma escrita a cada 5 s), `head` (sha do HEAD da worktree no fim de cada turno/tentativa), `inicio_pid` (horário de início do processo, campo 22 de `/proc/<pid>/stat`; vazio fora do Linux, para não confundir um PID reutilizado) e `checkpoints` (`n`, `ref`, `sha`, `em`, `motivo`).
+
+**Órfão.** Meta sem `fim` cujo processo morreu (ou cujo PID agora é de outro processo, por `inicio_pid`) aparece como `órfão` em `agentes listar`; a listagem grava `fim`, `codigo` -1 e `motivo` `"órfão"` e a vaga volta ao limite. `agentes parar` de um órfão não manda sinal: só fecha o meta. Um filho cujo pai morreu sem FIM aparece como `PAI MORTO` (`pai_morto` no `--json`) e não é alterado.
+
+**Checkpoint git-sombra.** No começo e no fim de cada turno/tentativa o `rodar` grava, na worktree do agente, um commit da árvore inteira (arquivos novos incluídos, `.gitignore` respeitado) em `refs/openheinerss/<nome>/<n>`, usando um índice temporário: o índice, o HEAD e a branch do agente não mudam, e só grava se a árvore mudou desde o último. Sem git, nada é feito (o `pkg/checkpoint`, por cópia de arquivos, segue como alternativa do servidor e dos SDKs).
+
+- `openheinerss agentes checkpoints <nome>` lista `n`, quando, motivo e o `git diff --shortstat` contra o anterior.
+- `openheinerss agentes desfazer <nome> [n]` restaura a worktree do agente (nunca o repositório principal) ao checkpoint `n`; sem `n`, ao anterior ao último. Antes, guarda o estado atual como checkpoint `antes-de-desfazer` (use o `n` dele para refazer). Se o checkpoint tem outro HEAD, a branch volta ao pai registrado com `git reset --soft` (os commits de depois seguem alcançáveis pelo checkpoint `antes-de-desfazer`); arquivos não rastreados somem com `git clean -fd` (sem `-x`: ignorados ficam). Recusa se o agente está rodando, a menos que `--forcar`.
+- `ApagarCheckpoints(dir, nome)` (Go) remove as refs do agente; use-o ao apagar a worktree.
+
+### Limite de contexto por projeto e por harness
+
+O contexto grande é onde a conta mais gasta. A chave `contexto:` do `config.yaml` define um limite de tokens
+e o que fazer ao passar dele; vale no projeto (`<repo>/.openheinerss/config.yaml`) e no global
+(`--config`/`OPENHEINERSS_CONFIG`, ou `~/.config/openheinerss/config.yaml` e `~/.openheinerss/config.yaml`,
+este vence), e o projeto vence o global:
+
+```yaml
+contexto:
+  padrao: {limite_tokens: 150000, acao: aviso}   # acao: aviso | nova-sessao
+  harnesses:
+    claude-conta2: {acao: nova-sessao}            # nome de instância ou de harness base
+    codex: {limite_tokens: 200000}
+```
+
+Cada campo é resolvido separadamente, nesta ordem: projeto (instância, base, `padrao`), depois global
+(instância, base, `padrao`). Sem nada, fica desligado. `--limite-contexto N` (`0` desliga) e
+`--acao-contexto aviso|nova-sessao` vencem a configuração. `openheinerss config contexto [--harness X]` mostra
+o valor efetivo e de onde vem cada campo. Arquivo inválido é erro e a execução nem começa.
+
+O tamanho do contexto é o `input` do último evento de uso (o `total` se só ele vier). Ao chegar no limite:
+`aviso` escreve `[contexto] N tokens >= limite L (origem: projeto|global|flag)` no log, uma vez por sessão, e
+uma linha `orq.contexto` no log de eventos (`--eventos-log`). `nova-sessao` avisa, encerra o turno e recomeça o
+MESMO motor em sessão nova (sem a sessão nativa), com o prompt original mais o texto de continuação. Não conta
+como tentativa nem como falha de cota; no máximo 3 reinícios por execução (depois só avisa), registrados em
+`reinicios_contexto` no `meta.json`.
+
 ### Contas AGY como instâncias
 
 Contas não ficam no código. Os exemplos `examples/harnesses/agy-conta1.yaml` e

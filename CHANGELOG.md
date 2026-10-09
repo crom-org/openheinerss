@@ -4,6 +4,23 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). A 1.2.0 está preparada mas
 **não publicada** (sem tag, release ou pacote): a publicação depende do ok do dono do projeto.
 
+## Não publicado
+
+### Corrigido (sessionId dos eventos)
+
+- Os eventos `agent.*` do servidor sempre levam o `sessionId` de `session.create`; o id nativo do motor (ex.: Claude Code) vai em `nativeSessionId`. Antes o claude-code mandava o id nativo e a Central não casava os eventos.
+
+### Adicionado (meta.json, órfãos, checkpoints)
+
+- `meta.json` com `ultimo_evento_em`, `head`, `inicio_pid` e `checkpoints` (todos opcionais).
+- `agentes listar` mostra `órfão` (processo morto sem `fim`, ou PID reutilizado) e fecha o meta com código -1; `agentes parar` de órfão só fecha o meta; filho de pai morto aparece como `PAI MORTO`.
+- Checkpoint git-sombra por turno (`refs/openheinerss/<nome>/<n>`), `agentes checkpoints <nome>` e `agentes desfazer <nome> [n] [--forcar]`. Ver `docs/07-rodar.md`.
+
+### Adicionado (limite de contexto por projeto e harness)
+
+- Chave `contexto:` no `config.yaml` (global e de projeto, o projeto vence; campo a campo: instância > harness base > `padrao`) com `limite_tokens` e `acao` (`aviso` ou `nova-sessao`). `rodar --limite-contexto N` (`0` desliga) e `--acao-contexto` vencem a configuração; `openheinerss config contexto [--harness X]` mostra o efetivo e a origem.
+- No `rodar`, ao passar do limite: aviso `[contexto] …` no log (uma vez por sessão) e linha `orq.contexto` no log de eventos; com `nova-sessao`, o turno termina e o mesmo motor recomeça em sessão nova (sem sessão nativa), no máximo 3 vezes, sem contar como tentativa. `reinicios_contexto` no `meta.json`.
+
 ## [1.2.0] — não publicada
 
 Tudo o que mudou desde a v1.1.0. SDKs TypeScript, Python e PHP em **1.2.0**.
