@@ -1,6 +1,6 @@
 # Harness custom
 
-Harnesses custom são carregados no início do comando a partir de `.openheinerss/harnesses/*.(yaml|yml|json)` e de `~/.config/openheinerss/harnesses`. O diretório do projeto vence o do usuário.
+Harnesses custom são carregados no início do comando a partir de `.openheinerss/harnesses/*.(yaml|yml|json)` e da configuração global do usuário (`$XDG_CONFIG_HOME/openheinerss/harnesses` — ou o diretório nativo equivalente — além do legado `~/.openheinerss/harnesses`). O diretório do projeto vence o do usuário, inclusive quando o comando roda fora dele.
 
 ### Pasta de configuração explícita (`--config`)
 
@@ -40,7 +40,9 @@ Mensagens de provedor podem chegar como erro antes de um fim `completed`. O padr
 
 Herança usa `base: claude-code` (ou outro harness custom já carregado) e faz merge de `env`; `command`, `args`, `model`, `prompt` e regexes podem ser substituídos. Veja `examples/cco-openrouter.yaml` e `examples/harness-ndjson.sh`.
 
-`openheinerss harness list`, `harness add <arquivo>` e `harness test <nome> --prompt 'responda OK'` gerenciam e verificam os harnesses. Pelo protocolo e SDKs, `harness.register`/`registerHarness({...})` registra um spec em tempo de execução sem gravar arquivo.
+`openheinerss harness list`, `harness add <arquivo>` (ou `--global`) e `harness test <nome> --prompt 'responda OK'` gerenciam e verificam os harnesses. Pelo protocolo e SDKs, `harness.register`/`registerHarness({...})` registra um spec em tempo de execução sem gravar arquivo.
+
+Contas de login seguem a mesma mesclagem: `contas adicionar` grava globalmente por padrão, `--projeto` grava em `.openheinerss/harnesses`, `contas listar` informa `origem`, e `contas migrar --sim` copia as instâncias do projeto sem remover as originais.
 
 ## MCP e risco
 

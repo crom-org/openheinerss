@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/crom-org/openheinerss/pkg/config"
 	"github.com/crom-org/openheinerss/pkg/harness/process"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 	"gopkg.in/yaml.v3"
@@ -260,16 +261,16 @@ func resolveSpec(s CustomSpec, seen map[string]bool) (CustomSpec, error) {
 	return base, nil
 }
 
-// LoadCustom carrega o projeto e ~/.config/openheinerss (projeto vence usuário).
+// LoadCustom carrega as instâncias globais e o projeto (projeto vence usuário).
 func LoadCustom(cwd string) error {
 	return LoadCustomDir(cwd + "/.openheinerss/harnesses")
 }
 
-// LoadCustomDir carrega ~/.config/openheinerss/harnesses e depois dir (dir vence usuário).
+// LoadCustomDir carrega as instâncias globais e depois dir (dir vence usuário).
 func LoadCustomDir(dir string) error {
-	paths := []string{}
-	if home, err := os.UserHomeDir(); err == nil {
-		paths = append(paths, home+"/.config/openheinerss/harnesses")
+	paths, err := config.UserHarnessDirs()
+	if err != nil {
+		return fmt.Errorf("resolver harnesses globais: %w", err)
 	}
 	paths = append(paths, dir)
 	for _, dir := range paths {

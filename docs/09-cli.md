@@ -134,6 +134,7 @@ Aliases:
 Available Commands:
   adicionar   Cria a pasta e a instância e abre o login nativo
   listar      Lista instâncias de conta sem ler credenciais
+  migrar      Copia as instâncias do projeto atual para o global
   remover     Remove a instância e, opcionalmente, sua pasta de login
   renomear    Renomeia a instância sem mover o login
 
@@ -194,7 +195,7 @@ Usage:
   openheinerss harness [command]
 
 Available Commands:
-  add         Valida e copia um arquivo de harness para o projeto
+  add         Valida e copia um arquivo de harness para o projeto ou global
   list        Lista harnesses embutidos e custom
   test        Executa um prompt curto e mostra eventos
 
@@ -638,6 +639,7 @@ Aliases:
   adicionar, add
 
 Flags:
+      --projeto     Grava a instância no projeto atual (por padrão, grava no global)
       --sem-login   Só cria a pasta e a instância
 
 Global Flags:
@@ -659,6 +661,23 @@ Aliases:
 
 Flags:
       --json   Emite JSON
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
+```
+
+## `openheinerss contas migrar --help`
+
+```text
+Copia as instâncias do projeto atual para o global
+
+Usage:
+  openheinerss contas migrar [flags]
+
+Flags:
+      --sim   Confirma a migração sem perguntar
 
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
@@ -707,13 +726,16 @@ Global Flags:
 ## `openheinerss harness add --help`
 
 ```text
-Valida e copia um arquivo de harness para o projeto
+Valida e copia um arquivo de harness para o projeto ou global
 
 Usage:
   openheinerss harness add <arquivo> [flags]
 
 Aliases:
   add, adicionar
+
+Flags:
+      --global   Grava na configuração global do usuário
 
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual

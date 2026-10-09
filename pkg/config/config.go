@@ -30,6 +30,36 @@ func UserConfigDir() (string, error) {
 	return os.UserConfigDir()
 }
 
+// UserHarnessDirs retorna as pastas globais de instâncias, na ordem de
+// precedência. A primeira usa o resolvedor de configuração do sistema (e
+// XDG_CONFIG_HOME quando definido); a segunda preserva o formato antigo em
+// ~/.openheinerss.
+func UserHarnessDirs() ([]string, error) {
+	configDir, err := UserConfigDir()
+	if err != nil {
+		return nil, err
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	first := filepath.Join(configDir, "openheinerss", "harnesses")
+	legacy := filepath.Join(home, WorkspaceDirName, "harnesses")
+	if filepath.Clean(first) == filepath.Clean(legacy) {
+		return []string{first}, nil
+	}
+	return []string{first, legacy}, nil
+}
+
+// UserHarnessDir é a pasta global principal, usada para novas gravações.
+func UserHarnessDir() (string, error) {
+	dirs, err := UserHarnessDirs()
+	if err != nil {
+		return "", err
+	}
+	return dirs[0], nil
+}
+
 // ProjectConfig configurações do projeto local
 type ProjectConfig struct {
 	Version        string `json:"version" yaml:"version"`

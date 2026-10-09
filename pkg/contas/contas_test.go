@@ -53,3 +53,36 @@ func TestCicloContaSemLerCredencial(t *testing.T) {
 		t.Fatalf("remoção deveria preservar pasta: %v", err)
 	}
 }
+
+func TestCamadasProjetoVenceEMigraSemApagar(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	global, projeto, destino := filepath.Join(t.TempDir(), "global"), filepath.Join(t.TempDir(), "projeto"), filepath.Join(t.TempDir(), "novo-global")
+	for _, dir := range []string{global, projeto} {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := Adicionar(global, "codex", "um"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Adicionar(projeto, "codex", "dois"); err != nil {
+		t.Fatal(err)
+	}
+	items, err := ListarCamadas([]string{global}, projeto)
+	if err != nil || len(items) != 2 {
+		t.Fatalf("camadas: %+v (%v)", items, err)
+	}
+	for _, item := range items {
+		if item.Origem == "" {
+			t.Fatalf("origem ausente: %+v", item)
+		}
+	}
+	n, err := Migrar(projeto, destino)
+	if err != nil || n != 1 {
+		t.Fatalf("migração: %d (%v)", n, err)
+	}
+	if _, err := os.Stat(filepath.Join(projeto, "codex-dois.yaml")); err != nil {
+		t.Fatalf("projeto foi apagado: %v", err)
+	}
+}

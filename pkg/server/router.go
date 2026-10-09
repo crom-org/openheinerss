@@ -48,6 +48,23 @@ func contasRPCDir(cwd string) (string, error) {
 	return filepath.Join(cwd, ".openheinerss", "harnesses"), nil
 }
 
+func contasRPCDirs(cwd string) ([]string, string, error) {
+	if d, err := config.ConfigDir(); err != nil {
+		return nil, "", err
+	} else if d != "" {
+		h := filepath.Join(d, "harnesses")
+		return []string{h}, h, nil
+	}
+	globais, err := config.UserHarnessDirs()
+	if err != nil {
+		return nil, "", err
+	}
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
+	return globais, filepath.Join(cwd, ".openheinerss", "harnesses"), nil
+}
+
 // NewRouter cria um novo despachante de métodos
 func NewRouter(m *session.Manager) *Router {
 	return NewRouterWithMaxAgents(m, 0)
@@ -83,11 +100,11 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (respo
 	case protocol.MethodContasListar:
 		var p protocol.ContasListarParams
 		_ = json.Unmarshal(req.Params, &p)
-		dir, err := contasRPCDir(p.CWD)
+		globais, projeto, err := contasRPCDirs(p.CWD)
 		if err != nil {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
 		}
-		res, err := contas.Listar(dir)
+		res, err := contas.ListarCamadas(globais, projeto)
 		if err != nil {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
 		}
@@ -97,9 +114,13 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (respo
 		if err := json.Unmarshal(req.Params, &p); err != nil || p.Harness == "" || p.Nome == "" {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para contas.adicionar", nil)
 		}
-		dir, err := contasRPCDir(p.CWD)
+		globais, projeto, err := contasRPCDirs(p.CWD)
 		if err != nil {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
+		}
+		dir := globais[0]
+		if p.Projeto {
+			dir = projeto
 		}
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
@@ -114,9 +135,23 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (respo
 		if err := json.Unmarshal(req.Params, &p); err != nil || p.Antigo == "" || p.Novo == "" {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para contas.renomear", nil)
 		}
-		dir, err := contasRPCDir(p.CWD)
+		globais, projeto, err := contasRPCDirs(p.CWD)
 		if err != nil {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
+		}
+		items, err := contas.ListarCamadas(globais, projeto)
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
+		}
+		var dir string
+		for _, item := range items {
+			if item.Instancia == p.Antigo {
+				dir = filepath.Dir(item.Arquivo)
+				break
+			}
+		}
+		if dir == "" {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "conta não encontrada", nil)
 		}
 		res, err := contas.Renomear(dir, p.Antigo, p.Novo)
 		if err != nil {
@@ -128,9 +163,23 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (respo
 		if err := json.Unmarshal(req.Params, &p); err != nil || p.Nome == "" || !p.Confirmar {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "contas.remover exige nome e confirmar: true", nil)
 		}
-		dir, err := contasRPCDir(p.CWD)
+		globais, projeto, err := contasRPCDirs(p.CWD)
 		if err != nil {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
+		}
+		items, err := contas.ListarCamadas(globais, projeto)
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
+		}
+		var dir string
+		for _, item := range items {
+			if item.Instancia == p.Nome {
+				dir = filepath.Dir(item.Arquivo)
+				break
+			}
+		}
+		if dir == "" {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "conta não encontrada", nil)
 		}
 		c, err := contas.Remover(dir, p.Nome)
 		if err != nil {
