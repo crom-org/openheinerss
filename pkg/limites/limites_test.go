@@ -563,3 +563,37 @@ func TestObterDescobreContasLocaisSemDadoEOrdenaEstavelmente(t *testing.T) {
 		}
 	}
 }
+
+func TestAvaliarCotaEscolheOutraContaDaMesmaBaseComDadoFresco(t *testing.T) {
+	agora := time.Now()
+	fresco := agora.Add(-time.Minute).Format(time.RFC3339)
+	velho := agora.Add(-time.Hour).Format(time.RFC3339)
+	jan := func(p float64) []Janela { return []Janela{{Nome: "5h", Percentual: p}} }
+	r := Resultado{Instancias: []Instancia{
+		{Nome: "a", Base: "claude-code", ContaID: "1", DadoEm: fresco, Janelas: jan(92)},
+		{Nome: "b", Base: "claude-code", ContaID: "2", DadoEm: fresco, Janelas: jan(30)},
+		{Nome: "c", Base: "claude-code", ContaID: "3", DadoEm: fresco, Janelas: jan(10)},
+		{Nome: "mesma", Base: "claude-code", ContaID: "1", DadoEm: fresco, Janelas: jan(1)},
+		{Nome: "velha", Base: "claude-code", ContaID: "4", DadoEm: velho, Janelas: jan(1)},
+		{Nome: "cheia", Base: "claude-code", ContaID: "5", DadoEm: fresco, Janelas: jan(85)},
+		{Nome: "semid", Base: "claude-code", DadoEm: fresco, Janelas: jan(1)},
+		{Nome: "outra-base", Base: "codex", ContaID: "6", DadoEm: fresco, Janelas: jan(1)},
+	}}
+	d := avaliarCota(r, agora, "a", 80, 5*time.Minute, nil)
+	if !d.Conhecida || !d.Acima || d.Alternativa != "c" || d.AlternativaPercentual != 10 {
+		t.Fatalf("%+v", d)
+	}
+	d = avaliarCota(r, agora, "a", 80, 5*time.Minute, func(n string) bool { return n != "c" })
+	if d.Alternativa != "b" {
+		t.Fatalf("validação ignorada: %+v", d)
+	}
+	if d := avaliarCota(r, agora, "b", 80, 5*time.Minute, nil); !d.Conhecida || d.Acima || d.Alternativa != "" {
+		t.Fatalf("abaixo do limiar não troca: %+v", d)
+	}
+	if d := avaliarCota(r, agora, "velha", 80, 5*time.Minute, nil); d.Conhecida {
+		t.Fatalf("dado velho não decide: %+v", d)
+	}
+	if d := avaliarCota(r, agora, "inexistente", 80, 5*time.Minute, nil); d.Conhecida {
+		t.Fatalf("%+v", d)
+	}
+}

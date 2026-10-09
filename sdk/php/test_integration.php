@@ -32,6 +32,15 @@ $agent->subscribeEvents(['projeto' => 'teste-php'], [
     'orq.precisa_decisao' => function (array $event) use (&$decisao): void { $decisao = $event; },
 ]);
 if (!isset($agent->getLimits()['instancias'])) throw new RuntimeException('limites ausentes');
+$capCodex = $agent->capacidades('codex');
+if (($capCodex['base'] ?? null) !== 'codex' || ($capCodex['retomar']['estado'] ?? null) !== 'sim') throw new RuntimeException('capacidades do codex ausentes');
+if (count($agent->capacidades()['harnesses'] ?? []) !== 5) throw new RuntimeException('capacidades das bases ausentes');
+try {
+    Openheinerss\Agent::session(['harness' => 'aider', 'retomar' => 'qualquer'], getenv('OPENHEINERSS_BIN') ?: 'openheinerss');
+    throw new RuntimeException('retomar no aider deveria falhar');
+} catch (\RuntimeException $e) {
+    if (!str_contains($e->getMessage(), 'retomada nativa não suportada')) throw $e;
+}
 if (($agent->identidade('mock')['instancia'] ?? null) !== 'mock') throw new RuntimeException('identidade RPC ausente');
 $run = $agent->run(['nome' => 'teste-php', 'motor' => 'mock', 'texto' => 'responda OK', 'cwd' => repoTemporario(), 'projeto' => 'teste-php']);
 if (!str_starts_with($run['id'], 'rodar-')) throw new RuntimeException('rodar não iniciado');

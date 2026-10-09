@@ -10,10 +10,16 @@ const (
 	MethodHarnessListar  = "harness.listar"
 	MethodEventosAssinar = "eventos.assinar"
 
+	MethodHarnessCapacidades       = "harness.capacidades"
 	MethodHarnessComandos          = "harness.comandos"
 	MethodHarnessComandosAnotar    = "harness.comandos.anotar"
 	MethodHarnessComandosConfirmar = "harness.comandos.confirmar"
 )
+
+// HarnessCapacidadesParams pede a matriz de capacidades de um harness ou instância; sem Harness, devolve as bases.
+type HarnessCapacidadesParams struct {
+	Harness string `json:"harness,omitempty"`
+}
 
 // HarnessComandosParams pede os comandos nativos de um harness ou instância. CWD (opcional) é a
 // pasta do projeto onde procurar comandos/skills do harness (ex.: .claude/commands).
@@ -46,6 +52,9 @@ type OrqInicioParams struct {
 	Modelo    string `json:"modelo"`
 	Tentativa int    `json:"tentativa"`
 	Worktree  string `json:"worktree"`
+	// TrocaDe e TrocaMotivo aparecem quando a tentativa começou por troca de conta por passar do limiar de cota.
+	TrocaDe     string `json:"trocaDe,omitempty"`
+	TrocaMotivo string `json:"trocaMotivo,omitempty"`
 }
 
 // OrqProgressoParams payload de orq.progresso.

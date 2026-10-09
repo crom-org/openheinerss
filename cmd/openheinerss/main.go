@@ -21,6 +21,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/crom-org/openheinerss/pkg/capacidades"
 	"github.com/crom-org/openheinerss/pkg/comandos"
 	"github.com/crom-org/openheinerss/pkg/config"
 	"github.com/crom-org/openheinerss/pkg/doctor"
@@ -208,8 +209,53 @@ Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC d
 	rootCmd.AddCommand(newComandosCmd())
 	rootCmd.AddCommand(newConfigCmd())
 	rootCmd.AddCommand(newIdentityCmd())
+	rootCmd.AddCommand(newCapacidadesCmd())
 	rootCmd.AddCommand(novaContasCmd())
 	return rootCmd
+}
+
+func newCapacidadesCmd() *cobra.Command {
+	var jsonOutput bool
+	cmd := &cobra.Command{
+		Use:     "capacidades [harness]",
+		Aliases: []string{"capabilities"},
+		Short:   "Mostra o que cada harness lê e aceita (instruções, skills, MCP, retomada, permissões)",
+		Long: `Matriz de capacidades por harness ou instância. Cada célula traz a fonte da confirmação
+(ajuda do CLI ou texto do binário instalado) ou "nao_confirmado". Sem argumento, mostra as bases embutidas.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var lista []capacidades.Capacidades
+			if len(args) == 1 {
+				c, err := capacidades.Para(args[0])
+				if err != nil {
+					return err
+				}
+				lista = []capacidades.Capacidades{c}
+			} else {
+				lista = capacidades.Todas()
+			}
+			if jsonOutput {
+				var v interface{} = lista
+				if len(args) == 1 {
+					v = lista[0]
+				}
+				b, err := json.MarshalIndent(v, "", "  ")
+				if err != nil {
+					return err
+				}
+				fmt.Println(string(b))
+				return nil
+			}
+			for _, c := range lista {
+				for _, l := range capacidades.Linhas(c) {
+					fmt.Println(l)
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Imprime o resultado em JSON")
+	return cmd
 }
 
 func newIdentityCmd() *cobra.Command {
@@ -619,8 +665,17 @@ func newRunCmd() *cobra.Command {
 
 			var sessRes *protocol.SessionCreateResult
 			var err error
+			// --retomar aceita o id de uma sessão do openheinerss (com o histórico gravado) ou o id nativo
+			// da conversa do harness; neste caso o harness vem de --harness/--motor/--papel.
 			if resumeID != "" {
 				sessRes, err = manager.ResumeSession(ctx, protocol.SessionResumeParams{SessionID: resumeID, CWD: cwd})
+				var rpcErr *protocol.RPCError
+				if errors.As(err, &rpcErr) && rpcErr.Code == protocol.CodeSessionNotFound && harnessName != "" {
+					sessRes, err = manager.CreateSession(ctx, protocol.SessionCreateParams{
+						Harness: harnessName, Mode: modeName, CWD: cwd, Provider: provider, Model: model, Env: env, Retomar: resumeID,
+						Options: protocol.SessionOptions{Extra: extra, Effort: effort, HarnessArgs: harnessArgs, SemMCP: semMCP, MCP: mcpNomes},
+					})
+				}
 			} else {
 				sessRes, err = manager.CreateSession(ctx, protocol.SessionCreateParams{
 					Harness:  harnessName,
@@ -769,7 +824,7 @@ func newRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&effort, "effort", "", "Alias em inglês de --esforco")
 	cmd.Flags().StringVar(&effort, "esforco", "", "Esforço de raciocínio do motor")
 	cmd.Flags().StringVar(&resumeID, "resume", "", "Alias em inglês de --retomar")
-	cmd.Flags().StringVar(&resumeID, "retomar", "", "Retoma a sessão persistida pelo ID")
+	cmd.Flags().StringVar(&resumeID, "retomar", "", "Retoma pelo ID: sessão persistida do openheinerss ou id nativo da conversa (com --harness/--motor)")
 	addHarnessArgFlags(cmd, &harnessArgs)
 	cmd.Flags().BoolVarP(&interactive, "interativo", "i", false, "Sessão interativa: lê um prompt por linha; linhas com / vão literalmente ao harness")
 	cmd.Flags().BoolVar(&interactive, "interactive", false, "Alias em inglês de --interativo")
@@ -812,7 +867,8 @@ func addHarnessArgFlags(cmd *cobra.Command, dst *[]string) {
 
 func newRodarCmd() *cobra.Command {
 	var modelo, esforco, modo, prompt, texto, pasta, branchBase, conta, regras, arquivoChaves string
-	var retomar, semRegras, seco bool
+	var retomar, semRegras, seco, semTroca bool
+	var sessao string
 	var carga, cargaAbaixo float64
 	var maxAgentes, tentativas int
 	var cotaMax float64
@@ -868,7 +924,7 @@ func newRodarCmd() *cobra.Command {
 			if cmd.Flags().Changed("parado-parar") {
 				pParar = &paradoParar
 			}
-			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{ParadoAviso: pAviso, ParadoParar: pParar, LimiteContexto: limiteCtx, AcaoContexto: acaoContexto, Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Mode: modo, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog, HarnessArgs: harnessArgs, EsperarFilhos: espera, RodadasFilhos: rodadasFilhos, FilhosObrigatorios: filhosObrigatorios, Pai: os.Getenv(orchestrator.EnvPai), PaiLogs: os.Getenv(orchestrator.EnvPaiLogs)})
+			res, err := orchestrator.Run(cmd.Context(), cwd, orchestrator.Options{ParadoAviso: pAviso, ParadoParar: pParar, LimiteContexto: limiteCtx, AcaoContexto: acaoContexto, Name: args[0], Motor: args[1], Model: modelo, Effort: esforco, Mode: modo, Conta: conta, PromptFile: prompt, PromptText: texto, Regras: regras, SemRegras: semRegras, Seco: seco, KeysFile: arquivoChaves, Retomar: retomar, SessaoNativa: sessao, SemTrocaConta: semTroca, AgentsDir: pasta, BranchBase: branchBase, MaxLoad: carga, MaxAgents: maxAgentes, Attempts: tentativas, QuotaMax: cotaMax, EventLog: eventosLog, HarnessArgs: harnessArgs, EsperarFilhos: espera, RodadasFilhos: rodadasFilhos, FilhosObrigatorios: filhosObrigatorios, Pai: os.Getenv(orchestrator.EnvPai), PaiLogs: os.Getenv(orchestrator.EnvPaiLogs)})
 			if err != nil && res.Name == "" {
 				return err
 			}
@@ -903,6 +959,9 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().StringVar(&prompt, "prompt", "", "Arquivo de prompt alternativo")
 	cmd.Flags().StringVar(&texto, "texto", "", "Prompt em texto, no lugar do arquivo prompts/<nome>.md")
 	cmd.Flags().StringVar(&texto, "text", "", "Alias em inglês de --texto")
+	cmd.Flags().StringVar(&sessao, "sessao", "", "Retoma a conversa existente do harness (id nativo ou id de sessão do openheinerss); não vale para aider")
+	cmd.Flags().StringVar(&sessao, "retomar-sessao", "", "Alias de --sessao")
+	cmd.Flags().BoolVar(&semTroca, "sem-troca-conta", false, "Acima de --cota-max só pula a instância, sem procurar outra conta da mesma base")
 	cmd.Flags().BoolVar(&retomar, "retomar", false, "Acrescenta o texto de continuação e preserva o log")
 	cmd.Flags().BoolVar(&retomar, "resume", false, "Alias em inglês de --retomar")
 	cmd.Flags().StringVar(&pasta, "pasta-agentes", "", "Pasta dos agentes (padrão .claude/agentes)")
@@ -918,7 +977,7 @@ func newRodarCmd() *cobra.Command {
 	cmd.Flags().IntVar(&maxAgentes, "max-agents", 0, "Alias em inglês de --max-agentes")
 	cmd.Flags().IntVar(&tentativas, "tentativas", 0, "Máximo de tentativas")
 	cmd.Flags().IntVar(&tentativas, "retries", 0, "Alias em inglês de --tentativas")
-	cmd.Flags().Float64Var(&cotaMax, "cota-max", 0, "Pula instâncias com uso de cota igual ou acima deste percentual (0 desativa)")
+	cmd.Flags().Float64Var(&cotaMax, "cota-max", 0, "Limiar de cota (%): acima dele pula a instância e troca para outra conta da mesma base com cota (0 desativa; config cota_max)")
 	cmd.Flags().Float64Var(&cotaMax, "quota-max", 0, "Alias em inglês de --cota-max")
 	cmd.Flags().StringVar(&eventosLog, "eventos-log", "", "Acrescenta FIM ao arquivo de eventos (desligado por padrão)")
 	cmd.Flags().StringVar(&eventosLog, "events-log", "", "Alias em inglês de --eventos-log")

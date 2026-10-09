@@ -14,6 +14,7 @@ Usage:
 
 Available Commands:
   agentes     Lista e controla agentes em execução
+  capacidades Mostra o que cada harness lê e aceita (instruções, skills, MCP, retomada, permissões)
   comandos    Lista os comandos nativos (/compact, /model…) de um harness ou instância e como são repassados
   config      Mostra a configuração efetiva (global + projeto)
   contas      Cria e administra contas de login dos harnesses
@@ -69,6 +70,28 @@ Global Flags:
       --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 Use "openheinerss agentes [command] --help" for more information about a command.
+
+```
+
+## `openheinerss capacidades --help`
+
+```text
+Matriz de capacidades por harness ou instância. Cada célula traz a fonte da confirmação
+(ajuda do CLI ou texto do binário instalado) ou "nao_confirmado". Sem argumento, mostra as bases embutidas.
+
+Usage:
+  openheinerss capacidades [harness] [flags]
+
+Aliases:
+  capacidades, capabilities
+
+Flags:
+      --json   Imprime o resultado em JSON
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -343,7 +366,7 @@ Flags:
       --conta string                Conta/provedor da instância
       --context-action string       Alias em inglês de --acao-contexto
       --context-limit int           Alias em inglês de --limite-contexto
-      --cota-max float              Pula instâncias com uso de cota igual ou acima deste percentual (0 desativa)
+      --cota-max float              Limiar de cota (%): acima dele pula a instância e troca para outra conta da mesma base com cota (0 desativa; config cota_max)
       --dry-run                     Alias em inglês de --seco
       --effort string               Alias em inglês de --esforco
       --esforco string              Esforço de raciocínio
@@ -375,6 +398,7 @@ Flags:
       --require-children            Alias em inglês de --filhos-obrigatorios
       --resume                      Alias em inglês de --retomar
       --retomar                     Acrescenta o texto de continuação e preserva o log
+      --retomar-sessao string       Alias de --sessao
       --retries int                 Alias em inglês de --tentativas
       --rodadas-filhos int          Máximo de retomadas automáticas depois dos filhos (padrão 5)
       --rules string                Alias em inglês de --regras
@@ -382,6 +406,8 @@ Flags:
       --sem-mcp                     Não entrega ao harness os servidores de mcp.json (global e do projeto)
       --sem-regras                  Não acrescenta regras padrão ao prompt
       --sem-regras-padrao           Desliga as regras padrão do prompt
+      --sem-troca-conta             Acima de --cota-max só pula a instância, sem procurar outra conta da mesma base
+      --sessao string               Retoma a conversa existente do harness (id nativo ou id de sessão do openheinerss); não vale para aider
       --tentativas int              Máximo de tentativas
       --text string                 Alias em inglês de --texto
       --texto string                Prompt em texto, no lugar do arquivo prompts/<nome>.md
@@ -428,7 +454,7 @@ Flags:
       --provedor string           Alias em português de --provider
       --provider string           Provedor do modelo
       --resume string             Alias em inglês de --retomar
-      --retomar string            Retoma a sessão persistida pelo ID
+      --retomar string            Retoma pelo ID: sessão persistida do openheinerss ou id nativo da conversa (com --harness/--motor)
       --role string               Alias em inglês de --papel
       --sem-mcp                   Não entrega ao harness os servidores de mcp.json (global e do projeto)
 

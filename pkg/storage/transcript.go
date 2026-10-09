@@ -138,3 +138,30 @@ func (s *Storage) ListPersistedSessions(cwd string) ([]string, error) {
 
 	return sessionIDs, nil
 }
+
+// IDNativo devolve o id nativo do harness gravado numa sessão do openheinerss. ok=false quando a sessão
+// não existe ou ainda não registrou um id (o valor passado, então, deve ser tratado como id nativo).
+func (s *Storage) IDNativo(cwd, sessionID string) (string, bool) {
+	entries, err := s.LoadSession(cwd, sessionID)
+	if err != nil {
+		return "", false
+	}
+	for i := len(entries) - 1; i >= 0; i-- {
+		if entries[i].Config == nil {
+			continue
+		}
+		b, _ := json.Marshal(entries[i].Config)
+		var cfg struct {
+			Options map[string]interface{} `json:"options"`
+		}
+		if json.Unmarshal(b, &cfg) != nil {
+			continue
+		}
+		for _, k := range []string{"session_id", "claude_session_id", "codex_session_id", "opencode_session_id", "conversation"} {
+			if v, ok := cfg.Options[k].(string); ok && v != "" {
+				return v, true
+			}
+		}
+	}
+	return "", false
+}

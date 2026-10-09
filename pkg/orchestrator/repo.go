@@ -296,16 +296,7 @@ func backoff(tentativa int) time.Duration {
 }
 
 // baseHarness segue a cadeia de `base:` de uma instância até o harness base (ou o próprio nome).
-func baseHarness(name string) string {
-	for i := 0; i < 16; i++ {
-		spec, ok := harness.CustomSpecFor(name)
-		if !ok || spec.Command != "" || spec.Base == "" {
-			return name
-		}
-		name = spec.Base
-	}
-	return name
-}
+func baseHarness(name string) string { return harness.BaseDe(name) }
 
 // dryRunCommand monta o comando completo que o `rodar` executaria: binário, modelo efetivo e argumentos.
 // Caminhos com espaço vão entre aspas (o texto pode ser colado num shell); valores de ambiente são mascarados.

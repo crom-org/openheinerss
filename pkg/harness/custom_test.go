@@ -312,3 +312,19 @@ func TestCustomStopMataOsFilhosDoProcesso(t *testing.T) {
 	_ = killForTest(pid)
 	t.Fatalf("o filho %d sobrou depois do Stop", pid)
 }
+
+func TestOpcoesRetomadaPorBase(t *testing.T) {
+	casos := map[string]string{"claude-code": "claude_session_id", "codex": "codex_session_id", "opencode": "opencode_session_id", "agy": "conversation"}
+	for base, chave := range casos {
+		o, err := OpcoesRetomada(base, "abc")
+		if err != nil || o[chave] != "abc" {
+			t.Errorf("%s: %v %v", base, o, err)
+		}
+	}
+	if _, err := OpcoesRetomada("aider", "abc"); err == nil {
+		t.Error("aider deveria recusar")
+	}
+	if _, err := OpcoesRetomada("codex", ""); err == nil {
+		t.Error("id vazio deveria falhar")
+	}
+}

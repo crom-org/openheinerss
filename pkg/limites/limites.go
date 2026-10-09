@@ -434,3 +434,70 @@ func contaClaude(nome, dir string) string {
 	}
 	return nome
 }
+
+// DecisaoCota é o resultado de AvaliarCota para uma instância.
+type DecisaoCota struct {
+	// Conhecida: há dado fresco para a instância; sem ele nada se decide por cota.
+	Conhecida  bool
+	Percentual float64
+	// Acima: o maior percentual vigente chegou ao limiar.
+	Acima bool
+	// Alternativa é outra instância da mesma base, de outra conta, com dado fresco abaixo do limiar
+	// (a de menor uso). Vazia quando a instância não passou do limiar ou ninguém serve.
+	Alternativa           string
+	AlternativaPercentual float64
+}
+
+// AvaliarCota decide, com dado fresco (idade máxima maxAge), se a instância passou do limiar e qual
+// instância da mesma base pode assumir. Candidatas precisam ter conta diferente (ContaID conhecido e
+// distinto), dado fresco e passar em valida (ex.: estar registrada como harness).
+func AvaliarCota(ctx context.Context, nome string, limiar float64, maxAge time.Duration, valida func(string) bool) DecisaoCota {
+	resultado, err := Atualizar(ctx, AtualizarOpcoes{Intervalo: maxAge})
+	if err != nil {
+		return DecisaoCota{}
+	}
+	return avaliarCota(resultado, time.Now(), nome, limiar, maxAge, valida)
+}
+
+func avaliarCota(resultado Resultado, agora time.Time, nome string, limiar float64, maxAge time.Duration, valida func(string) bool) DecisaoCota {
+	fresco := func(i Instancia) (float64, bool) {
+		dado, err := time.Parse(time.RFC3339, i.DadoEm)
+		if i.DadoEm == "" || err != nil || agora.Sub(dado) < 0 || agora.Sub(dado) > maxAge {
+			return 0, false
+		}
+		return maiorPercentual(i, agora)
+	}
+	var atual *Instancia
+	for k := range resultado.Instancias {
+		if resultado.Instancias[k].Nome == nome {
+			atual = &resultado.Instancias[k]
+		}
+	}
+	if atual == nil {
+		return DecisaoCota{}
+	}
+	pct, ok := fresco(*atual)
+	if !ok {
+		return DecisaoCota{}
+	}
+	d := DecisaoCota{Conhecida: true, Percentual: pct, Acima: pct >= limiar}
+	if !d.Acima {
+		return d
+	}
+	for _, i := range resultado.Instancias {
+		if i.Nome == nome || i.Base != atual.Base || i.ContaID == "" || i.ContaID == atual.ContaID {
+			continue
+		}
+		if valida != nil && !valida(i.Nome) {
+			continue
+		}
+		p, ok := fresco(i)
+		if !ok || p >= limiar {
+			continue
+		}
+		if d.Alternativa == "" || p < d.AlternativaPercentual {
+			d.Alternativa, d.AlternativaPercentual = i.Nome, p
+		}
+	}
+	return d
+}

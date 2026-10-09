@@ -26,6 +26,11 @@ test("SDK TypeScript conversa com o servidor real", async () => {
     });
     const limits = await client.getLimits();
     assert.ok(Array.isArray(limits.instancias));
+    const cap = await client.capacidades("codex");
+    assert.equal(cap.base, "codex");
+    assert.equal(cap.retomar.estado, "sim");
+    assert.ok(cap.instrucoes.some((i) => i.nome === "AGENTS.md" && i.estado === "sim"));
+    assert.equal((await client.capacidades()).harnesses.length, 5);
     const identidade = await client.identidade("mock");
     assert.equal(identidade.instancia, "mock");
     const run = await client.run({ nome: "teste-ts", motor: "mock", texto: "responda OK", cwd: await repoTemporario(), projeto: "teste-ts" });
@@ -34,6 +39,13 @@ test("SDK TypeScript conversa com o servidor real", async () => {
     await Promise.race([terminou, new Promise((_, reject) => setTimeout(() => reject(new Error("timeout de eventos")), 3000))]);
     assert.deepEqual(eventos.slice(0, 3), ["orq.inicio", "orq.progresso", "orq.fim"]);
     assert.ok(Array.isArray((await client.listRuns({ projeto: "teste-ts" })).agentes));
+  } finally { client.close(); }
+});
+
+test("SDK TypeScript: retomar numa base sem resume nativo é recusado", async () => {
+  const client = new Openheinerss({ binPath: bin, transport: "stdio" });
+  try {
+    await assert.rejects(client.start({ harness: "aider", retomar: "qualquer" }), /retomada nativa não suportada/);
   } finally { client.close(); }
 });
 
