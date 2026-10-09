@@ -386,7 +386,7 @@ claude-code:
 {"jsonrpc":"2.0","id":6,"method":"limites.obter"}
 ```
 ```json
-{"jsonrpc":"2.0","id":6,"result":{"agora":"2026-10-08T07:30:00-03:00","instancias":[{"nome":"codex","base":"codex","janelas":[{"nome":"5h","percentual":12.5,"reiniciaEm":"2026-10-08T11:00:00-03:00"}]}]}}
+{"jsonrpc":"2.0","id":6,"result":{"agora":"2026-10-08T07:30:00-03:00","instancias":[{"nome":"codex","base":"codex","janelas":[{"nome":"5h","percentual":12.5,"voltaEm":"2026-10-08T11:00:00-03:00"}]}]}}
 ```
 
 ### Eventos `orq.*`

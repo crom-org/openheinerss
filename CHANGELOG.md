@@ -3,6 +3,10 @@
 Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 
+## Não publicado
+
+- `limites --atualizar` renova o OAuth do Claude após HTTP 401, respeita `Retry-After` em HTTP 429 usando o último cache bom e nomeia as janelas com `voltaEm`.
+
 ## [1.4.0] — 2026-10-09
 
 - `limites --atualizar` consulta Claude (`/api/oauth/usage`) e Codex (`/backend-api/wham/usage`) sem prompt, com cache 0600, intervalo mínimo por conta e fontes/idades explícitas; `serve --limites-a-cada N` emite `limites.atualizado`. SDKs aceitam `atualizar`/`forcar` em limites.

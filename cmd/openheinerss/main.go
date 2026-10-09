@@ -954,8 +954,12 @@ func newLimitesCmd() *cobra.Command {
 			fmt.Printf(" — fonte %s\n", i.Fonte)
 			for _, j := range i.Janelas {
 				fmt.Printf("  %s: %.1f%%", j.Nome, j.Percentual)
-				if j.ReiniciaEm != "" {
-					fmt.Printf("; reinicia %s", j.ReiniciaEm)
+				voltaEm := j.VoltaEm
+				if voltaEm == "" {
+					voltaEm = j.ReiniciaEm
+				}
+				if voltaEm != "" {
+					fmt.Printf("; voltaEm %s", voltaEm)
 				}
 				fmt.Println()
 			}
