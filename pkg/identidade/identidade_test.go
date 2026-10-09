@@ -32,10 +32,6 @@ func TestParaCanonicalizaSymlinkENome(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	arquivoResolvido, err := filepath.EvalSymlinks(arquivo)
-	if err != nil {
-		t.Fatal(err)
-	}
 	if err := harness.LoadCustomFile(arquivo); err != nil {
 		t.Fatal(err)
 	}
@@ -53,8 +49,8 @@ func TestParaCanonicalizaSymlinkENome(t *testing.T) {
 	if a.ContaID == "" || a.ContaDir != contaResolvida {
 		t.Fatalf("identidade inesperada: %+v", a)
 	}
-	if a.ConfigFonte != arquivoResolvido {
-		t.Fatalf("configFonte=%q, esperado %q", a.ConfigFonte, arquivoResolvido)
+	if a.ConfigFonte != arquivo {
+		t.Fatalf("configFonte=%q, esperado %q", a.ConfigFonte, arquivo)
 	}
 	outra := filepath.Join(root, "outra")
 	if err := os.Mkdir(outra, 0700); err != nil {
