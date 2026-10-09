@@ -52,6 +52,8 @@ func NewStdioServerWithMaxAgents(m *session.Manager, in io.Reader, out io.Writer
 	return s
 }
 
+func (s *StdioServer) Router() *Router { return s.router }
+
 // SetNegarEncerra liga serve --negar-encerra (veja Router.SetNegarEncerra).
 func (s *StdioServer) SetNegarEncerra(v bool) { s.router.SetNegarEncerra(v) }
 

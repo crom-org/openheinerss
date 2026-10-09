@@ -55,7 +55,7 @@ export class Openheinerss extends EventEmitter {
   /** `run` (id da execução, vem em `orq.precisa_decisao`) é opcional; se vier, o servidor confere. */
   /** encerrar (opcional): numa negação, termina a execução (orq.fim código 3, motivo "negado"); ausente vale serve --negar-encerra. */
   async decideRun(id: string, resposta: string, mensagem?: string, run?: string, encerrar?: boolean): Promise<void> { await this.ensureTransport(); await this.sendRPC("rodar.decidir", { id, resposta, mensagem, run, encerrar }); }
-  async getLimits(): Promise<Limits> { await this.ensureTransport(); return this.sendRPC("limites.obter", {}); }
+  async getLimits(atualizar = false, forcar = false): Promise<Limits> { await this.ensureTransport(); return this.sendRPC("limites.obter", atualizar ? { atualizar: true, forcar } : {}); }
   async identidade(instancia: string): Promise<Identity> { await this.ensureTransport(); return this.sendRPC("instancia.identidade", { instancia }); }
   async listarContas(cwd?: string): Promise<Conta[]> { await this.ensureTransport(); return this.sendRPC("contas.listar", cwd ? { cwd } : {}).then((r: Conta[]) => r); }
   async adicionarConta(harness: string, nome: string, cwd?: string, iniciarLogin = false): Promise<any> { await this.ensureTransport(); return this.sendRPC("contas.adicionar", { harness, nome, cwd, iniciarLogin }); }

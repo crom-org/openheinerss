@@ -5,6 +5,8 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 
 ## [1.3.1] — 2026-10-09
 
+- `limites --atualizar` consulta Claude (`/api/oauth/usage`) e Codex (`/backend-api/wham/usage`) sem prompt, com cache 0600, intervalo mínimo por conta e fontes/idades explícitas; `serve --limites-a-cada N` emite `limites.atualizado`. SDKs aceitam `atualizar`/`forcar` em limites.
+
 - Instâncias globais são carregadas de `$XDG_CONFIG_HOME/openheinerss/harnesses` (ou do diretório nativo equivalente) e do legado `~/.openheinerss/harnesses`; o projeto vence nomes iguais mesmo quando o comando roda em outro repositório.
 - `contas adicionar` grava no global por padrão e aceita `--projeto`; `contas listar` mostra a origem, renomear/remover procuram nas camadas e `contas migrar --sim` copia as contas do projeto sem apagá-las. `harness add --global` grava uma instância global.
 

@@ -378,7 +378,9 @@ claude-code:
 ```
 
 ### `limites.obter` e `harness.listar`
-`limites.obter` devolve o mesmo JSON do `openheinerss limites --json` (o método antigo `limites` continua valendo). `harness.listar` devolve os harnesses e instâncias carregados, no formato de `catalog.list`.
+`limites.obter` devolve o mesmo JSON do `openheinerss limites --json` (o método antigo `limites` continua valendo). Cada instância informa `idadeSegundos` e `fonte` (`statusline`, `consulta-ativa`, `cabeçalhos` ou `log`). Com `{ "atualizar": true }`, o servidor consulta as credenciais OAuth locais sem executar prompt; `{ "forcar": true }` ignora o intervalo mínimo de cinco minutos. `harness.listar` devolve os harnesses e instâncias carregados, no formato de `catalog.list`.
+
+`serve --limites-a-cada N` atualiza em segundo plano a cada N minutos e emite `limites.atualizado` com o mesmo objeto de resultado.
 
 ```json
 {"jsonrpc":"2.0","id":6,"method":"limites.obter"}

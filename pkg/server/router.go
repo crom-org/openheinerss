@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/crom-org/openheinerss/pkg/comandos"
 	"github.com/crom-org/openheinerss/pkg/config"
@@ -27,6 +28,27 @@ func novaGeracao() string {
 		return fmt.Sprintf("geracao-%d", os.Getpid())
 	}
 	return fmt.Sprintf("geracao-%x", b)
+}
+
+// IniciarAtualizacaoLimites mantém limites frescos para clientes inscritos.
+func (r *Router) IniciarAtualizacaoLimites(ctx context.Context, intervalo time.Duration) {
+	if intervalo <= 0 {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(intervalo)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if res, err := limites.Atualizar(ctx, limites.AtualizarOpcoes{}); err == nil {
+					r.orq.emitir(protocol.EventLimitesAtualizado, "", "", res)
+				}
+			}
+		}
+	}()
 }
 
 // Router processa requisições JSON-RPC e delega para o SessionManager ou subsistemas
@@ -281,6 +303,15 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (respo
 		return protocol.NewResponse(req.ID, protocol.RunResult{Nome: res.Name, WorkDir: res.WorkDir, Log: res.LogFile, Meta: res.MetaFile, Tentativas: res.Attempts, Codigo: res.Code})
 
 	case protocol.MethodLimits, protocol.MethodLimitesObter:
+		var p protocol.LimitsParams
+		_ = json.Unmarshal(req.Params, &p)
+		if p.Atualizar {
+			res, err := limites.Atualizar(ctx, limites.AtualizarOpcoes{Forcar: p.Forcar})
+			if err != nil {
+				return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
+			}
+			return protocol.NewResponse(req.ID, res)
+		}
 		return protocol.NewResponse(req.ID, limites.Obter())
 
 	case protocol.MethodHarnessListar:
