@@ -44,9 +44,10 @@ import (
 var (
 	// Estas variáveis recebem valores reais no release pelo GoReleaser. Um
 	// build local deliberadamente continua identificável como desenvolvimento.
-	Version = "dev"
-	Commit  = "desconhecido"
-	Date    = "desconhecida"
+	Version    = "dev"
+	Commit     = "desconhecido"
+	Date       = "desconhecida"
+	projetoDir string
 )
 
 func main() {
@@ -65,11 +66,14 @@ func main() {
 			_ = os.Setenv(config.EnvConfigDir, abs)
 		}
 	}
+	if dir := flagProjeto(os.Args[1:]); dir != "" {
+		projetoDir = dir
+	}
 	if _, err := config.ConfigDir(); err != nil {
 		fmt.Fprintf(os.Stderr, "Erro: %v\n", err)
 		os.Exit(1)
 	}
-	if cwd, err := os.Getwd(); err == nil {
+	if cwd, err := projetoAtual(); err == nil {
 		if err := carregarInstancias(cwd); err != nil {
 			fmt.Fprintf(os.Stderr, "Aviso: %v\n", err)
 		}
@@ -112,6 +116,28 @@ func flagConfig(args []string) string {
 		}
 	}
 	return dir
+}
+
+func flagProjeto(args []string) string {
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--" {
+			break
+		}
+		if args[i] == "--projeto" && i+1 < len(args) {
+			return args[i+1]
+		}
+		if strings.HasPrefix(args[i], "--projeto=") {
+			return strings.TrimPrefix(args[i], "--projeto=")
+		}
+	}
+	return ""
+}
+
+func projetoAtual() (string, error) {
+	if projetoDir != "" {
+		return filepath.Abs(projetoDir)
+	}
+	return os.Getwd()
 }
 
 // pastaHarnesses é onde ficam as instâncias: <config>/harnesses com --config/OPENHEINERSS_CONFIG,
@@ -165,6 +191,7 @@ Unifica Claude Code, OpenCode, Codex e outros sob um único protocolo JSON-RPC d
 	// Lidas também pelo main antes do cobra (ver flagConfig); declaradas aqui para aparecer na ajuda.
 	rootCmd.PersistentFlags().String("config", "", "Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence "+config.EnvConfigDir+" e a busca pela pasta atual")
 	rootCmd.PersistentFlags().String("configuracao", "", "Alias de --config")
+	rootCmd.PersistentFlags().StringVar(&projetoDir, "projeto", "", "Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)")
 
 	rootCmd.AddCommand(newServeCmd())
 	rootCmd.AddCommand(newDoctorCmd())
@@ -213,7 +240,7 @@ func newIdentityCmd() *cobra.Command {
 
 // pastaAgentes resolve a pasta de agentes pela raiz do repositório (vale também dentro de worktrees).
 func pastaAgentes(dir string) (string, error) {
-	cwd, err := os.Getwd()
+	cwd, err := projetoAtual()
 	if err != nil {
 		return "", err
 	}
@@ -514,7 +541,7 @@ func newInitCmd() *cobra.Command {
 		Aliases: []string{"inicializar"},
 		Short:   "Inicializa o diretório .openheinerss no repositório atual",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cwd, err := os.Getwd()
+			cwd, err := projetoAtual()
 			if err != nil {
 				return err
 			}
@@ -560,7 +587,7 @@ func newRunCmd() *cobra.Command {
 			if promptText == "" && !interactive {
 				return fmt.Errorf("run exige um prompt; com --retomar informe o novo prompt depois do ID (ou use --interativo)")
 			}
-			cwd, _ := os.Getwd()
+			cwd, _ := projetoAtual()
 			var env map[string]string
 			var extra map[string]interface{}
 			if role != "" {
@@ -732,9 +759,9 @@ func newRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&role, "role", "", "Alias em inglês de --papel")
 	cmd.Flags().StringVar(&motorName, "motor", "", "Harness base ou instância custom definida pelo usuário")
 	cmd.Flags().StringVar(&motorName, "engine", "", "Alias em inglês de --motor")
-	cmd.Flags().StringVar(&harnessName, "harness", "mock", "Nome do harness ('mock', 'claude-code', 'opencode')")
-	cmd.Flags().StringVar(&modeName, "mode", "mock", "Modo do harness ('mock', 'sdk', 'cli')")
-	cmd.Flags().StringVar(&modeName, "modo", "mock", "Alias em português de --mode")
+	cmd.Flags().StringVar(&harnessName, "harness", "", "Nome do harness (obrigatório ou default_harness em config.yaml)")
+	cmd.Flags().StringVar(&modeName, "mode", "", "Modo do harness (cli ou sdk; a configuração pode definir default_mode)")
+	cmd.Flags().StringVar(&modeName, "modo", "", "Alias em português de --mode")
 	cmd.Flags().StringVar(&provider, "provider", "", "Provedor do modelo")
 	cmd.Flags().StringVar(&provider, "provedor", "", "Alias em português de --provider")
 	cmd.Flags().StringVar(&model, "model", "", "Nome do modelo")
@@ -809,7 +836,7 @@ func newRodarCmd() *cobra.Command {
 			if os.Getenv("RETOMAR") == "1" {
 				retomar = true
 			}
-			cwd, err := os.Getwd()
+			cwd, err := projetoAtual()
 			if err != nil {
 				return err
 			}
@@ -982,7 +1009,7 @@ func newMotorsCmd() *cobra.Command {
 			}
 			fmt.Println()
 		}
-		cwd, _ := os.Getwd()
+		cwd, _ := projetoAtual()
 		roles, path, err := motor.FindRoles(cwd)
 		if err != nil {
 			return err
@@ -1010,7 +1037,7 @@ func newMcpCmd() *cobra.Command {
 		Aliases: []string{"listar"},
 		Short:   "Lista os servidores MCP configurados em .openheinerss/mcp.json",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cwd, _ := os.Getwd()
+			cwd, _ := projetoAtual()
 			servers, err := mcp.GetHub().ListServers(cwd)
 			if err != nil {
 				return err
@@ -1036,7 +1063,7 @@ func newMcpCmd() *cobra.Command {
 		Aliases: []string{"effective"},
 		Short:   "Lista os servidores que cada harness recebe nesta pasta (global + projeto; valores de env/headers ocultos)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cwd, _ := os.Getwd()
+			cwd, _ := projetoAtual()
 			servs, err := mcp.Efetivos(cwd)
 			if err != nil {
 				return err
@@ -1069,7 +1096,7 @@ func newMcpCmd() *cobra.Command {
 		DisableFlagParsing: true,
 		Args:               cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cwd, _ := os.Getwd()
+			cwd, _ := projetoAtual()
 			name := args[0]
 			command := args[1]
 			mcpArgs := args[2:]
@@ -1147,7 +1174,7 @@ func newHarnessCmd() *cobra.Command {
 		if err := harness.LoadCustomFile(args[0]); err != nil {
 			return err
 		}
-		cwd, err := os.Getwd()
+		cwd, err := projetoAtual()
 		if err != nil {
 			return err
 		}
@@ -1210,7 +1237,7 @@ func newHarnessCmd() *cobra.Command {
 		if r := h.ValidatePrerequisites(ctx); !r.Satisfied {
 			return fmt.Errorf("pré-requisito ausente: %s", strings.Join(r.MissingItems, ", "))
 		}
-		cwd, _ := os.Getwd()
+		cwd, _ := projetoAtual()
 		if err := h.Start(ctx, harness.SessionConfig{SessionID: "harness-test", CWD: cwd}); err != nil {
 			return err
 		}
@@ -1279,7 +1306,7 @@ func newComandosCmd() *cobra.Command {
 		if cwd != "" {
 			return cwd
 		}
-		d, _ := os.Getwd()
+		d, _ := projetoAtual()
 		return d
 	}
 	mostrar := func(v interface{}) error {

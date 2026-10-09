@@ -9,19 +9,19 @@ import (
 )
 
 func TestCodexHarnessRegistration(t *testing.T) {
-	hAPI, err := harness.Create("codex", harness.ModeAPI)
+	hCLI, err := harness.Create("codex", harness.ModeCLI)
 	if err != nil {
-		t.Fatalf("falha ao criar harness codex modo API: %v", err)
+		t.Fatalf("falha ao criar harness codex modo CLI: %v", err)
 	}
-	if hAPI.Name() != "codex" {
-		t.Errorf("nome esperado 'codex', obteve '%s'", hAPI.Name())
+	if hCLI.Name() != "codex" {
+		t.Errorf("nome esperado 'codex', obteve '%s'", hCLI.Name())
 	}
-	if hAPI.Mode() != harness.ModeAPI {
-		t.Errorf("modo esperado 'api', obteve '%s'", hAPI.Mode())
+	if hCLI.Mode() != harness.ModeCLI {
+		t.Errorf("modo esperado 'cli', obteve '%s'", hCLI.Mode())
 	}
 
 	ctx := context.Background()
-	res := hAPI.ValidatePrerequisites(ctx)
+	res := hCLI.ValidatePrerequisites(ctx)
 	if !res.Satisfied {
 		t.Logf("pré-requisitos codex: %+v", res)
 	}

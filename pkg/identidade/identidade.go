@@ -27,8 +27,21 @@ func Para(nome string, env map[string]string) (protocol.Identity, error) {
 	}
 	key := chaveLogin(base)
 	dir := efetivo[key]
+	if strings.EqualFold(base, "claude-code") && strings.EqualFold(nome, "claude-code") {
+		// A instância canônica não pode ser redirecionada por env do pedido:
+		// o filho também ignora esse valor e usa ~/.claude.
+		dir = ""
+	}
 	if dir == "" {
-		dir = padraoLogin(base)
+		// claude-code nunca herda CLAUDE_CONFIG_DIR do shell: o adaptador CLI
+		// também fixa ~/.claude para a instância principal.
+		if strings.EqualFold(base, "claude-code") {
+			dir = padraoLogin(base)
+		} else if valor, ok := os.LookupEnv(key); ok && valor != "" {
+			dir = valor
+		} else {
+			dir = padraoLogin(base)
+		}
 	}
 	dir, err = canonico(dir)
 	if err != nil {
