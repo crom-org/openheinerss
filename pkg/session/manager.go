@@ -498,9 +498,32 @@ func (m *Manager) forwardEvents(s *Session) {
 				n.Params = p
 			}
 		}
+		n.Params = comSessao(n.Params, s.ID)
 		_ = m.storage.Record(s.Config.CWD, s.ID, "event", &n, "", nil)
 		m.broadcast(n)
 	}
+}
+
+// comSessao garante que o evento leve o sessionId devolvido por session.create. Motores como o
+// claude-code informam o id nativo da conversa; ele segue em nativeSessionId.
+func comSessao(params interface{}, id string) interface{} {
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return params
+	}
+	var campos map[string]interface{}
+	if json.Unmarshal(raw, &campos) != nil || campos == nil {
+		return params
+	}
+	atual, _ := campos["sessionId"].(string)
+	if atual == id {
+		return params
+	}
+	if atual != "" {
+		campos["nativeSessionId"] = atual
+	}
+	campos["sessionId"] = id
+	return campos
 }
 
 // classificarEvento acrescenta risco e motivo a tool_call e permission_request (só informa).
