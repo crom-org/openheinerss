@@ -20,7 +20,10 @@ import (
 type Janela struct {
 	Nome       string  `json:"nome"`
 	Percentual float64 `json:"percentual"`
-	ReiniciaEm string  `json:"reiniciaEm,omitempty"`
+	// ReiniciaEm permanece no Go para compatibilidade; o contrato JSON chama o
+	// horário de voltaEm.
+	ReiniciaEm string `json:"-"`
+	VoltaEm    string `json:"voltaEm,omitempty"`
 }
 
 type Instancia struct {
@@ -154,8 +157,8 @@ func maiorPercentual(i Instancia, agora time.Time) (float64, bool) {
 	var maior float64
 	validas := 0
 	for _, j := range i.Janelas {
-		if j.ReiniciaEm != "" {
-			if t, err := time.Parse(time.RFC3339, j.ReiniciaEm); err == nil && t.Before(agora) {
+		if voltaEm(j) != "" {
+			if t, err := time.Parse(time.RFC3339, voltaEm(j)); err == nil && t.Before(agora) {
 				continue
 			}
 		}
@@ -169,11 +172,26 @@ func maiorPercentual(i Instancia, agora time.Time) (float64, bool) {
 
 func janelasVigentes(janelas []Janela, agora time.Time) []Janela {
 	result := make([]Janela, 0, len(janelas))
+	legadas := 0
 	for _, j := range janelas {
-		if j.ReiniciaEm != "" {
-			if t, err := time.Parse(time.RFC3339, j.ReiniciaEm); err == nil && t.Before(agora) {
+		if voltaEm(j) != "" {
+			if t, err := time.Parse(time.RFC3339, voltaEm(j)); err == nil && t.Before(agora) {
 				continue
 			}
+		}
+		if j.VoltaEm == "" {
+			j.VoltaEm = j.ReiniciaEm
+		}
+		j.ReiniciaEm = j.VoltaEm
+		if j.Nome == "limite" || j.Nome == "" {
+			if legadas == 0 {
+				j.Nome = "5h"
+			} else if legadas == 1 {
+				j.Nome = "semana"
+			} else {
+				j.Nome = fmt.Sprintf("janela-%d", legadas+1)
+			}
+			legadas++
 		}
 		result = append(result, j)
 	}
@@ -251,15 +269,15 @@ func lerCodex(nome, home string, agora time.Time) (Instancia, bool) {
 		if w == nil {
 			continue
 		}
-		nomeJanela := fmt.Sprintf("janela de %d min", w.WindowMinutes)
+		nomeJanela := fmt.Sprintf("janela-%dmin", w.WindowMinutes)
 		if w.WindowMinutes == 300 {
-			nomeJanela = "5 h"
+			nomeJanela = "5h"
 		} else if w.WindowMinutes == 10080 {
-			nomeJanela = "semanal"
+			nomeJanela = "semana"
 		}
 		j := Janela{Nome: nomeJanela, Percentual: w.UsedPercent}
 		if w.ResetsAt > 0 {
-			j.ReiniciaEm = time.Unix(int64(w.ResetsAt), 0).Format(time.RFC3339)
+			j = comVoltaEm(j, time.Unix(int64(w.ResetsAt), 0).Format(time.RFC3339))
 		}
 		i.Janelas = append(i.Janelas, j)
 	}
@@ -291,7 +309,7 @@ func lerClaude(nome, dir string, agora time.Time) (Instancia, bool) {
 	for _, x := range []struct {
 		name string
 		w    *rateWindow
-	}{{"5 h", v.RateLimits.Five}, {"semanal", v.RateLimits.Seven}} {
+	}{{"5h", v.RateLimits.Five}, {"semana", v.RateLimits.Seven}} {
 		if x.w == nil {
 			continue
 		}
@@ -305,11 +323,24 @@ func lerClaude(nome, dir string, agora time.Time) (Instancia, bool) {
 			if r < 1e12 {
 				r *= 1000
 			}
-			j.ReiniciaEm = time.UnixMilli(int64(r)).Format(time.RFC3339)
+			j = comVoltaEm(j, time.UnixMilli(int64(r)).Format(time.RFC3339))
 		}
 		i.Janelas = append(i.Janelas, j)
 	}
 	return i, true
+}
+
+func voltaEm(j Janela) string {
+	if j.VoltaEm != "" {
+		return j.VoltaEm
+	}
+	return j.ReiniciaEm
+}
+
+func comVoltaEm(j Janela, valor string) Janela {
+	j.ReiniciaEm = valor
+	j.VoltaEm = valor
+	return j
 }
 
 func expandHome(value, fallback string) string {

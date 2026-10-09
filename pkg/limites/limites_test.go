@@ -83,6 +83,154 @@ func TestAtualizarConsultaAtivaCacheiaSemCredencialNoResultado(t *testing.T) {
 	}
 }
 
+func prepararClaudeAtivo(t *testing.T, cred string) (string, string) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, ".credentials.json")
+	if err := os.WriteFile(path, []byte(cred), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return home, path
+}
+
+func TestAtualizarClaudeRenovaOAuth401EGravaMesmoFormato(t *testing.T) {
+	_, credPath := prepararClaudeAtivo(t, `{"claudeAiOauth":{"accessToken":"velho","refreshToken":"renovar","expiresAt":1,"subscriptionType":"pro"}}`)
+	var usageCalls, refreshCalls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/usage":
+			usageCalls++
+			if r.Header.Get("Authorization") == "Bearer velho" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set("anthropic-ratelimit-unified-5h-utilization", "0.12")
+			_, _ = w.Write([]byte(`{"rate_limits":{"five_hour":{"used_percentage":12,"resets_at":4102444800}}}`))
+		case "/token":
+			refreshCalls++
+			if err := r.ParseForm(); err != nil || r.Form.Get("grant_type") != "refresh_token" || r.Form.Get("client_id") == "" {
+				t.Fatalf("formulário OAuth inválido")
+			}
+			_, _ = w.Write([]byte(`{"access_token":"novo","refresh_token":"novo-refresh","expires_in":3600}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	t.Setenv("OPENHEINERSS_CLAUDE_USAGE_URL", srv.URL+"/usage")
+	t.Setenv("OPENHEINERSS_CLAUDE_OAUTH_TOKEN_URL", srv.URL+"/token")
+	resultado, err := Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: filepath.Join(t.TempDir(), "cache"), HTTPClient: srv.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if usageCalls < 2 || refreshCalls != 1 {
+		t.Fatalf("chamadas usage=%d refresh=%d", usageCalls, refreshCalls)
+	}
+	if resultado.Instancias[0].Fonte != "cabeçalhos" {
+		t.Fatalf("fonte: %+v", resultado.Instancias[0])
+	}
+	b, err := os.ReadFile(credPath)
+	if err != nil || !strings.Contains(string(b), "novo") || strings.Contains(string(b), "velho") {
+		t.Fatalf("credencial não foi renovada: %v", err)
+	}
+	if st, err := os.Stat(credPath); err != nil || st.Mode().Perm() != 0600 {
+		t.Fatalf("modo da credencial: %v", err)
+	}
+}
+
+func TestAtualizarClaude401FalhaMantemFontePassiva(t *testing.T) {
+	home, _ := prepararClaudeAtivo(t, `{"claudeAiOauth":{"accessToken":"velho","refreshToken":"inválido"}}`)
+	if err := os.MkdirAll(filepath.Join(home, ".config", "crom-painel"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".config", "crom-painel", "statusline-conta1.json"), []byte(`{"em":4102444000000,"rate_limits":{"five_hour":{"used_percentage":31}}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/usage" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer srv.Close()
+	t.Setenv("OPENHEINERSS_CLAUDE_USAGE_URL", srv.URL+"/usage")
+	t.Setenv("OPENHEINERSS_CLAUDE_OAUTH_TOKEN_URL", srv.URL+"/token")
+	r, err := Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: filepath.Join(t.TempDir(), "cache"), HTTPClient: srv.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Instancias[0].Fonte != "statusline" || !strings.Contains(r.Instancias[0].Nota, "renovação OAuth") {
+		t.Fatalf("fonte passiva esperada: %+v", r.Instancias)
+	}
+}
+
+func TestAtualizar429RespeitaRetryAfterEUsaCache(t *testing.T) {
+	_, _ = prepararClaudeAtivo(t, `{"claudeAiOauth":{"accessToken":"bom"}}`)
+	var calls int
+	got429 := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if got429 {
+			w.Header().Set("Retry-After", "60")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`{"rate_limits":{"five_hour":{"used_percentage":22}}}`))
+	}))
+	defer srv.Close()
+	t.Setenv("OPENHEINERSS_CLAUDE_USAGE_URL", srv.URL)
+	cache := filepath.Join(t.TempDir(), "cache")
+	if _, err := Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: cache, HTTPClient: srv.Client()}); err != nil {
+		t.Fatal(err)
+	}
+	got429 = true
+	r, err := Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: cache, HTTPClient: srv.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	chamadasDepoisDo429 := calls
+	if calls < 2 || r.Instancias[0].Fonte != "cache (429)" || len(r.Instancias[0].Janelas) != 1 {
+		t.Fatalf("429 não usou cache: chamadas=%d resultado=%+v", calls, r.Instancias)
+	}
+	_, err = Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: cache, HTTPClient: srv.Client()})
+	if err != nil || calls != chamadasDepoisDo429 {
+		t.Fatalf("repetiu antes do retry-after: chamadas=%d erro=%v", calls, err)
+	}
+}
+
+func TestAtualizarNomesEVoltaEm(t *testing.T) {
+	_, _ = prepararClaudeAtivo(t, `{"claudeAiOauth":{"accessToken":"bom"}}`)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"rate_limits":{"five_hour":{"used_percentage":22,"resets_at":4102444800},"seven_day":{"used_percentage":44,"resets_at":4102448400}}}`))
+	}))
+	defer srv.Close()
+	t.Setenv("OPENHEINERSS_CLAUDE_USAGE_URL", srv.URL)
+	r, err := Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: filepath.Join(t.TempDir(), "cache"), HTTPClient: srv.Client()})
+	if err != nil || len(r.Instancias[0].Janelas) != 2 {
+		t.Fatalf("resultado: %+v erro=%v", r, err)
+	}
+	got := map[string]Janela{}
+	for _, j := range r.Instancias[0].Janelas {
+		got[j.Nome] = j
+	}
+	for _, nome := range []string{"5h", "semana"} {
+		j, ok := got[nome]
+		if !ok || j.VoltaEm == "" {
+			t.Fatalf("janela sem nome/voltaEm: %q %+v", nome, got)
+		}
+	}
+	b, _ := json.Marshal(r)
+	if !strings.Contains(string(b), `"voltaEm"`) || strings.Contains(string(b), `"nome":"limite"`) {
+		t.Fatalf("JSON de janelas: %s", b)
+	}
+}
+
 func TestObterLêCodexEClaudePorInstancia(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
