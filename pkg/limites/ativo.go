@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/crom-org/openheinerss/pkg/harness"
@@ -180,19 +179,6 @@ func aplicarFalha429(i *Instancia, cachePath string, retryAte time.Time, reserva
 		return
 	}
 	i.Nota = fmt.Sprintf("HTTP 429; nova tentativa após %s; reserva de cabeçalhos falhou: %s", retryAte.Format(time.RFC3339), reservaMotivo)
-}
-
-// travarConta coordena processos diferentes que consultam a mesma conta.
-func travarConta(path string) (func(), error) {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return func() {}, err
-	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
-		_ = f.Close()
-		return func() {}, err
-	}
-	return func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN); _ = f.Close() }, nil
 }
 
 func mesclar(antigo, novo Instancia) Instancia {
