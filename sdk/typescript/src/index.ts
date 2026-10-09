@@ -56,7 +56,7 @@ export class Openheinerss extends EventEmitter {
   /** `run` (id da execução, vem em `orq.precisa_decisao`) é opcional; se vier, o servidor confere. */
   /** encerrar (opcional): numa negação, termina a execução (orq.fim código 3, motivo "negado"); ausente vale serve --negar-encerra. */
   async decideRun(id: string, resposta: string, mensagem?: string, run?: string, encerrar?: boolean): Promise<void> { await this.ensureTransport(); await this.sendRPC("rodar.decidir", { id, resposta, mensagem, run, encerrar }); }
-  async getLimits(atualizar = false, forcar = false): Promise<Limits> { await this.ensureTransport(); return this.sendRPC("limites.obter", atualizar ? { atualizar: true, forcar } : {}); }
+  async getLimits(atualizar = false, forcar = false): Promise<Limits> { await this.ensureTransport(); return this.sendRPC("limites.obter", atualizar || forcar ? { atualizar: true, forcar } : {}); }
   /** Matriz de capacidades (instruções, skills, MCP, retomada, permissões); sem harness, devolve as bases. */
   async capacidades(harness?: string): Promise<HarnessCapabilities | { harnesses: HarnessCapabilities[] }> { await this.ensureTransport(); return this.sendRPC("harness.capacidades", harness ? { harness } : {}); }
   async identidade(instancia: string): Promise<Identity> { await this.ensureTransport(); return this.sendRPC("instancia.identidade", { instancia }); }

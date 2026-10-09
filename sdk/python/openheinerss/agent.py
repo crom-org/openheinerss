@@ -240,7 +240,7 @@ class Agent:
         self._request("rodar.decidir", params)
 
     def get_limits(self, atualizar: bool = False, forcar: bool = False) -> Dict[str, Any]:
-        return self._request("limites.obter", {"atualizar": True, "forcar": forcar} if atualizar else {})
+        return self._request("limites.obter", {"atualizar": True, "forcar": forcar} if atualizar or forcar else {})
 
     def capacidades(self, harness: Optional[str] = None) -> Dict[str, Any]:
         """Matriz de capacidades (instruções, skills, MCP, retomada, permissões); sem harness, as bases."""
