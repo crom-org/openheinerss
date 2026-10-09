@@ -1,6 +1,7 @@
 package identidade
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -8,6 +9,31 @@ import (
 	"github.com/crom-org/openheinerss/pkg/harness"
 	_ "github.com/crom-org/openheinerss/pkg/harness/claudecode"
 )
+
+func TestIDParaIdentificadorAninhadoEhDeterministico(t *testing.T) {
+	dir := t.TempDir()
+	b, err := json.Marshal(map[string]interface{}{
+		"z": map[string]interface{}{"email": "email@example.test", "accountUuid": "uuid-prioritario"},
+		"a": map[string]interface{}{"account_id": "id-prioritario"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "auth.json"), b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	var anterior string
+	for i := 0; i < 50; i++ {
+		id, fonte := IDPara("codex", dir)
+		if fonte != "id-real" {
+			t.Fatalf("fonte inesperada: %q", fonte)
+		}
+		if i > 0 && id != anterior {
+			t.Fatalf("contaId mudou na repetição %d: %s != %s", i, anterior, id)
+		}
+		anterior = id
+	}
+}
 
 func TestParaCanonicalizaSymlinkENome(t *testing.T) {
 	root := t.TempDir()

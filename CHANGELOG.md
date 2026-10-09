@@ -5,6 +5,9 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 
 ## Não publicado
 
+- Torna `contaId` determinístico, faz `contas listar` usar o diretório padrão do
+  harness, recusa apagar cwd/repositório, melhora erros da CLI e faz `config` e
+  `mcp` exibirem a configuração efetiva sem subcomando.
 - `limites --atualizar` (claude-code): o token OAuth vencido agora é renovado antes da consulta e da reserva por cabeçalhos (antes só em HTTP 401, que não vinha: o servidor devolvia 429). A reserva também renova em 401 e o diagnóstico lista só os NOMES dos cabeçalhos `anthropic-*`.
 - Adiciona a matriz de capacidades por harness no CLI/RPC e SDKs, retomada nativa
   de sessões e troca de instância por cota fresca com motivo registrado.

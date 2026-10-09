@@ -346,6 +346,9 @@ func newAgentesCmd() *cobra.Command {
 		}
 		log, err := orchestrator.ShowAgentLog(dir, args[0], 80)
 		if err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("agente %q não encontrado", args[0])
+			}
 			return err
 		}
 		fmt.Println(log)
@@ -355,6 +358,13 @@ func newAgentesCmd() *cobra.Command {
 		dir, err := pastaAgentes(agentsDir)
 		if err != nil {
 			return err
+		}
+		metaPath := filepath.Join(dir, "logs", args[0]+".meta.json")
+		logPath := filepath.Join(dir, "logs", args[0]+".log")
+		if _, metaErr := os.Stat(metaPath); os.IsNotExist(metaErr) {
+			if _, logErr := os.Stat(logPath); os.IsNotExist(logErr) {
+				return fmt.Errorf("agente %q não encontrado", args[0])
+			}
 		}
 		orfao, err := orchestrator.PararAgente(dir, args[0], time.Now())
 		if err != nil {
@@ -490,9 +500,11 @@ func newServeCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:     "serve",
-		Aliases: []string{"servir"},
-		Short:   "Inicia o servidor de orquestração Openheinerss (STDIO ou WebSocket)",
+		Use:           "serve",
+		Aliases:       []string{"servir"},
+		Short:         "Inicia o servidor de orquestração Openheinerss (STDIO ou WebSocket)",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			manager := session.NewManager()
 			defer manager.Close()
@@ -1090,6 +1102,14 @@ func newMcpCmd() *cobra.Command {
 		Use:   "mcp",
 		Short: "Gerencia os servidores MCP (Model Context Protocol) do projeto",
 	}
+	mcpCmd.RunE = func(cmd *cobra.Command, args []string) error {
+		cmd.SilenceUsage = true
+		cwd, err := projetoAtual()
+		if err != nil {
+			return err
+		}
+		return listarMcpEfetivos(cwd)
+	}
 
 	mcpCmd.AddCommand(&cobra.Command{
 		Use:     "list",
@@ -1122,29 +1142,11 @@ func newMcpCmd() *cobra.Command {
 		Aliases: []string{"effective"},
 		Short:   "Lista os servidores que cada harness recebe nesta pasta (global + projeto; valores de env/headers ocultos)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cwd, _ := projetoAtual()
-			servs, err := mcp.Efetivos(cwd)
+			cwd, err := projetoAtual()
 			if err != nil {
 				return err
 			}
-			if len(servs) == 0 {
-				fmt.Println("Nenhum servidor MCP em mcp.json (global ou do projeto).")
-				return nil
-			}
-			for _, name := range mcp.Nomes(servs) {
-				s := mcp.Mascarar(servs[name])
-				target := strings.TrimSpace(s.Command + " " + strings.Join(s.Args, " "))
-				if s.URL != "" {
-					target = s.URL
-				}
-				var env []string
-				for k := range s.Env {
-					env = append(env, k+"=***")
-				}
-				sort.Strings(env)
-				fmt.Printf("   • %-15s %s %s\n", name, target, strings.Join(env, " "))
-			}
-			return nil
+			return listarMcpEfetivos(cwd)
 		},
 	})
 
@@ -1173,6 +1175,31 @@ func newMcpCmd() *cobra.Command {
 	})
 
 	return mcpCmd
+}
+
+func listarMcpEfetivos(cwd string) error {
+	servs, err := mcp.Efetivos(cwd)
+	if err != nil {
+		return err
+	}
+	if len(servs) == 0 {
+		fmt.Println("Nenhum servidor MCP em mcp.json (global ou do projeto).")
+		return nil
+	}
+	for _, name := range mcp.Nomes(servs) {
+		s := mcp.Mascarar(servs[name])
+		target := strings.TrimSpace(s.Command + " " + strings.Join(s.Args, " "))
+		if s.URL != "" {
+			target = s.URL
+		}
+		var env []string
+		for k := range s.Env {
+			env = append(env, k+"=***")
+		}
+		sort.Strings(env)
+		fmt.Printf("   • %-15s %s %s\n", name, target, strings.Join(env, " "))
+	}
+	return nil
 }
 
 func newVersionCmd() *cobra.Command {

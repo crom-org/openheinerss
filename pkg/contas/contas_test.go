@@ -6,7 +6,32 @@ import (
 	"testing"
 
 	_ "github.com/crom-org/openheinerss/pkg/harness/codex"
+	_ "github.com/crom-org/openheinerss/pkg/harness/opencode"
 )
+
+func TestListarEnvVazioUsaPadraoEApagarNaoAceitaProjeto(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("OPENCODE_CONFIG_DIR", "")
+	dir := filepath.Join(t.TempDir(), "harnesses")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "opencode.yaml"), []byte("name: opencode\nenv: {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	items, err := Listar(dir)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("listagem: %+v (%v)", items, err)
+	}
+	want := filepath.Join(home, ".config", "opencode")
+	if items[0].ContaDir != want {
+		t.Fatalf("env vazio caiu em %q; queria %q", items[0].ContaDir, want)
+	}
+	if err := ValidarPastaParaApagar("opencode", want, want, want); err == nil {
+		t.Fatal("deveria recusar apagar cwd/projeto")
+	}
+}
 
 func TestCicloContaSemLerCredencial(t *testing.T) {
 	home := t.TempDir()

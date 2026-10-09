@@ -919,7 +919,7 @@ func readPromptOptions(agents, name, explicit, text, rulesPath, defaultRulesPath
 		}
 		var err error
 		if b, err = os.ReadFile(prompt); err != nil {
-			return "", fmt.Errorf("abrir prompt %s: %w", prompt, err)
+			return "", fmt.Errorf("abrir prompt: %w", err)
 		}
 	}
 	rules := rulesPath

@@ -13,6 +13,7 @@ import (
 	"github.com/crom-org/openheinerss/pkg/contas"
 	"github.com/crom-org/openheinerss/pkg/identidade"
 	"github.com/crom-org/openheinerss/pkg/limites"
+	"github.com/crom-org/openheinerss/pkg/orchestrator"
 	"github.com/spf13/cobra"
 )
 
@@ -185,6 +186,14 @@ func novaContasCmd() *cobra.Command {
 			}
 		}
 		if apagar {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			repo, _ := orchestrator.RaizDoRepo(cwd)
+			if err := contas.ValidarPastaParaApagar(alvo.Base, alvo.ContaDir, cwd, repo); err != nil {
+				return err
+			}
 			ok, err := confirmarConta("APAGAR também a pasta de login "+alvo.ContaDir+"?", in)
 			if err != nil || !ok {
 				return fmt.Errorf("remoção cancelada")
