@@ -1,15 +1,13 @@
 # Changelog
 
-## Não publicado
+Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
+[Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
+
+## [1.8.0] — 2026-10-09
 
 - `limites --atualizar` sempre consulta as contas na hora, ignora cache e intervalo mínimo, e mantém `--forcar` como alias compatível.
 - Quando o uso Claude responde 429, a reserva por cabeçalhos também é tentada imediatamente; o resultado documenta o custo de 1 token de saída mais tokens de entrada. As janelas Claude preenchem `voltaEm` a partir de `resets_at` e dos cabeçalhos de reserva.
 - A saída de `limites` sempre mostra a idade do dado; cache só é usado na leitura sem `--atualizar` ou como último recurso após falharem consulta e reserva.
-
-Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
-[Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
-
-## Não publicado
 
 - Adiciona `rodar --permitir-pasta`/`pastasPermitidas` em RPC e SDKs, configuração global/projeto/instância, normalização de caminhos e tradução para permissões nativas dos motores. `--seco` exibe as pastas e rejeições externas do OpenCode ficam explícitas.
 
