@@ -83,6 +83,48 @@ func TestAtualizarConsultaAtivaCacheiaSemCredencialNoResultado(t *testing.T) {
 	}
 }
 
+func TestConsultaCodexWhamLêFixtureEEnviaAccountID(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	codex := filepath.Join(home, ".codex")
+	if err := os.MkdirAll(codex, 0700); err != nil {
+		t.Fatal(err)
+	}
+	fixture, err := os.ReadFile(filepath.Join("testdata", "wham-usage.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(codex, "auth.json"), []byte(`{"account_id":"acct-anonimo","tokens":{"access_token":"token-anonimo"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var gotID string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotID = r.Header.Get("ChatGPT-Account-Id")
+		_, _ = w.Write(fixture)
+	}))
+	defer srv.Close()
+	t.Setenv("OPENHEINERSS_CODEX_USAGE_URL", srv.URL)
+	r, err := Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: filepath.Join(t.TempDir(), "cache"), HTTPClient: srv.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var codexResult Instancia
+	for _, i := range r.Instancias {
+		if i.Nome == "codex" {
+			codexResult = i
+		}
+	}
+	if gotID != "acct-anonimo" {
+		t.Fatalf("account id não enviado: %q", gotID)
+	}
+	if len(codexResult.Janelas) != 2 || codexResult.Janelas[0].VoltaEm == "" || codexResult.Janelas[1].VoltaEm == "" {
+		t.Fatalf("fixture wham não interpretado: %+v", codexResult)
+	}
+	if codexResult.ContaIDFonte != "id-real" {
+		t.Fatalf("fonte da identidade: %+v", codexResult)
+	}
+}
+
 func prepararClaudeAtivo(t *testing.T, cred string) (string, string) {
 	t.Helper()
 	home := t.TempDir()

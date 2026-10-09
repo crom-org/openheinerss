@@ -1,5 +1,0 @@
-name: codex2
-base: codex
-env:
-  CODEX_HOME: ~/.codex-compartilhado
-model: gpt-reserve

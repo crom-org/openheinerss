@@ -285,7 +285,18 @@ func LoadCustomDir(dir string) error {
 			if e.IsDir() || !(strings.HasSuffix(e.Name(), ".yaml") || strings.HasSuffix(e.Name(), ".yml") || strings.HasSuffix(e.Name(), ".json")) {
 				continue
 			}
-			if err := LoadCustomFile(dir + "/" + e.Name()); err != nil {
+			path := filepath.Join(dir, e.Name())
+			// Corrige o erro antigo que gravava extensão dupla, sem perder o arquivo.
+			if strings.HasSuffix(e.Name(), ".yaml.yaml") || strings.HasSuffix(e.Name(), ".yml.yml") {
+				novo := strings.TrimSuffix(strings.TrimSuffix(e.Name(), filepath.Ext(e.Name())), filepath.Ext(strings.TrimSuffix(e.Name(), filepath.Ext(e.Name())))) + filepath.Ext(e.Name())
+				// A expressão acima preserva .yaml/.yml; só renomeamos quando o alvo está livre.
+				if _, statErr := os.Stat(filepath.Join(dir, novo)); os.IsNotExist(statErr) {
+					if err := os.Rename(path, filepath.Join(dir, novo)); err == nil {
+						path = filepath.Join(dir, novo)
+					}
+				}
+			}
+			if err := LoadCustomFile(path); err != nil {
 				return err
 			}
 		}

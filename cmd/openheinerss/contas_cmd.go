@@ -54,6 +54,9 @@ func exibirContas(items []contas.Conta, jsonOutput bool) error {
 	}
 	for _, c := range items {
 		fmt.Printf("%s origem=%s base=%s contaId=%s contaDir=%s login=%t\n", c.Instancia, c.Origem, c.Base, c.ContaID, c.ContaDir, c.TemLogin)
+		if c.MesmaContaQue != "" {
+			fmt.Printf("  mesma conta que %s\n", c.MesmaContaQue)
+		}
 	}
 	return nil
 }
@@ -69,6 +72,17 @@ func novaContasCmd() *cobra.Command {
 		items, err := contas.ListarCamadas(globais, projeto)
 		if err != nil {
 			return err
+		}
+		porID := map[string]string{}
+		for n := range items {
+			if items[n].ContaID == "" {
+				continue
+			}
+			if anterior, ok := porID[items[n].ContaID]; ok {
+				items[n].MesmaContaQue = anterior
+			} else {
+				porID[items[n].ContaID] = items[n].Instancia
+			}
 		}
 		return exibirContas(items, jsonOutput)
 	}}

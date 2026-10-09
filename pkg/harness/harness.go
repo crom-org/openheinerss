@@ -112,6 +112,9 @@ func Register(name string, meta protocol.HarnessCatalogItem, factory Factory) {
 
 // Create instancia um harness pelo nome e modo
 func Create(name string, mode Mode) (Harness, error) {
+	if strings.EqualFold(name, "codex2") {
+		return nil, fmt.Errorf("codex2 removido: é a mesma conta do codex; use codex")
+	}
 	name = CanonicalName(name)
 	defaultRegistry.mu.RLock()
 	factory, exists := defaultRegistry.factories[name]

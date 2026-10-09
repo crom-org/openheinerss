@@ -14,7 +14,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+
+	"github.com/crom-org/openheinerss/pkg/harness"
 )
 
 type AtualizarOpcoes struct {
@@ -58,51 +61,72 @@ func Atualizar(ctx context.Context, op AtualizarOpcoes) (Resultado, error) {
 			continue
 		}
 		cachePath := filepath.Join(cacheDir, nomeCache(i.Nome))
-		if retryAte, ok := lerRetryAte(retryPath(cachePath)); ok && time.Now().Before(retryAte) {
-			if c, ok := lerCacheSemValidade(cachePath); ok {
-				c.Fonte = "cache (429)"
-				c.Nota = fmt.Sprintf("HTTP 429; nova tentativa após %s", retryAte.Format(time.RFC3339))
-				*i = mesclar(*i, c)
-			} else {
-				i.Nota = fmt.Sprintf("HTTP 429; nova tentativa após %s", retryAte.Format(time.RFC3339))
-			}
+		unlock, lockErr := travarConta(cachePath + ".lock")
+		if lockErr != nil {
+			i.Nota = "consulta ativa indisponível: trava de cache"
 			continue
 		}
-		if !op.Forcar {
-			if c, ok := lerCache(cachePath, time.Now(), op.Intervalo); ok {
-				*i = mesclar(*i, c)
-				continue
-			}
-		}
-		var got Instancia
-		var err error
-		if i.Base == "claude-code" {
-			got, err = consultaClaude(ctx, *i, op.HTTPClient)
-		} else {
-			got, err = consultaCodex(ctx, *i, op.HTTPClient)
-		}
-		if err != nil {
-			if he, ok := err.(*httpStatusError); ok && he.status == http.StatusTooManyRequests {
-				retryAte := time.Now().Add(retryAfter(he.header.Get("Retry-After")))
-				_ = gravarRetryAte(retryPath(cachePath), retryAte)
-				if c, cacheOK := lerCacheSemValidade(cachePath); cacheOK {
+		func() {
+			defer unlock()
+			if retryAte, ok := lerRetryAte(retryPath(cachePath)); ok && time.Now().Before(retryAte) {
+				if c, ok := lerCacheSemValidade(cachePath); ok {
 					c.Fonte = "cache (429)"
 					c.Nota = fmt.Sprintf("HTTP 429; nova tentativa após %s", retryAte.Format(time.RFC3339))
 					*i = mesclar(*i, c)
 				} else {
 					i.Nota = fmt.Sprintf("HTTP 429; nova tentativa após %s", retryAte.Format(time.RFC3339))
 				}
-				continue
+				return
 			}
-			// O dado passivo continua útil, mas o erro não inclui URL nem credencial.
-			i.Nota = "consulta ativa indisponível: " + erroSeguro(err)
-			continue
-		}
-		*i = mesclar(*i, got)
-		_ = gravarCache(cachePath, got)
+			if !op.Forcar {
+				if c, ok := lerCache(cachePath, time.Now(), op.Intervalo); ok {
+					*i = mesclar(*i, c)
+					return
+				}
+			}
+			var got Instancia
+			var err error
+			if i.Base == "claude-code" {
+				got, err = consultaClaude(ctx, *i, op.HTTPClient)
+			} else {
+				got, err = consultaCodex(ctx, *i, op.HTTPClient)
+			}
+			if err != nil {
+				if he, ok := err.(*httpStatusError); ok && he.status == http.StatusTooManyRequests {
+					retryAte := time.Now().Add(retryAfter(he.header.Get("Retry-After")))
+					_ = gravarRetryAte(retryPath(cachePath), retryAte)
+					if c, cacheOK := lerCacheSemValidade(cachePath); cacheOK {
+						c.Fonte = "cache (429)"
+						c.Nota = fmt.Sprintf("HTTP 429; nova tentativa após %s", retryAte.Format(time.RFC3339))
+						*i = mesclar(*i, c)
+					} else {
+						i.Nota = fmt.Sprintf("HTTP 429; nova tentativa após %s", retryAte.Format(time.RFC3339))
+					}
+					return
+				}
+				// O dado passivo continua útil, mas o erro não inclui URL nem credencial.
+				i.Nota = "consulta ativa indisponível: " + erroSeguro(err)
+				return
+			}
+			*i = mesclar(*i, got)
+			_ = gravarCache(cachePath, got)
+		}()
 	}
 	resultado.Agora = time.Now().Format(time.RFC3339)
 	return resultado, nil
+}
+
+// travarConta coordena processos diferentes que consultam a mesma conta.
+func travarConta(path string) (func(), error) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return func() {}, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		_ = f.Close()
+		return func() {}, err
+	}
+	return func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN); _ = f.Close() }, nil
 }
 
 func mesclar(antigo, novo Instancia) Instancia {
@@ -201,6 +225,18 @@ func tokenArquivo(path string, chaves ...string) (string, error) {
 	}
 	return acharToken(v, chaves...), nil
 }
+
+func tokenArquivoSemSegredo(path string, chaves ...string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var v interface{}
+	if json.Unmarshal(b, &v) != nil {
+		return ""
+	}
+	return acharToken(v, chaves...)
+}
 func acharToken(v interface{}, chaves ...string) string {
 	if m, ok := v.(map[string]interface{}); ok {
 		for _, chave := range chaves {
@@ -282,7 +318,8 @@ func consultaClaude(ctx context.Context, base Instancia, client *http.Client) (I
 }
 func consultaCodex(ctx context.Context, base Instancia, client *http.Client) (Instancia, error) {
 	home := dirCodex(base)
-	token, err := tokenArquivo(filepath.Join(home, "auth.json"), "access_token", "accessToken", "token")
+	authPath := filepath.Join(home, "auth.json")
+	token, err := tokenArquivo(authPath, "access_token", "accessToken", "token")
 	if err != nil || token == "" {
 		return base, errors.New("credencial não encontrada")
 	}
@@ -290,14 +327,18 @@ func consultaCodex(ctx context.Context, base Instancia, client *http.Client) (In
 	if url == "" {
 		url = "https://chatgpt.com/backend-api/wham/usage"
 	}
-	v, headers, err := requestJSON(ctx, client, url, token, map[string]string{"ChatGPT-Account-Id": ""})
+	reqHeaders := map[string]string{}
+	if accountID := tokenArquivoSemSegredo(authPath, "account_id", "accountId"); accountID != "" {
+		reqHeaders["ChatGPT-Account-Id"] = accountID
+	}
+	v, headers, err := requestJSON(ctx, client, url, token, reqHeaders)
 	if err != nil {
 		return base, err
 	}
 	return instanciaUso(base, v, headers, "consulta-ativa"), nil
 }
 func instanciaUso(base Instancia, v map[string]interface{}, h http.Header, fonte string) Instancia {
-	i := Instancia{Nome: base.Nome, Base: base.Base, DadoEm: time.Now().Format(time.RFC3339), Fonte: fonte}
+	i := Instancia{Nome: base.Nome, Base: base.Base, DadoEm: time.Now().Format(time.RFC3339), Fonte: fonte, ContaID: base.ContaID, ContaIDFonte: base.ContaIDFonte}
 	if h.Get("anthropic-ratelimit-unified-5h-utilization") != "" {
 		i.Fonte = "cabeçalhos"
 		i.Janelas = append(i.Janelas, Janela{Nome: "5h", Percentual: parseFloat(h.Get("anthropic-ratelimit-unified-5h-utilization")) * 100})
@@ -311,7 +352,7 @@ func instanciaUso(base Instancia, v map[string]interface{}, h http.Header, fonte
 }
 func walkUso(v interface{}, i *Instancia) {
 	if m, ok := v.(map[string]interface{}); ok {
-		for key, nome := range map[string]string{"five_hour": "5h", "seven_day": "semana", "five-hour": "5h", "seven-day": "semana"} {
+		for key, nome := range map[string]string{"five_hour": "5h", "seven_day": "semana", "five-hour": "5h", "seven-day": "semana", "primary_window": "5h", "secondary_window": "semana", "primary": "5h", "secondary": "semana", "primaryWindow": "5h", "secondaryWindow": "semana"} {
 			if child, ok := m[key].(map[string]interface{}); ok {
 				if percentual, found := percentualUso(child); found {
 					j := Janela{Nome: nome, Percentual: percentual}
@@ -334,7 +375,7 @@ func walkUso(v interface{}, i *Instancia) {
 }
 
 func percentualUso(m map[string]interface{}) (float64, bool) {
-	for _, key := range []string{"used_percent", "used_percentage", "utilization"} {
+	for _, key := range []string{"used_percent", "used_percentage", "usedPercent", "usedPercentage", "utilization"} {
 		if f, ok := num(m[key]); ok {
 			if f <= 1 {
 				f *= 100
@@ -347,6 +388,12 @@ func percentualUso(m map[string]interface{}) (float64, bool) {
 
 func resetUso(m map[string]interface{}) (string, bool) {
 	f, ok := num(m["resets_at"])
+	if !ok {
+		f, ok = num(m["reset_at"])
+	}
+	if !ok {
+		f, ok = num(m["resetAt"])
+	}
 	if !ok || f <= 0 {
 		return "", false
 	}
@@ -435,13 +482,16 @@ func num(v interface{}) (float64, bool) {
 	case json.Number:
 		f, e := x.Float64()
 		return f, e == nil
+	case string:
+		f, e := strconv.ParseFloat(strings.TrimSpace(x), 64)
+		return f, e == nil
 	}
 	return 0, false
 }
 func parseFloat(s string) float64 { f, _ := strconv.ParseFloat(strings.TrimSpace(s), 64); return f }
 func dirClaude(i Instancia) string {
-	if i.Nome == "claude-conta2" {
-		return filepath.Join(userHome(), ".claude-conta2")
+	if spec, ok := harness.CustomSpecFor(i.Nome); ok && spec.Env["CLAUDE_CONFIG_DIR"] != "" {
+		return expandHome(spec.Env["CLAUDE_CONFIG_DIR"], filepath.Join(userHome(), ".claude"))
 	}
 	if strings.HasPrefix(i.Nome, "claude-") && i.Nome != "claude-code" {
 		return filepath.Join(userHome(), "."+i.Nome)
@@ -449,8 +499,8 @@ func dirClaude(i Instancia) string {
 	return filepath.Join(userHome(), ".claude")
 }
 func dirCodex(i Instancia) string {
-	if i.Nome == "codex2" {
-		return filepath.Join(userHome(), ".codex-compartilhado")
+	if spec, ok := harness.CustomSpecFor(i.Nome); ok && spec.Env["CODEX_HOME"] != "" {
+		return expandHome(spec.Env["CODEX_HOME"], filepath.Join(userHome(), ".codex"))
 	}
 	return expandHome(os.Getenv("CODEX_HOME"), filepath.Join(userHome(), ".codex"))
 }

@@ -9,6 +9,8 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 - `rodar --cota-max` só decide com limite atualizado nos últimos cinco minutos e tenta consulta ativa quando o dado passivo está velho.
 - Removidos os modos falsos `codex api` e `agy sdk`; sessões sem harness explícito leem `default_harness`/`default_mode` do projeto e recusam a ausência de configuração em vez de cair no mock.
 - Limites informam janelas vencidas e datas desconhecidas; modelos de provedores não ficam congelados no catálogo; `--projeto` seleciona a configuração local nos comandos CLI.
+- Corrige limites do Codex/Claude: parse do wham com janelas e `voltaEm`, identidade por ID real, cache compartilhado com trava e respeito a 429.
+- Remove a instância fixa `codex2`, corrige extensões duplicadas de harness e sinaliza contas que apontam para a mesma identidade.
 
 ## [1.4.1] — 2026-10-09
 

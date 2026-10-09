@@ -13,7 +13,7 @@ virar essa camada, mas ainda não está pronto.
 ## O que falta para substituir o rodar.sh
 1. Corrigir o adaptador do Codex: usar `codex exec` (com `--json` para streaming), não `codex run`. O modo API pago fica opcional.
 2. Trocar a porta 4799 (conflita com o painel) por 4820 e aceitar `--porta`/env.
-3. Suportar como motores os mesmos do `rodar.sh`: `codex`, `codex2` (`CODEX_HOME=~/.codex-compartilhado`),
+3. Suportar como motores os mesmos do `rodar.sh`: `codex` com instâncias configuráveis (`CODEX_HOME`),
    `claude` com `CLAUDE_CONFIG_DIR` (conta2), `cco --provider openrouter|opencode-zen` (modelos `--free`) e `opencode` grátis.
 4. Escolher motor e modelo por arquivo de configuração (ex.: `papel: motor/modelo`), para trocar com uma linha.
 5. Fazer o que o rodar.sh já faz:
