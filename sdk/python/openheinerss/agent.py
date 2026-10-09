@@ -230,8 +230,8 @@ class Agent:
             params["encerrar"] = encerrar
         self._request("rodar.decidir", params)
 
-    def get_limits(self) -> Dict[str, Any]:
-        return self._request("limites.obter", {})
+    def get_limits(self, atualizar: bool = False, forcar: bool = False) -> Dict[str, Any]:
+        return self._request("limites.obter", {"atualizar": True, "forcar": forcar} if atualizar else {})
 
     def identidade(self, instancia: str) -> Dict[str, Any]:
         return self._request("instancia.identidade", {"instancia": instancia})
@@ -247,7 +247,7 @@ class Agent:
 
     def subscribe_events(self, callback: Optional[Callable[[Dict[str, Any]], None]] = None, **filter: str) -> None:
         if callback:
-            for name in ("orq.inicio", "orq.progresso", "orq.fim", "orq.erro", "orq.precisa_decisao", "orq.filhos_orfaos"):
+            for name in ("orq.inicio", "orq.progresso", "orq.fim", "orq.erro", "orq.precisa_decisao", "orq.filhos_orfaos", "limites.atualizado"):
                 self.callbacks[name] = callback
         self._request("eventos.assinar", filter)
 

@@ -33,6 +33,7 @@ const (
 	EventOrqErro           = "orq.erro"
 	EventOrqPrecisaDecisao = "orq.precisa_decisao"
 	EventOrqFilhosOrfaos   = "orq.filhos_orfaos"
+	EventLimitesAtualizado = "limites.atualizado"
 )
 
 // OrqInicioParams payload de orq.inicio (um por tentativa).

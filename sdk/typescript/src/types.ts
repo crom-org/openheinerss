@@ -53,14 +53,14 @@ export interface AgentInfo { id?: string; agente: string; projeto: string; estad
 export interface OrchestrationDecision { geracao?: string; run?: string; id: string; agente: string; projeto: string; pergunta: string; opcoes: string[]; }
 export interface RunList { agentes: AgentInfo[]; decisoes: OrchestrationDecision[]; }
 export interface LimitsWindow { nome: string; percentual: number; reiniciaEm?: string; }
-export interface Limits { agora: string; instancias: Array<{ nome: string; base: string; janelas: LimitsWindow[]; }>; }
+export interface Limits { agora: string; instancias: Array<{ nome: string; base: string; janelas: LimitsWindow[]; dadoEm?: string; idadeSegundos?: number; fonte: string; nota?: string; }>; }
 export interface EventFilter { projeto?: string; agente?: string; cwd?: string; pasta?: string; }
 /** Como a ponte repassa o comando no modo sem tela. */
 export type CommandRelay = "literal" | "traduzido" | "sem_equivalente";
 /** Comando nativo do harness (harness.comandos), já mesclado com a anotação do usuário. */
 export interface HarnessCommand { nome: string; descricao: string; repasse: CommandRelay; detalhe?: string; origem: "embutido" | "descoberto" | "usuario"; anotacao?: string; confirmado: boolean; }
 export interface HarnessCommandList { harness: string; base: string; cadeia: string[]; desconhecido: CommandRelay; arquivo: string; comandos: HarnessCommand[]; }
-export type OrchestrationEventName = "orq.inicio" | "orq.progresso" | "orq.fim" | "orq.erro" | "orq.precisa_decisao" | "orq.filhos_orfaos";
+export type OrchestrationEventName = "orq.inicio" | "orq.progresso" | "orq.fim" | "orq.erro" | "orq.precisa_decisao" | "orq.filhos_orfaos" | "limites.atualizado";
 export type OrchestrationEvent = { method: OrchestrationEventName; params: Record<string, unknown> & { geracao: string }; };
 export type OrchestrationCallback = (params: Record<string, unknown>) => void;
 

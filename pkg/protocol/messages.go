@@ -262,7 +262,10 @@ type RunParams struct {
 	CWD                string `json:"cwd,omitempty"`
 }
 
-type LimitsParams struct{}
+type LimitsParams struct {
+	Atualizar bool `json:"atualizar,omitempty"`
+	Forcar    bool `json:"forcar,omitempty"`
+}
 
 type RunResult struct {
 	Nome       string `json:"nome"`

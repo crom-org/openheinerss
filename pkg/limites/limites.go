@@ -30,6 +30,7 @@ type Instancia struct {
 	DadoEm        string   `json:"dadoEm,omitempty"`
 	IdadeSegundos int64    `json:"idadeSegundos,omitempty"`
 	Nota          string   `json:"nota,omitempty"`
+	Fonte         string   `json:"fonte"`
 }
 
 type Resultado struct {
@@ -241,10 +242,11 @@ func lerCodex(nome, home string, agora time.Time) (Instancia, bool) {
 		_ = f.Close()
 	}
 	if best == nil {
-		return Instancia{Nome: nome, Base: "codex", Nota: "sem dado: sem leitura de limite nos arquivos de sessão"}, true
+		return Instancia{Nome: nome, Base: "codex", Nota: "sem dado: sem leitura de limite nos arquivos de sessão", Fonte: "log"}, true
 	}
 	em := parseTime(best.Timestamp, agora)
 	i := Instancia{Nome: nome, Base: "codex", DadoEm: em.Format(time.RFC3339), IdadeSegundos: int64(agora.Sub(em).Seconds())}
+	i.Fonte = "log"
 	for _, w := range []*rateWindow{best.Payload.RateLimits.Primary, best.Payload.RateLimits.Secondary} {
 		if w == nil {
 			continue
@@ -269,7 +271,7 @@ func lerClaude(nome, dir string, agora time.Time) (Instancia, bool) {
 	statusPath := filepath.Join(userHome(), ".config", "crom-painel", "statusline-"+contaClaude(nome, dir)+".json")
 	b, err := os.ReadFile(statusPath)
 	if err != nil {
-		return Instancia{Nome: nome, Base: "claude-code", Nota: "sem dado: statusline não encontrado"}, true
+		return Instancia{Nome: nome, Base: "claude-code", Nota: "sem dado: statusline não encontrado", Fonte: "statusline"}, true
 	}
 	var v struct {
 		Em         float64 `json:"em"`
@@ -279,13 +281,13 @@ func lerClaude(nome, dir string, agora time.Time) (Instancia, bool) {
 		} `json:"rate_limits"`
 	}
 	if json.Unmarshal(b, &v) != nil {
-		return Instancia{Nome: nome, Base: "claude-code", Nota: "sem dado: statusline inválido"}, true
+		return Instancia{Nome: nome, Base: "claude-code", Nota: "sem dado: statusline inválido", Fonte: "statusline"}, true
 	}
 	em := time.UnixMilli(int64(v.Em))
 	if v.Em < 1e12 {
 		em = time.Unix(int64(v.Em), 0)
 	}
-	i := Instancia{Nome: nome, Base: "claude-code", DadoEm: em.Format(time.RFC3339), IdadeSegundos: int64(agora.Sub(em).Seconds())}
+	i := Instancia{Nome: nome, Base: "claude-code", DadoEm: em.Format(time.RFC3339), IdadeSegundos: int64(agora.Sub(em).Seconds()), Fonte: "statusline"}
 	for _, x := range []struct {
 		name string
 		w    *rateWindow

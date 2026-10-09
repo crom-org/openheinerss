@@ -256,7 +256,10 @@ Aliases:
   limites, limits
 
 Flags:
-      --json   Emite JSON
+      --atualizar            Consulta ativamente cada conta, respeitando o intervalo mínimo
+      --forcar               Ignora o intervalo mínimo por conta
+      --intervalo duration   Intervalo mínimo entre consultas por conta (default 5m0s)
+      --json                 Emite JSON
 
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
@@ -433,17 +436,18 @@ Aliases:
   serve, servir
 
 Flags:
-      --classificar-risco   Acrescenta risco (baixo|medio|alto) e motivo a tool_call e permission_request; só informa, nunca bloqueia
-      --classify-risk       Alias em inglês de --classificar-risco
-      --deny-ends           Alias em inglês de --negar-encerra
-      --hospedeiro string   Alias em português de --host (default "127.0.0.1")
-      --host string         Host de vinculação do WebSocket (default "127.0.0.1")
-      --max-agentes int     Máximo de agentes simultâneos no servidor
-      --max-agents int      Alias em inglês de --max-agentes
-      --negar-encerra       Negar em rodar.decidir encerra a execução (código 3, motivo negado) sem nova tentativa
-  -p, --port int            Porta para o servidor WebSocket (alias de --porta) (default 4820)
-      --porta int           Porta para o servidor WebSocket (default 4820)
-      --stdio               Executa via pipes padrão STDIO (JSON-RPC / NDJSON)
+      --classificar-risco    Acrescenta risco (baixo|medio|alto) e motivo a tool_call e permission_request; só informa, nunca bloqueia
+      --classify-risk        Alias em inglês de --classificar-risco
+      --deny-ends            Alias em inglês de --negar-encerra
+      --hospedeiro string    Alias em português de --host (default "127.0.0.1")
+      --host string          Host de vinculação do WebSocket (default "127.0.0.1")
+      --limites-a-cada int   Atualiza limites em segundo plano a cada N minutos (0 desliga)
+      --max-agentes int      Máximo de agentes simultâneos no servidor
+      --max-agents int       Alias em inglês de --max-agentes
+      --negar-encerra        Negar em rodar.decidir encerra a execução (código 3, motivo negado) sem nova tentativa
+  -p, --port int             Porta para o servidor WebSocket (alias de --porta) (default 4820)
+      --porta int            Porta para o servidor WebSocket (default 4820)
+      --stdio                Executa via pipes padrão STDIO (JSON-RPC / NDJSON)
 
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual

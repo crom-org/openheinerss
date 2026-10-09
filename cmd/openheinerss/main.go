@@ -407,12 +407,13 @@ func renderCLIDoc(root *cobra.Command) ([]byte, error) {
 
 func newServeCmd() *cobra.Command {
 	var (
-		useStdio   bool
-		port       int
-		host       string
-		maxAgentes int
-		negarEnc   bool
-		classRisco bool
+		useStdio    bool
+		port        int
+		host        string
+		maxAgentes  int
+		negarEnc    bool
+		classRisco  bool
+		limitesCada int
 	)
 
 	cmd := &cobra.Command{
@@ -429,12 +430,14 @@ func newServeCmd() *cobra.Command {
 			if useStdio {
 				stdioServer := server.NewStdioServerWithMaxAgents(manager, os.Stdin, os.Stdout, maxAgentes)
 				stdioServer.SetNegarEncerra(negarEnc)
+				stdioServer.Router().IniciarAtualizacaoLimites(ctx, time.Duration(limitesCada)*time.Minute)
 				return stdioServer.Run(ctx)
 			}
 
 			addr := fmt.Sprintf("%s:%d", host, port)
 			wsServer := server.NewWSServerWithMaxAgents(manager, maxAgentes)
 			wsServer.SetNegarEncerra(negarEnc)
+			wsServer.Router().IniciarAtualizacaoLimites(ctx, time.Duration(limitesCada)*time.Minute)
 			listener, err := net.Listen("tcp", addr)
 			if err != nil {
 				return fmt.Errorf("abrir porta %s: %w", addr, err)
@@ -470,6 +473,7 @@ func newServeCmd() *cobra.Command {
 	cmd.Flags().IntVar(&maxAgentes, "max-agents", 0, "Alias em inglês de --max-agentes")
 	cmd.Flags().BoolVar(&negarEnc, "negar-encerra", false, "Negar em rodar.decidir encerra a execução (código 3, motivo negado) sem nova tentativa")
 	cmd.Flags().BoolVar(&negarEnc, "deny-ends", false, "Alias em inglês de --negar-encerra")
+	cmd.Flags().IntVar(&limitesCada, "limites-a-cada", 0, "Atualiza limites em segundo plano a cada N minutos (0 desliga)")
 	addRiscoFlag(cmd, &classRisco)
 
 	return cmd
@@ -919,9 +923,17 @@ func newRodarCmd() *cobra.Command {
 }
 
 func newLimitesCmd() *cobra.Command {
-	var jsonOutput bool
+	var jsonOutput, atualizar, forcar bool
+	var intervalo time.Duration
 	cmd := &cobra.Command{Use: "limites", Aliases: []string{"limits"}, Short: "Mostra as cotas locais das instâncias Codex e Claude", RunE: func(cmd *cobra.Command, args []string) error {
 		resultado := limites.Obter()
+		var err error
+		if atualizar {
+			resultado, err = limites.Atualizar(cmd.Context(), limites.AtualizarOpcoes{Forcar: forcar, Intervalo: intervalo})
+			if err != nil {
+				return err
+			}
+		}
 		if jsonOutput {
 			b, err := json.MarshalIndent(resultado, "", "  ")
 			if err != nil {
@@ -939,7 +951,7 @@ func newLimitesCmd() *cobra.Command {
 			if i.Nota != "" {
 				fmt.Printf(" — %s", i.Nota)
 			}
-			fmt.Println()
+			fmt.Printf(" — fonte %s\n", i.Fonte)
 			for _, j := range i.Janelas {
 				fmt.Printf("  %s: %.1f%%", j.Nome, j.Percentual)
 				if j.ReiniciaEm != "" {
@@ -951,6 +963,9 @@ func newLimitesCmd() *cobra.Command {
 		return nil
 	}}
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emite JSON")
+	cmd.Flags().BoolVar(&atualizar, "atualizar", false, "Consulta ativamente cada conta, respeitando o intervalo mínimo")
+	cmd.Flags().BoolVar(&forcar, "forcar", false, "Ignora o intervalo mínimo por conta")
+	cmd.Flags().DurationVar(&intervalo, "intervalo", 5*time.Minute, "Intervalo mínimo entre consultas por conta")
 	return cmd
 }
 

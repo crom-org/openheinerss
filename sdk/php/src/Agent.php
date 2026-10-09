@@ -211,7 +211,7 @@ class Agent
         if ($encerrar !== null) $params['encerrar'] = $encerrar;
         $this->request('rodar.decidir', $params);
     }
-    public function getLimits(): array { return $this->request('limites.obter', []); }
+    public function getLimits(bool $atualizar = false, bool $forcar = false): array { return $this->request('limites.obter', $atualizar ? ['atualizar' => true, 'forcar' => $forcar] : []); }
     public function identidade(string $instancia): array { return $this->request('instancia.identidade', ['instancia' => $instancia]); }
     public function listarContas(?string $cwd = null): array { return $this->request('contas.listar', array_filter(['cwd' => $cwd])); }
     public function adicionarConta(string $harness, string $nome, ?string $cwd = null, bool $iniciarLogin = false): array { return $this->request('contas.adicionar', array_filter(['harness' => $harness, 'nome' => $nome, 'cwd' => $cwd, 'iniciarLogin' => $iniciarLogin])); }

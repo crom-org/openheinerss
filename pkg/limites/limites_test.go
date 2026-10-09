@@ -1,6 +1,10 @@
 package limites
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +15,73 @@ import (
 	_ "github.com/crom-org/openheinerss/pkg/harness/claudecode"
 	_ "github.com/crom-org/openheinerss/pkg/harness/codex"
 )
+
+func TestAtualizarConsultaAtivaCacheiaSemCredencialNoResultado(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for _, path := range []string{filepath.Join(home, ".claude"), filepath.Join(home, ".codex")} {
+		if err := os.MkdirAll(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(home, ".claude", ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"fake-claude"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".codex", "auth.json"), []byte(`{"tokens":{"access_token":"fake-codex"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.Header.Get("Authorization") == "" {
+			t.Error("faltou autorização")
+		}
+		if r.URL.Path == "/claude" {
+			w.Header().Set("anthropic-ratelimit-unified-5h-utilization", "0.25")
+			_, _ = w.Write([]byte(`{"rate_limits":{"five_hour":{"used_percentage":25}}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"rate_limits":{"primary":{"used_percent":33,"window_minutes":300,"resets_at":4102444800}}}`))
+	}))
+	defer srv.Close()
+	t.Setenv("OPENHEINERSS_CLAUDE_USAGE_URL", srv.URL+"/claude")
+	t.Setenv("OPENHEINERSS_CODEX_USAGE_URL", srv.URL+"/codex")
+	cache := filepath.Join(home, "cache")
+	r, err := Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: cache, HTTPClient: srv.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls < 2 {
+		t.Fatalf("chamadas = %d, esperadas pelo menos 2", calls)
+	}
+	primeiraChamada := calls
+	porNome := map[string]Instancia{}
+	for _, i := range r.Instancias {
+		porNome[i.Nome] = i
+	}
+	if porNome["claude-code"].Fonte != "cabeçalhos" || len(porNome["claude-code"].Janelas) == 0 {
+		t.Fatalf("claude ativo: %+v", porNome["claude-code"])
+	}
+	if porNome["codex"].Fonte != "consulta-ativa" && porNome["codex"].Fonte != "cabeçalhos" {
+		t.Fatalf("codex ativo: %+v", porNome["codex"])
+	}
+	b, err := os.ReadFile(filepath.Join(cache, nomeCache("claude-code")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var semSegredo Instancia
+	if json.Unmarshal(b, &semSegredo) != nil || strings.Contains(string(b), "fake-") {
+		t.Fatal("cache contém credencial")
+	}
+	r, err = Atualizar(context.Background(), AtualizarOpcoes{CacheDir: cache, HTTPClient: srv.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = r
+	if calls != primeiraChamada {
+		t.Fatalf("cache não respeitado: chamadas = %d", calls)
+	}
+}
 
 func TestObterLêCodexEClaudePorInstancia(t *testing.T) {
 	home := t.TempDir()
