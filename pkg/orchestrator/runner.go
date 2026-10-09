@@ -439,6 +439,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 	cur.Worktree, cur.Branch = work, branchAtual(work)
 	turnos := novoRegistroTurnos(work, o.Name, &cur, metaPath, o.Now)
 	turnos.Marcar("base")
+	estado := novoEstadoAgente(logsDir, o.Name, work, repo, o.BranchBase, prompt, o.Now)
 	// Quem for lançado de dentro do harness (`openheinerss rodar` filho) sabe quem é o pai e onde se registrar.
 	if absLogs, err := filepath.Abs(logsDir); err == nil {
 		env := make(map[string]string, len(keys)+2)
@@ -572,9 +573,9 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				}
 				turnoMsg = ""
 			} else if cx.pendente {
-				text += cx.textoContinuacao()
+				text += cx.textoContinuacao(estado.Continuacao())
 			} else if attempts > 1 || o.Retomar {
-				text += continuation
+				text += estado.ContinuacaoOu(continuation)
 			}
 			if strings.TrimSpace(prompt) == "" {
 				e = fmt.Errorf("prompt vazio recebido pelo motor %s", candidate)
@@ -682,6 +683,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				_ = h.Stop()
 				cancel()
 				turnos.Marcar("interrompido")
+				estado.FimDeTurno()
 				pararFilhos(logsDir, o.Name, o.Now())
 				// Interrompido (rodar.parar ou Ctrl-C): fecha meta e log para ninguém achar que ainda roda.
 				return finish(130, "interrompido", candidate, true), ctx.Err()
@@ -696,6 +698,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		_ = h.Stop()
 		cancel()
 		turnos.Marcar(fmt.Sprintf("tentativa %d", attempts))
+		estado.FimDeTurno()
 		if reiniciarCtx {
 			// Sessão nova do MESMO motor: sem sessão nativa e sem contar como tentativa.
 			resumeID, resumeMotor = "", ""

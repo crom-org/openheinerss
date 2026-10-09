@@ -130,6 +130,12 @@ O `meta.json` de cada agente ganhou campos opcionais (um meta antigo continua le
 - `openheinerss agentes desfazer <nome> [n]` restaura a worktree do agente (nunca o repositório principal) ao checkpoint `n`; sem `n`, ao anterior ao último. Antes, guarda o estado atual como checkpoint `antes-de-desfazer` (use o `n` dele para refazer). Se o checkpoint tem outro HEAD, a branch volta ao pai registrado com `git reset --soft` (os commits de depois seguem alcançáveis pelo checkpoint `antes-de-desfazer`); arquivos não rastreados somem com `git clean -fd` (sem `-x`: ignorados ficam). Recusa se o agente está rodando, a menos que `--forcar`.
 - `ApagarCheckpoints(dir, nome)` (Go) remove as refs do agente; use-o ao apagar a worktree.
 
+### Arquivo de estado e retomada
+
+No fim de cada turno/tentativa o `rodar` grava `logs/<nome>.estado.md` (sem custo de modelo): objetivo, prompt original (cortado em 4000 caracteres), HEAD, `git diff --stat` contra a base da worktree, os últimos 6 trechos de texto do log e o `RELATORIO-AGENTE.md` da worktree como "resumo do agente". Segredos são mascarados. O cabeçalho guarda `em`, `turno`, `head`, `head_resumo` e `turno_resumo`.
+
+Ao retomar (`--retomar`), trocar de motor ou recomeçar em sessão nova pelo limite de contexto, esse estado vai no lugar do texto fixo "CONTINUAÇÃO", para qualquer harness. O git manda; o resumo é só contexto. O resumo é descartado se o HEAD mudou depois dele (commits mais novos que o relatório) ou se está mais de 2 turnos atrasado (`OPENHEINERSS_RESUMO_MAX_TURNOS`); aí vai o histórico: diff, últimos eventos e prompt original. Sem git e sem log, vale o texto fixo antigo.
+
 ### Limite de contexto por projeto e por harness
 
 O contexto grande é onde a conta mais gasta. A chave `contexto:` do `config.yaml` define um limite de tokens
