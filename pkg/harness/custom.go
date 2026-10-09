@@ -137,6 +137,25 @@ func CustomSpecFor(name string) (CustomSpec, bool) {
 	return s, ok
 }
 
+// UnregisterCustom remove uma instância custom do catálogo em memória.
+// Arquivos já removidos/renomeados não continuam válidos em um servidor longo.
+func UnregisterCustom(name string) bool {
+	customMu.Lock()
+	_, ok := customSpecs[name]
+	if ok {
+		delete(customSpecs, name)
+	}
+	customMu.Unlock()
+	if !ok {
+		return false
+	}
+	defaultRegistry.mu.Lock()
+	delete(defaultRegistry.factories, name)
+	delete(defaultRegistry.metadata, name)
+	defaultRegistry.mu.Unlock()
+	return true
+}
+
 func CanonicalName(name string) string {
 	customMu.RLock()
 	defer customMu.RUnlock()

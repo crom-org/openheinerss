@@ -245,6 +245,15 @@ Executa o diagnóstico de dependências do ambiente.
 
 ## 4. Padrão de Erros JSON-RPC Enriquecidos
 
+## 4.1 Contas de login
+
+`contas.listar` lista instâncias e informa somente se arquivos de credencial conhecidos
+existem; seu conteúdo nunca é lido. `contas.adicionar` recebe `harness`, `nome` e opcionalmente
+`cwd`, cria a pasta privada e a instância e devolve `comandoLogin` para um terminal. O servidor
+não inicia login interativo; `iniciarLogin` fica reservado para fluxos de dispositivo. `contas.renomear`
+troca somente o nome e `contas.remover` exige `confirmar: true`; `apagarPasta: true` remove também
+a pasta de login.
+
 Quando ocorre um erro de execução ou dependência ausente, a resposta de erro segue o padrão:
 
 ```json
