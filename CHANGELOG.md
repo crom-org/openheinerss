@@ -4,7 +4,7 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). A 1.2.0 está preparada mas
 **não publicada** (sem tag, release ou pacote): a publicação depende do ok do dono do projeto.
 
-## Não publicado
+## [1.2.1] — 2026-10-09
 
 ### Adicionado (identidade efetiva de conta)
 
@@ -13,6 +13,11 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 - Novo RPC `instancia.identidade` e CLI `openheinerss identidade <instancia> [--json]`.
 - SDKs TypeScript, Python e PHP expõem a identidade da criação e o método `identidade(instancia)`.
 
+### Corrigido
+
+- Pasta de configuração respeita `XDG_CONFIG_HOME` também no macOS e Windows.
+
+## [1.2.0] — 2026-10-09
 ### Corrigido (sessionId dos eventos)
 
 - Os eventos `agent.*` do servidor sempre levam o `sessionId` de `session.create`; o id nativo do motor (ex.: Claude Code) vai em `nativeSessionId`. Antes o claude-code mandava o id nativo e a Central não casava os eventos.
@@ -35,7 +40,6 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 - Chave `contexto:` no `config.yaml` (global e de projeto, o projeto vence; campo a campo: instância > harness base > `padrao`) com `limite_tokens` e `acao` (`aviso` ou `nova-sessao`). `rodar --limite-contexto N` (`0` desliga) e `--acao-contexto` vencem a configuração; `openheinerss config contexto [--harness X]` mostra o efetivo e a origem.
 - No `rodar`, ao passar do limite: aviso `[contexto] …` no log (uma vez por sessão) e linha `orq.contexto` no log de eventos; com `nova-sessao`, o turno termina e o mesmo motor recomeça em sessão nova (sem sessão nativa), no máximo 3 vezes, sem contar como tentativa. `reinicios_contexto` no `meta.json`.
 
-## [1.2.0] — não publicada
 
 Tudo o que mudou desde a v1.1.0. SDKs TypeScript, Python e PHP em **1.2.0**.
 

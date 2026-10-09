@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openheinerss"
-version = "1.2.0"
+version = "1.2.1"
 description = "SDK oficial Python para o orquestrador Openheinerss"
 authors = [{ name = "crom-org" }]
 license = { text = "MIT" }
