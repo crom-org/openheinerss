@@ -16,6 +16,10 @@ const (
 	MethodRun                      = "run"
 	MethodLimits                   = "limites"
 	MethodInstanceIdentity         = "instancia.identidade"
+	MethodContasListar             = "contas.listar"
+	MethodContasAdicionar          = "contas.adicionar"
+	MethodContasRenomear           = "contas.renomear"
+	MethodContasRemover            = "contas.remover"
 )
 
 // MCPListParams parâmetros para mcp.list
@@ -87,6 +91,27 @@ type Identity struct {
 
 type InstanceIdentityParams struct {
 	Instancia string `json:"instancia"`
+}
+
+type ContasListarParams struct {
+	CWD string `json:"cwd,omitempty"`
+}
+type ContasAdicionarParams struct {
+	Harness      string `json:"harness"`
+	Nome         string `json:"nome"`
+	CWD          string `json:"cwd,omitempty"`
+	IniciarLogin bool   `json:"iniciarLogin,omitempty"`
+}
+type ContasRenomearParams struct {
+	Antigo string `json:"antigo"`
+	Novo   string `json:"novo"`
+	CWD    string `json:"cwd,omitempty"`
+}
+type ContasRemoverParams struct {
+	Nome        string `json:"nome"`
+	CWD         string `json:"cwd,omitempty"`
+	Confirmar   bool   `json:"confirmar"`
+	ApagarPasta bool   `json:"apagarPasta,omitempty"`
 }
 
 type SessionResumeParams struct {

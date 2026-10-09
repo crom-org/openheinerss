@@ -16,6 +16,7 @@ Available Commands:
   agentes     Lista e controla agentes em execução
   comandos    Lista os comandos nativos (/compact, /model…) de um harness ou instância e como são repassados
   config      Mostra a configuração efetiva (global + projeto)
+  contas      Cria e administra contas de login dos harnesses
   docs        Gera ou verifica o manual do CLI em docs/09-cli.md
   doctor      Verifica ferramentas, dependências e pré-requisitos do sistema
   harness     Lista, instala e testa harnesses
@@ -116,6 +117,31 @@ Global Flags:
       --configuracao string   Alias de --config
 
 Use "openheinerss config [command] --help" for more information about a command.
+
+```
+
+## `openheinerss contas --help`
+
+```text
+Cria e administra contas de login dos harnesses
+
+Usage:
+  openheinerss contas [command]
+
+Aliases:
+  contas, accounts
+
+Available Commands:
+  adicionar   Cria a pasta e a instância e abre o login nativo
+  listar      Lista instâncias de conta sem ler credenciais
+  remover     Remove a instância e, opcionalmente, sua pasta de login
+  renomear    Renomeia a instância sem mover o login
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
+Use "openheinerss contas [command] --help" for more information about a command.
 
 ```
 
@@ -593,6 +619,84 @@ Usage:
 
 Flags:
       --harness string   Instância ou harness a resolver (padrão: o padrão e os citados no config)
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
+```
+
+## `openheinerss contas adicionar --help`
+
+```text
+Cria a pasta e a instância e abre o login nativo
+
+Usage:
+  openheinerss contas adicionar <harness> [nome] [flags]
+
+Aliases:
+  adicionar, add
+
+Flags:
+      --sem-login   Só cria a pasta e a instância
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
+```
+
+## `openheinerss contas listar --help`
+
+```text
+Lista instâncias de conta sem ler credenciais
+
+Usage:
+  openheinerss contas listar [flags]
+
+Aliases:
+  listar, list
+
+Flags:
+      --json   Emite JSON
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
+```
+
+## `openheinerss contas remover --help`
+
+```text
+Remove a instância e, opcionalmente, sua pasta de login
+
+Usage:
+  openheinerss contas remover <nome> [flags]
+
+Aliases:
+  remover, remove
+
+Flags:
+      --apagar-pasta   Apaga também a pasta de login (exige confirmação extra)
+      --sim            Confirma a remoção sem perguntar
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+
+```
+
+## `openheinerss contas renomear --help`
+
+```text
+Renomeia a instância sem mover o login
+
+Usage:
+  openheinerss contas renomear <antigo> <novo> [flags]
+
+Aliases:
+  renomear, rename
 
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual

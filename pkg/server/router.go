@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/crom-org/openheinerss/pkg/comandos"
+	"github.com/crom-org/openheinerss/pkg/config"
+	"github.com/crom-org/openheinerss/pkg/contas"
 	"github.com/crom-org/openheinerss/pkg/doctor"
 	"github.com/crom-org/openheinerss/pkg/harness"
 	"github.com/crom-org/openheinerss/pkg/identidade"
@@ -31,6 +34,18 @@ type Router struct {
 	manager *session.Manager
 	orq     *Orq
 	geracao string
+}
+
+func contasRPCDir(cwd string) (string, error) {
+	if d, err := config.ConfigDir(); err != nil {
+		return "", err
+	} else if d != "" {
+		return filepath.Join(d, "harnesses"), nil
+	}
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
+	return filepath.Join(cwd, ".openheinerss", "harnesses"), nil
 }
 
 // NewRouter cria um novo despachante de métodos
@@ -65,6 +80,68 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (respo
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, err.Error(), nil)
 		}
 		return protocol.NewResponse(req.ID, res)
+	case protocol.MethodContasListar:
+		var p protocol.ContasListarParams
+		_ = json.Unmarshal(req.Params, &p)
+		dir, err := contasRPCDir(p.CWD)
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
+		}
+		res, err := contas.Listar(dir)
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
+		}
+		return protocol.NewResponse(req.ID, res)
+	case protocol.MethodContasAdicionar:
+		var p protocol.ContasAdicionarParams
+		if err := json.Unmarshal(req.Params, &p); err != nil || p.Harness == "" || p.Nome == "" {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para contas.adicionar", nil)
+		}
+		dir, err := contasRPCDir(p.CWD)
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
+		}
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
+		}
+		res, err := contas.Adicionar(dir, p.Harness, p.Nome)
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, err.Error(), nil)
+		}
+		return protocol.NewResponse(req.ID, res)
+	case protocol.MethodContasRenomear:
+		var p protocol.ContasRenomearParams
+		if err := json.Unmarshal(req.Params, &p); err != nil || p.Antigo == "" || p.Novo == "" {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para contas.renomear", nil)
+		}
+		dir, err := contasRPCDir(p.CWD)
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
+		}
+		res, err := contas.Renomear(dir, p.Antigo, p.Novo)
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, err.Error(), nil)
+		}
+		return protocol.NewResponse(req.ID, res)
+	case protocol.MethodContasRemover:
+		var p protocol.ContasRemoverParams
+		if err := json.Unmarshal(req.Params, &p); err != nil || p.Nome == "" || !p.Confirmar {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "contas.remover exige nome e confirmar: true", nil)
+		}
+		dir, err := contasRPCDir(p.CWD)
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
+		}
+		c, err := contas.Remover(dir, p.Nome)
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, err.Error(), nil)
+		}
+		if p.ApagarPasta {
+			if err := os.RemoveAll(c.ContaDir); err != nil {
+				return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
+			}
+		}
+		return protocol.NewResponse(req.ID, c)
 	case protocol.MethodSessionCreate:
 		var params protocol.SessionCreateParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {

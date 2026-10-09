@@ -15,6 +15,11 @@ As sessões expõem a identidade efetiva em `session.create`: `identidade` cont�
 mesma informação sem criar sessão. No TypeScript ela fica também em `client.sessionIdentity`;
 em Python, em `agent.session_identity`; em PHP, em `$agent->identidade`.
 
+Os SDKs também expõem `listarContas`, `adicionarConta`, `renomearConta` e `removerConta`
+(Python: `listar_contas`, `adicionar_conta`, `renomear_conta`, `remover_conta`).
+`adicionarConta` cria a instância e devolve `comandoLogin`; o cliente deve executá-lo em um
+terminal interativo. Nenhum SDK lê ou guarda credenciais.
+
 ## TypeScript
 
 O pacote em `sdk/typescript/` exporta `Openheinerss` e o hook React pelo próprio pacote `@openheinerss/sdk` (não há pacote separado `@openheinerss/react`). A configuração usa `options`, `wsEndpoint` e `transport`.

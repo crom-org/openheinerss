@@ -236,6 +236,15 @@ class Agent:
     def identidade(self, instancia: str) -> Dict[str, Any]:
         return self._request("instancia.identidade", {"instancia": instancia})
 
+    def listar_contas(self, cwd: Optional[str] = None) -> list[dict[str, Any]]:
+        return self._request("contas.listar", {"cwd": cwd} if cwd else {})
+    def adicionar_conta(self, harness: str, nome: str, cwd: Optional[str] = None, iniciar_login: bool = False) -> Dict[str, Any]:
+        return self._request("contas.adicionar", {"harness": harness, "nome": nome, "cwd": cwd, "iniciarLogin": iniciar_login})
+    def renomear_conta(self, antigo: str, novo: str, cwd: Optional[str] = None) -> Dict[str, Any]:
+        return self._request("contas.renomear", {"antigo": antigo, "novo": novo, "cwd": cwd})
+    def remover_conta(self, nome: str, cwd: Optional[str] = None, apagar_pasta: bool = False) -> Dict[str, Any]:
+        return self._request("contas.remover", {"nome": nome, "cwd": cwd, "apagarPasta": apagar_pasta, "confirmar": True})
+
     def subscribe_events(self, callback: Optional[Callable[[Dict[str, Any]], None]] = None, **filter: str) -> None:
         if callback:
             for name in ("orq.inicio", "orq.progresso", "orq.fim", "orq.erro", "orq.precisa_decisao", "orq.filhos_orfaos"):
@@ -251,6 +260,10 @@ class Agent:
     decideRun = decide_run
     getLimits = get_limits
     subscribeEvents = subscribe_events
+    listarContas = listar_contas
+    adicionarConta = adicionar_conta
+    renomearConta = renomear_conta
+    removerConta = remover_conta
 
     def respond_permission(self, request_id: str, allow: bool):
         req_id = self.req_id

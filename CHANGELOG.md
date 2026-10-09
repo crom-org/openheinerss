@@ -4,6 +4,14 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). A 1.2.0 está preparada mas
 **não publicada** (sem tag, release ou pacote): a publicação depende do ok do dono do projeto.
 
+## Não publicado
+
+- Novo comando `contas adicionar|listar|renomear|remover` com pastas privadas por harness,
+  login nativo interativo, identidade e limites; `--sem-login`, confirmação e `--apagar-pasta`.
+  O openheinerss nunca lê, digita ou armazena credenciais.
+- Novos RPCs `contas.listar`, `contas.adicionar`, `contas.renomear` e `contas.remover`, com
+  métodos correspondentes nos SDKs TypeScript, Python e PHP.
+
 ## [1.2.1] — 2026-10-09
 
 ### Adicionado (identidade efetiva de conta)

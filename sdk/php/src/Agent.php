@@ -213,6 +213,10 @@ class Agent
     }
     public function getLimits(): array { return $this->request('limites.obter', []); }
     public function identidade(string $instancia): array { return $this->request('instancia.identidade', ['instancia' => $instancia]); }
+    public function listarContas(?string $cwd = null): array { return $this->request('contas.listar', array_filter(['cwd' => $cwd])); }
+    public function adicionarConta(string $harness, string $nome, ?string $cwd = null, bool $iniciarLogin = false): array { return $this->request('contas.adicionar', array_filter(['harness' => $harness, 'nome' => $nome, 'cwd' => $cwd, 'iniciarLogin' => $iniciarLogin])); }
+    public function renomearConta(string $antigo, string $novo, ?string $cwd = null): array { return $this->request('contas.renomear', array_filter(['antigo' => $antigo, 'novo' => $novo, 'cwd' => $cwd])); }
+    public function removerConta(string $nome, ?string $cwd = null, bool $apagarPasta = false): array { return $this->request('contas.remover', array_filter(['nome' => $nome, 'cwd' => $cwd, 'apagarPasta' => $apagarPasta, 'confirmar' => true])); }
     /** @param array<string, callable(array): void> $callbacks */
     public function subscribeEvents(array|EventFilter $filter = [], array $callbacks = []): void {
         $this->callbacks = array_merge($this->callbacks, $callbacks);
