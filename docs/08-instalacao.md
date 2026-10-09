@@ -20,7 +20,7 @@ Quem usa o binário global precisa reinstalá-lo para receber esta versão (`./i
 
 ## Go
 
-Quem já usa o toolchain Go pode instalar a versão publicada do módulo (enquanto a próxima versão não for publicada, `@latest` é a v1.0.0, sem as novidades do `CHANGELOG.md`):
+Quem já usa o toolchain Go pode instalar a versão publicada do módulo:
 
 ```bash
 go install github.com/crom-org/openheinerss/cmd/openheinerss@latest

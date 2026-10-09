@@ -7,7 +7,7 @@ e adaptadores. Commit em português na sua branch; sem push nem publicação sem
 
 ## Por que importa
 A Crom quer trocar fácil de motor e modelo (Codex, Claude conta2, cco com OpenRouter/Zen, modelos grátis ou pagos).
-Hoje isso é feito pelo `rodar.sh` (`~/Documentos/GitHub/crom-painel/rodar/rodar.sh`). O openheinerss deve
+Hoje isso é feito por um script de execução do projeto consumidor. O openheinerss deve
 virar essa camada, mas ainda não está pronto.
 
 ## O que falta para substituir o rodar.sh
@@ -43,5 +43,5 @@ Hoje só dá para adicionar harness escrevendo Go e chamando `harness.Register` 
 - Comandos: `openheinerss harness list | add | test <nome>` (teste com prompt curto).
 
 ## Ideias (não implementar)
-- **Passar o bastão entre motores** (pedido do usuário, 08/10 10:30): quando trocar de motor/conta por cota, o motor novo recebe um resumo do que o anterior fez. Inspirado no ai-memory 2.6 do Akita (github.com/akitaonrails/ai-memory; análise em ~/Documentos/Central/analises/08-akita-post.md). Cuidado: memória grava prompts; excluir pastas sensíveis.
-- ✅ **FEITO (Não publicado): Avisar/limitar contexto grande por agente** (dado da Central, 08/10): 63% do uso da conta2 nas últimas 24 h foi com contexto acima de 150k. Ideia: o openheinerss avisar ou limitar o contexto por agente (missões menores; retomar em sessão nova com resumo em vez de continuar a mesma sessão).
+- **Passar o bastão entre motores** (pedido registrado em 08/10 10:30): quando trocar de motor/conta por cota, o motor novo recebe um resumo do que o anterior fez. Cuidado: memória grava prompts; excluir pastas sensíveis.
+- ✅ **FEITO (não publicado neste pacote): Avisar/limitar contexto grande por agente** (dado anonimizado, 08/10): uma parcela relevante do uso recente teve contexto grande. Ideia: o openheinerss avisar ou limitar o contexto por agente (missões menores; retomar em sessão nova com resumo em vez de continuar a mesma sessão).

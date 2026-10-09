@@ -3,7 +3,7 @@ base: claude-code
 env:
   CLAUDE_CONFIG_DIR: ~/.claude-conta2
   # Só o modo SDK precisa disto: onde está o @anthropic-ai/claude-agent-sdk nesta máquina.
-  OPENHEINERSS_CLAUDE_SDK_PATH: ~/Documentos/GitHub/claude-code-open/app/node_modules/@anthropic-ai/claude-agent-sdk
+  OPENHEINERSS_CLAUDE_SDK_PATH: ~/.openheinerss/shims/node_modules/@anthropic-ai/claude-agent-sdk
 model: claude-sonnet-5-5
 reserva:
   - codex

@@ -1,6 +1,10 @@
 # Binários Go
 /openheinerss
 /openheinerss.exe
+*.bin
+*.exe
+*.tar.gz
+*.zip
 dist/
 bin/
 

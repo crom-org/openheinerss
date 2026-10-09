@@ -1,4 +1,4 @@
-# Openheinerss PHP SDK 1.2.0
+# Openheinerss PHP SDK 1.7.0
 
 SDK oficial em **PHP** para automações e backends consumirem o orquestrador **Openheinerss** (crom-org).
 

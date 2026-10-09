@@ -300,10 +300,10 @@ Os mesmos métodos valem no STDIO (NDJSON) e no WebSocket (`ws://127.0.0.1:4820/
 Registra a conexão para receber os eventos `orq.*`. Sem assinar, nenhum `orq.*` chega. Uma nova chamada na mesma conexão troca o filtro. Todos os campos são opcionais.
 
 ```json
-{"jsonrpc":"2.0","id":1,"method":"eventos.assinar","params":{"projeto":"crom-tv","agente":"etapa-1","cwd":"/home/j/projetos/crom-tv"}}
+{"jsonrpc":"2.0","id":1,"method":"eventos.assinar","params":{"projeto":"exemplo","agente":"etapa-1","cwd":"/caminho/do/projeto"}}
 ```
 ```json
-{"jsonrpc":"2.0","id":1,"result":{"assinado":true,"projeto":"crom-tv","agente":"etapa-1","observando":"/home/j/projetos/crom-tv/.claude/agentes"}}
+{"jsonrpc":"2.0","id":1,"result":{"assinado":true,"projeto":"exemplo","agente":"etapa-1","observando":"/caminho/do/projeto/.claude/agentes"}}
 ```
 
 - `projeto` e `agente` filtram os eventos (vazio = todos). O nome do projeto é o nome da pasta da raiz git (ou o campo `projeto` de `rodar.iniciar`).
@@ -313,10 +313,10 @@ Registra a conexão para receber os eventos `orq.*`. Sem assinar, nenhum `orq.*`
 Mesmas opções do `openheinerss rodar` (nomes em português, como em `run`), mais `projeto`. O prompt vem de `texto` (texto direto), de `prompt` (caminho de um arquivo) ou, na falta dos dois, de `<pasta>/prompts/<nome>.md`; o nome do agente só aceita letras, números, `.`, `_` e `-`. Não bloqueia: devolve o `id` e os eventos informam o andamento.
 
 ```json
-{"jsonrpc":"2.0","id":2,"method":"rodar.iniciar","params":{"nome":"etapa-1","motor":"codex","modelo":"","esforco":"high","prompt":"","retomar":false,"pasta":"","branchBase":"main","cargaMax":0,"maxAgentes":4,"tentativas":4,"cotaMax":0,"harnessArgs":["--x","a,b"],"cwd":"/home/j/projetos/crom-tv","projeto":"crom-tv"}}
+{"jsonrpc":"2.0","id":2,"method":"rodar.iniciar","params":{"nome":"etapa-1","motor":"codex","modelo":"","esforco":"high","prompt":"","retomar":false,"pasta":"","branchBase":"main","cargaMax":0,"maxAgentes":4,"tentativas":4,"cotaMax":0,"harnessArgs":["--x","a,b"],"cwd":"/caminho/do/projeto","projeto":"exemplo"}}
 ```
 ```json
-{"jsonrpc":"2.0","id":2,"geracao":"geracao-a1b2c3","result":{"geracao":"geracao-a1b2c3","id":"rodar-1","agente":"etapa-1","projeto":"crom-tv"}}
+{"jsonrpc":"2.0","id":2,"geracao":"geracao-a1b2c3","result":{"geracao":"geracao-a1b2c3","id":"rodar-1","agente":"etapa-1","projeto":"exemplo"}}
 ```
 Se o servidor foi iniciado com `serve --max-agentes N`, `maxAgentes` vira no máximo `N` (0 ou ausente também vira `N`).
 
@@ -326,10 +326,10 @@ Erros (`-32602`): nome ou motor vazio; agente com o mesmo nome já rodando neste
 Lê `logs/*.meta.json` da pasta de agentes (`cwd`, `pasta` e `projeto` opcionais) e junta as execuções do servidor e as decisões pendentes. `estado`: `aguardando` (esperando vaga/worktree), `rodando`, `concluido`, `falhou` ou `interrompido` (processo morreu sem registrar o fim).
 
 ```json
-{"jsonrpc":"2.0","id":3,"method":"rodar.listar","params":{"cwd":"/home/j/projetos/crom-tv"}}
+{"jsonrpc":"2.0","id":3,"method":"rodar.listar","params":{"cwd":"/caminho/do/projeto"}}
 ```
 ```json
-{"jsonrpc":"2.0","id":3,"result":{"agentes":[{"id":"rodar-1","agente":"etapa-1","projeto":"crom-tv","estado":"rodando","motor":"codex","modelo":"padrão","tentativa":1,"inicio":"2026-10-08T07:30:00-03:00","pid":4242,"log":"/home/j/projetos/crom-tv/.claude/agentes/logs/etapa-1.log"}],"decisoes":[{"id":"dec-2","agente":"etapa-1","projeto":"crom-tv","pergunta":"Permitir a ferramenta Bash: git status (risco medium)?","opcoes":["permitir","negar"]}]}}
+{"jsonrpc":"2.0","id":3,"result":{"agentes":[{"id":"rodar-1","agente":"etapa-1","projeto":"exemplo","estado":"rodando","motor":"codex","modelo":"padrão","tentativa":1,"inicio":"2026-10-08T07:30:00-03:00","pid":4242,"log":"/caminho/do/projeto/.claude/agentes/logs/etapa-1.log"}],"decisoes":[{"id":"dec-2","agente":"etapa-1","projeto":"exemplo","pergunta":"Permitir a ferramenta Bash: git status (risco medium)?","opcoes":["permitir","negar"]}]}}
 ```
 
 ### `rodar.parar`
@@ -408,11 +408,11 @@ Notificações sem `id`. Os eventos de execuções lançadas por `rodar.iniciar`
 Ordem garantida por agente: `orq.inicio` → (`orq.progresso` | `orq.precisa_decisao` | `orq.erro`)* → `orq.filhos_orfaos`? → `orq.fim`; nenhum progresso depois do fim. Com reservas ou novas tentativas há um `orq.inicio` por tentativa e um só `orq.fim`.
 
 ```json
-{"jsonrpc":"2.0","method":"orq.inicio","params":{"id":"rodar-1","agente":"etapa-1","projeto":"crom-tv","motor":"codex","modelo":"padrão","tentativa":1,"worktree":"/home/j/projetos/crom-tv/.claude/agentes/etapa-1"}}
-{"jsonrpc":"2.0","method":"orq.progresso","params":{"id":"rodar-1","agente":"etapa-1","projeto":"crom-tv","resumo":"ferramenta Bash {\"command\":\"go test ./...\"}"}}
-{"jsonrpc":"2.0","method":"orq.precisa_decisao","params":{"id":"dec-2","agente":"etapa-1","projeto":"crom-tv","pergunta":"Permitir a ferramenta Bash: git status (risco medium)?","opcoes":["permitir","negar"]}}
-{"jsonrpc":"2.0","method":"orq.erro","params":{"id":"rodar-1","agente":"etapa-1","projeto":"crom-tv","mensagem":"execução interrompida por falta de cota","cota":true}}
-{"jsonrpc":"2.0","method":"orq.fim","params":{"id":"rodar-1","agente":"etapa-1","projeto":"crom-tv","codigo":0,"tentativas":2,"duracao":812.4,"relatorio":"/home/j/projetos/crom-tv/.claude/agentes/etapa-1/RELATORIO-AGENTE.md"}}
+{"jsonrpc":"2.0","method":"orq.inicio","params":{"id":"rodar-1","agente":"etapa-1","projeto":"exemplo","motor":"codex","modelo":"padrão","tentativa":1,"worktree":"/caminho/do/projeto/.claude/agentes/etapa-1"}}
+{"jsonrpc":"2.0","method":"orq.progresso","params":{"id":"rodar-1","agente":"etapa-1","projeto":"exemplo","resumo":"ferramenta Bash {\"command\":\"go test ./...\"}"}}
+{"jsonrpc":"2.0","method":"orq.precisa_decisao","params":{"id":"dec-2","agente":"etapa-1","projeto":"exemplo","pergunta":"Permitir a ferramenta Bash: git status (risco medium)?","opcoes":["permitir","negar"]}}
+{"jsonrpc":"2.0","method":"orq.erro","params":{"id":"rodar-1","agente":"etapa-1","projeto":"exemplo","mensagem":"execução interrompida por falta de cota","cota":true}}
+{"jsonrpc":"2.0","method":"orq.fim","params":{"id":"rodar-1","agente":"etapa-1","projeto":"exemplo","codigo":0,"tentativas":2,"duracao":812.4,"relatorio":"/caminho/do/projeto/.claude/agentes/etapa-1/RELATORIO-AGENTE.md"}}
 ```
 
 ### Agentes lançados pelo CLI

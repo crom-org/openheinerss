@@ -1,6 +1,6 @@
 name: agy-conta1
 displayName: AGY conta 1 (exemplo)
-command: ~/Documentos/GitHub/crom-painel/rodar/agy-conta.sh
+command: agy
 args: [conta1, --dangerously-skip-permissions, --output-format, stream-json, -p, "{{prompt}}"]
 env:
   AGY_CONTA: conta1

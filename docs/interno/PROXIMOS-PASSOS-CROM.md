@@ -5,7 +5,7 @@ Preparado em 07/10/2026 depois de uma análise rápida do código. Leia antes de
 ## Objetivo
 
 O openheinerss vira a **camada que roda os agentes** (no lugar do `rodar.sh` dos projetos), e a
-**Central de Tarefas** (repositório privado `crom-painel`, http://localhost:4792) continua sendo a
+**Central de Tarefas** (repositório privado do projeto consumidor, em uma porta local configurável) continua sendo a
 tela, ouvindo o WebSocket do openheinerss. Também usar o openheinerss para desenvolver o próprio
 openheinerss.
 
@@ -27,7 +27,7 @@ openheinerss.
 
 ## O que o rodar.sh faz hoje e o openheinerss ainda não
 
-Referência: `~/Documentos/GitHub/crom-tv/.claude/agentes/rodar.sh` (e o genérico em `crom-painel/rodar/`).
+Referência: o script `rodar.sh` do projeto consumidor e sua versão genérica.
 
 - Trocar de conta/motor sozinho quando a cota acaba (agy tem 32 contas; "SEM COTA" → próxima).
 - Retomar com "CONTINUAÇÃO" (`RETOMAR=1`) lendo `git status`/`git log`/`RELATORIO-AGENTE.md`.
