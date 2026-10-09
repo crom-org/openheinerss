@@ -103,7 +103,7 @@ func NormalizarNome(cmd string) (string, error) {
 
 // ArquivoGlobal é ~/.config/openheinerss/comandos.yaml (respeita XDG_CONFIG_HOME).
 func ArquivoGlobal() string {
-	dir, err := os.UserConfigDir()
+	dir, err := config.UserConfigDir()
 	if err != nil {
 		return ""
 	}
