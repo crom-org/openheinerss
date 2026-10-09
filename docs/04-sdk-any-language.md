@@ -2,7 +2,7 @@
 
 O transporte comum é JSON-RPC 2.0 em NDJSON via `openheinerss serve --stdio`. O servidor WebSocket (`ws://127.0.0.1:4820/ws`; `OPENHEINERSS_PORTA` muda a porta) também existe; os três SDKs o usam. Python e PHP usam STDIO por padrão e WebSocket com `Agent(transport="websocket", host=, port=, origin=)` / `url=` (PHP: `Agent::session(['transport' => 'websocket', 'port' => N])`), sem dependências; origem fora de `OPENHEINERSS_ORIGENS` é recusada (HTTP 403 → `TransportError`/`RuntimeException`).
 
-Os três SDKs (versão 1.2.0) expõem a mesma orquestração: `registerHarness`, `listHarnesses`, `run` (`rodar.iniciar`), `listRuns`, `stopRun`, `decideRun`, `getLimits(atualizar?, forcar?)` e `subscribeEvents`. `getLimits(true)` faz consulta ativa barata, sem prompt, respeitando cinco minutos por conta; `forcar` ignora o intervalo. O evento `limites.atualizado` é entregue junto com os `orq.*`. Todos os callbacks `orq.*` recebem `geracao` (e todo evento do serve, inclusive `agent.*`, traz `geracao` no envelope); erro RPC em `session.prompt` (ex.: `/compact` sem equivalente no codex) vira exceção nos três SDKs, e Python/PHP têm teto de segurança sem eventos no prompt (`prompt_timeout`/`$promptTimeout`, padrão 3600 s; `timeout` por chamada); a geração da última resposta também fica disponível no cliente. Comandos nativos do harness (`harness.comandos*`): `listCommands(harness, cwd?)`,
+Os três SDKs (versão 1.7.0) expõem a mesma orquestração: `registerHarness`, `listHarnesses`, `run` (`rodar.iniciar`), `listRuns`, `stopRun`, `decideRun`, `getLimits(atualizar?, forcar?)` e `subscribeEvents`. `getLimits(true)` faz consulta ativa barata, sem prompt, respeitando cinco minutos por conta; `forcar` ignora o intervalo. O evento `limites.atualizado` é entregue junto com os `orq.*`. Todos os callbacks `orq.*` recebem `geracao` (e todo evento do serve, inclusive `agent.*`, traz `geracao` no envelope); erro RPC em `session.prompt` (ex.: `/compact` sem equivalente no codex) vira exceção nos três SDKs, e Python/PHP têm teto de segurança sem eventos no prompt (`prompt_timeout`/`$promptTimeout`, padrão 3600 s; `timeout` por chamada); a geração da última resposta também fica disponível no cliente. Comandos nativos do harness (`harness.comandos*`): `listCommands(harness, cwd?)`,
 `annotateCommand(harness, comando, anotacao)` e `confirmCommand(harness, comando)` (Python também
 `list_commands`, `annotate_command`, `confirm_command`). Cada comando traz `nome`, `descricao`,
 `repasse` (`literal`/`traduzido`/`sem_equivalente`), `origem`, `anotacao` e `confirmado`. A tela de
@@ -76,7 +76,7 @@ Com o classificador ligado, os eventos `tool_call` e `permission` trazem `risco`
 
 Os nomes oficiais e campos estão em [02-protocol-spec.md](02-protocol-spec.md). Para um cliente WebSocket completo e curto veja `scripts/ws-cliente.mjs`; o passo a passo de verificação está em [VERIFICACAO.md](VERIFICACAO.md).
 
-# SDKs 1.2.0
+# SDKs 1.7.0
 
 Os SDKs TypeScript, Python e PHP usam JSON-RPC sobre STDIO por padrão e conversam com
 `openheinerss serve --stdio`. A porta WebSocket padrão é **4820**; defina

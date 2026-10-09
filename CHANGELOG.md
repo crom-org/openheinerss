@@ -94,7 +94,7 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 - No `rodar`, ao passar do limite: aviso `[contexto] …` no log (uma vez por sessão) e linha `orq.contexto` no log de eventos; com `nova-sessao`, o turno termina e o mesmo motor recomeça em sessão nova (sem sessão nativa), no máximo 3 vezes, sem contar como tentativa. `reinicios_contexto` no `meta.json`.
 
 
-Tudo o que mudou desde a v1.1.0. SDKs TypeScript, Python e PHP em **1.2.0**.
+### Adicionado (continuação da 1.2.0)
 
 ### Adicionado (pai falha quando filho falha; filhos órfãos)
 

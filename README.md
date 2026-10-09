@@ -1,8 +1,6 @@
-# Openheinerss (OpenHarness)
+# Openheinerss
 
-O Openheinerss é um binário Go que normaliza sessões de agentes de código por JSON-RPC 2.0/NDJSON. Ele oferece transporte STDIO e WebSocket (`127.0.0.1:4820`), além de uma execução de missões com worktree, logs e retomada.
-
-Todo comando e flag do CLI aceita o nome padrão em português e em inglês; `rodar` também pode ser chamado de `launch` ou `dispatch`, sem alterar o comando interativo `run`.
+O Openheinerss é um binário Go que faz a ponte entre sessões de agentes de código e harnesses locais. Expõe JSON-RPC 2.0 por STDIO ou WebSocket (`127.0.0.1:4820`), com SDKs para TypeScript, Python e PHP.
 
 ## Início rápido
 
@@ -10,72 +8,53 @@ Todo comando e flag do CLI aceita o nome padrão em português e em inglês; `ro
 make build
 bin/openheinerss doctor
 bin/openheinerss init
-bin/openheinerss run --harness mock "Analise o repositório"   # o mock pede permissão: responda s ou N
-bin/openheinerss harness test mock --prompt "responda OK"     # nega a permissão sozinho e termina em segundos
-bin/openheinerss rodar demo mock --texto "responda OK"         # missão com worktree, log e meta.json (exige repositório git)
-bin/openheinerss agentes
+bin/openheinerss run --harness mock "responda OK"
+bin/openheinerss harness test mock --prompt "responda OK"
+bin/openheinerss rodar demo mock --texto "responda OK"
+bin/openheinerss agentes listar
 ```
 
-O `mock` é determinístico, offline e não consome tokens. O roteiro completo, passo a passo e com o resultado esperado de cada comando, está em [docs/VERIFICACAO.md](docs/VERIFICACAO.md). Para conferir todos os comandos e flags do binário local, use `bin/openheinerss docs` ou leia [docs/09-cli.md](docs/09-cli.md). O manual é gerado automaticamente e tem teste de consistência.
-
-## Instalação
-
-A instalação recomendada baixa o binário do último release, verifica o SHA-256 e instala em `~/.local/bin`:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/crom-org/openheinerss/main/install.sh | bash
-```
-
-Para fixar uma versão, use `curl ... | bash -s -- --versao 0.1.0`. Se o GitHub não estiver disponível e o comando for executado dentro de um clone do projeto, o instalador compila com `go build` como fallback. Se `~/.local/bin` não estiver no `PATH`, adicione-o ao shell.
-
-Também é possível instalar pelo toolchain Go:
-
-```bash
-go install github.com/crom-org/openheinerss/cmd/openheinerss@latest
-```
-
-Ou baixe manualmente o arquivo `openheinerss_<versão>_<sistema>_<arquitetura>.tar.gz` (ou `.zip` no Windows) na página de releases, confira `checksums.txt`, extraia e coloque o binário no `PATH`. Confira a instalação com `openheinerss version`.
+O `mock` é offline e determinístico. `rodar` precisa ser executado dentro de um repositório Git. Para validar a instalação, use `bin/openheinerss version` e `bin/openheinerss docs --check`.
 
 ## O que existe hoje
 
-- Harnesses embutidos: `mock`, `claude-code`, `opencode`, `codex`, `agy` e `aider`. Instâncias adicionais podem ser declaradas em `.openheinerss/harnesses/`.
-- `claude-code` pode usar CLI ou SDK; os demais adaptadores executam seus CLIs. O `codex` usa `codex exec --json`, não a Assistants API.
-- Modelos locais são possíveis quando o CLI correspondente os suporta, por exemplo `opencode --model ollama/...` e `aider --model ollama/...`; o Openheinerss não gerencia o KV-cache.
-- `agent.permission_request` é emitido atualmente por `claude-code` e `mock`. O campo `risk` é informativo; não há classificador universal por criticidade. O Codex é executado com bypass de aprovações.
-- O hub MCP mantém a configuração em `.openheinerss/mcp.json`; ele não hospeda servidores nem injeta ferramentas automaticamente nos harnesses.
-- `limites` lê dados locais de cotas de Codex e Claude. `rodar` oferece worktree, log, metadados, retomada, reservas e limites de carga/cota, e termina com o código do `FIM` (0 ok, 1 erro, 2 sem cota, 130 parado). `agentes` lista, mostra e para os agentes pelos logs.
-- Cada sessão grava o transcript em `.openheinerss/sessions/<id>.jsonl` (base do `session.resume` e de `run --retomar`) e um checkpoint por cópia de arquivos antes do primeiro prompt. Não há rollback automático antes de cada ferramenta.
-- O servidor WebSocket só aceita conexões sem `Origin` ou de origens locais; outras precisam de `OPENHEINERSS_ORIGENS`.
+Há harnesses embutidos `mock`, `claude-code`, `opencode`, `codex`, `agy` e `aider`. Também é possível declarar instâncias em `.openheinerss/harnesses/` ou numa pasta passada por `--config`. Os CLIs são repassados pelo adaptador; o Openheinerss não fornece os motores, modelos, logins ou créditos deles.
 
-## Comandos úteis
+O catálogo atual inclui:
 
-```bash
-bin/openheinerss serve --stdio
-bin/openheinerss serve --port 4820
-bin/openheinerss run --harness opencode --mode cli --model ollama/qwen2.5-coder:32b "Escreva testes"
-bin/openheinerss limites --json
-bin/openheinerss harness list
-bin/openheinerss agentes ver <nome>
-bin/openheinerss mcp list
-```
+- `doctor`, `init`, `version` e `docs`;
+- `run` para uma sessão interativa e `serve` para JSON-RPC por STDIO/WebSocket;
+- `rodar` (aliases `launch` e `dispatch`) para missões com worktree, branch, logs, metadados, tentativas e retomada;
+- `agentes listar|ver|parar|checkpoints|desfazer` para acompanhar, parar e restaurar checkpoints;
+- `harness list|add|test` e `capacidades` para descobrir adaptadores e recursos;
+- `motores`, `config contexto`, `identidade` e `contas` para perfis, configuração, identidade efetiva e contas sem o Openheinerss ler credenciais;
+- `limites` para cotas locais de Codex e Claude, com idade da informação;
+- `mcp list|add|efetivos` para configuração e entrega de servidores MCP;
+- `comandos` para catálogo de comandos nativos dos harnesses.
 
-`motores` lista perfis e papéis definidos em `.openheinerss/motores.yaml`, no formato `papel: motor/modelo` e opcionalmente `esforco=low|medium|high`. O arquivo é opcional: sem ele o comando lista só os perfis e informa `Nenhum papel`.
+Cada item acima foi conferido com `bin/openheinerss <comando> --help` no código desta versão; o manual completo é [docs/09-cli.md](docs/09-cli.md).
 
-## Protocolo e SDKs
+## Ponte, risco e limites
 
-O protocolo oficial está em [docs/02-protocol-spec.md](docs/02-protocol-spec.md). Os nomes corretos incluem `session.create`, `session.prompt`, `session.permission_respond`, `session.abort`, `session.list`, `session.resume`, `catalog.list`, `harness.register` e `doctor.check`, além dos métodos de orquestração `rodar.*`, `limites.obter` e `eventos.assinar` (eventos `orq.*`).
+A ponte encaminha prompts, argumentos, eventos, permissões e saída dos harnesses. Ela não é um classificador de segurança nem bloqueia ferramentas por conta própria. `--classificar-risco` apenas acrescenta `baixo`, `medio` ou `alto` e um motivo a eventos de ferramenta/permissão. O Codex é executado pelo CLI `codex exec --json`; não há uma API paga implícita.
 
-Os SDKs disponíveis estão em [sdk/typescript/](sdk/typescript), [sdk/python/](sdk/python) e [sdk/php/](sdk/php). Consulte [docs/04-sdk-any-language.md](docs/04-sdk-any-language.md) para os recursos realmente expostos por cada um.
+`limites` lê caches/consultas locais de cotas quando configurados. `rodar --cota-max` pode pular uma instância acima do limiar e trocar por outra disponível; isso não cria contas nem renova créditos. `contas` cria e administra diretórios de login, mas deixa o login para o comando nativo do harness e nunca imprime credenciais. `identidade` mostra o vínculo efetivo entre instância, harness e diretório, sem revelar tokens.
 
-## Documentação
+## Missões e retomada
 
-`docs/` é a única documentação técnica do projeto:
+Uma missão pode ser simulada com `rodar --seco` (ou `--dry-run`); `--json` mostra o plano mascarado. Em execução, `rodar` mantém worktree, log, `meta.json`, transcript e checkpoints git-sombra. `--retomar`/`--sessao` retomam a missão ou sessão quando o harness suporta isso. `--limite-contexto` pode avisar ou iniciar nova sessão.
 
-- [Visão geral](docs/00-overview.md) e [arquitetura](docs/01-architecture.md)
-- [Protocolo](docs/02-protocol-spec.md), [harnesses](docs/03-harness-adapters.md) e [SDKs](docs/04-sdk-any-language.md)
-- [Roadmap](docs/05-roadmap.md), [harness custom](docs/06-harness-custom.md), [missões](docs/07-rodar.md) e [manual do CLI](docs/09-cli.md)
-- [Instalação](docs/08-instalacao.md), [roteiro de verificação](docs/VERIFICACAO.md), [testes reais](docs/TESTES-REAIS.md) e [auditoria de lacunas](docs/LACUNAS.md)
-- [Como desenvolvemos com o próprio Openheinerss](docs/COMO-DESENVOLVEMOS.md) e [CHANGELOG](CHANGELOG.md)
+O detector `parado` avisa ou interrompe uma missão sem progresso observável; a ação é configurável e a interrupção é retomável. `--filhos-obrigatorios` e `--esperar-filhos` controlam agentes filhos. Checkpoints podem ser listados e desfeitos explicitamente; não há rollback automático antes de cada ferramenta.
+
+## MCP e contexto por projeto
+
+O hub lê `.openheinerss/mcp.json` global/projeto e entrega servidores por execução quando o harness tem suporte. Ele não hospeda servidores nem injeta ferramentas sem configuração. `--sem-mcp` desliga a entrega.
+
+Configuração, motores, limites de contexto e instâncias podem ser globais ou do projeto; a configuração do projeto vence a global. `--projeto` seleciona outro projeto e `--config` seleciona uma pasta explícita. Consulte [docs/02-protocol-spec.md](docs/02-protocol-spec.md) e [docs/04-sdk-any-language.md](docs/04-sdk-any-language.md) para o protocolo e os SDKs realmente disponíveis.
+
+## Instalação
+
+O instalador de release valida SHA-256; dentro de um clone, `install.sh --local` ou `make build` compilam localmente. Também é possível instalar o módulo Go com `go install github.com/crom-org/openheinerss/cmd/openheinerss@latest`.
 
 ## Desenvolvimento
 
@@ -85,4 +64,4 @@ go vet ./...
 go test ./...
 ```
 
-Licença MIT.
+O checklist para publicar os SDKs e o release está em [docs/PUBLICAR.md](docs/PUBLICAR.md). Consulte [docs/README.md](docs/README.md) para distinguir documentação pública de material interno. Licença MIT.

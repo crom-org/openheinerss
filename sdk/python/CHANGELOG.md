@@ -1,6 +1,9 @@
 # Changelog
 
-## 1.2.0 (não publicada)
+## 1.7.0 — 2026-10-09
+- Versão do pacote alinhada ao release do Openheinerss; inclui a API de orquestração disponível nesta versão.
+
+## 1.2.0 — 2026-10-09
 - `filhosObrigatorios` em `run` (o pai termina com código 4, motivo "filho falhou"); `subscribe_events` também recebe `orq.filhos_orfaos`; `orq.fim` traz `filhos`.
 - Adiciona `WebSocketTransport` (RFC 6455, sem dependências) e `Agent(transport="websocket", host=, port=, origin=)` / `url=`; padrão continua STDIO.
 - `Agent.stream`/`prompt`: erro RPC de `session.prompt` (ex.: `/compact` sem equivalente) levanta `RuntimeError` em vez de travar; teto `prompt_timeout` (3600 s) e `timeout` por chamada levantam `TimeoutError`.
