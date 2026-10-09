@@ -70,8 +70,11 @@ func Atualizar(ctx context.Context, op AtualizarOpcoes) (Resultado, error) {
 			defer unlock()
 			if retryAte, ok := lerRetryAte(retryPath(cachePath)); ok && time.Now().Before(retryAte) {
 				if c, ok := lerCacheSemValidade(cachePath); ok {
-					c.Fonte = "cache (429)"
-					c.Nota = fmt.Sprintf("HTTP 429; nova tentativa após %s", retryAte.Format(time.RFC3339))
+					if c.Fonte != "cabeçalhos" {
+						c.Fonte = "cache (429)"
+						c.Nota = fmt.Sprintf("HTTP 429; nova tentativa após %s", retryAte.Format(time.RFC3339))
+					}
+					atualizarIdade(&c, time.Now())
 					*i = mesclar(*i, c)
 				} else {
 					i.Nota = fmt.Sprintf("HTTP 429; nova tentativa após %s", retryAte.Format(time.RFC3339))
@@ -95,12 +98,32 @@ func Atualizar(ctx context.Context, op AtualizarOpcoes) (Resultado, error) {
 				if he, ok := err.(*httpStatusError); ok && he.status == http.StatusTooManyRequests {
 					retryAte := time.Now().Add(retryAfter(he.header.Get("Retry-After")))
 					_ = gravarRetryAte(retryPath(cachePath), retryAte)
+					reservaMotivo := ""
+					if i.Base == "claude-code" {
+						reservado, reservaErr := reservaClaude(ctx, *i, op.HTTPClient)
+						if reservaErr == nil && len(reservado.Janelas) > 0 {
+							reservado.Nota = fmt.Sprintf("/api/oauth/usage respondeu HTTP 429; reserva mínima (haiku, max_tokens=1), custo: 1 token de saída mais tokens de entrada")
+							*i = mesclar(*i, reservado)
+							_ = gravarCache(cachePath, reservado)
+							return
+						}
+						if reservaErr != nil {
+							reservaMotivo = erroSeguro(reservaErr)
+						}
+					}
 					if c, cacheOK := lerCacheSemValidade(cachePath); cacheOK {
 						c.Fonte = "cache (429)"
 						c.Nota = fmt.Sprintf("HTTP 429; nova tentativa após %s", retryAte.Format(time.RFC3339))
+						if reservaMotivo != "" {
+							c.Nota += "; reserva de cabeçalhos falhou: " + reservaMotivo
+						}
+						atualizarIdade(&c, time.Now())
 						*i = mesclar(*i, c)
 					} else {
 						i.Nota = fmt.Sprintf("HTTP 429; nova tentativa após %s", retryAte.Format(time.RFC3339))
+						if reservaMotivo != "" {
+							i.Nota += "; reserva de cabeçalhos falhou: " + reservaMotivo
+						}
 					}
 					return
 				}
@@ -168,8 +191,16 @@ func lerCache(path string, agora time.Time, intervalo time.Duration) (Instancia,
 	if err != nil || agora.Sub(t) >= intervalo {
 		return Instancia{}, false
 	}
-	i.IdadeSegundos = int64(agora.Sub(t).Seconds())
+	atualizarIdade(&i, agora)
 	return i, true
+}
+
+func atualizarIdade(i *Instancia, agora time.Time) {
+	t, err := time.Parse(time.RFC3339, i.DadoEm)
+	if err != nil {
+		return
+	}
+	i.IdadeSegundos = int64(agora.Sub(t).Seconds())
 }
 
 func lerCacheSemValidade(path string) (Instancia, bool) {
@@ -316,6 +347,45 @@ func consultaClaude(ctx context.Context, base Instancia, client *http.Client) (I
 	i := instanciaUso(base, v, headers, "consulta-ativa")
 	return i, nil
 }
+
+// reservaClaude usa uma única mensagem mínima para obter os cabeçalhos de cota
+// quando /api/oauth/usage está temporariamente limitado. O cache/lock do
+// chamador garante no máximo uma reserva por intervalo compartilhado por conta.
+func reservaClaude(ctx context.Context, base Instancia, client *http.Client) (Instancia, error) {
+	dir := dirClaude(base)
+	token, _, err := credenciaisClaude(filepath.Join(dir, ".credentials.json"))
+	if err != nil || token == "" {
+		return base, errors.New("credencial não encontrada")
+	}
+	endpoint := os.Getenv("OPENHEINERSS_CLAUDE_MESSAGES_URL")
+	if endpoint == "" {
+		endpoint = "https://api.anthropic.com/v1/messages"
+	}
+	modelo := os.Getenv("OPENHEINERSS_CLAUDE_RESERVA_MODELO")
+	if modelo == "" {
+		modelo = "claude-3-5-haiku-20241022"
+	}
+	body, err := json.Marshal(map[string]interface{}{
+		"model": modelo, "max_tokens": 1,
+		"messages": []map[string]string{{"role": "user", "content": "ok"}},
+	})
+	if err != nil {
+		return base, errors.New("reserva Claude inválida")
+	}
+	v, headers, requestErr := requestJSONMethod(ctx, client, http.MethodPost, endpoint, strings.NewReader(string(body)), token, map[string]string{
+		"Content-Type":      "application/json",
+		"anthropic-version": "2023-06-01",
+		"anthropic-beta":    "oauth-2025-04-20",
+	})
+	if requestErr != nil && len(headers) == 0 {
+		return base, requestErr
+	}
+	i := instanciaUso(base, v, headers, "cabeçalhos")
+	if len(i.Janelas) == 0 {
+		return base, errors.New("reserva sem cabeçalhos de limite")
+	}
+	return i, nil
+}
 func consultaCodex(ctx context.Context, base Instancia, client *http.Client) (Instancia, error) {
 	home := dirCodex(base)
 	authPath := filepath.Join(home, "auth.json")
@@ -339,16 +409,57 @@ func consultaCodex(ctx context.Context, base Instancia, client *http.Client) (In
 }
 func instanciaUso(base Instancia, v map[string]interface{}, h http.Header, fonte string) Instancia {
 	i := Instancia{Nome: base.Nome, Base: base.Base, DadoEm: time.Now().Format(time.RFC3339), Fonte: fonte, ContaID: base.ContaID, ContaIDFonte: base.ContaIDFonte}
-	if h.Get("anthropic-ratelimit-unified-5h-utilization") != "" {
+	if valor := headerValor(h, "anthropic-ratelimit-unified-5h-utilization", "anthropic-ratelimit-5h-utilization"); valor != "" {
 		i.Fonte = "cabeçalhos"
-		i.Janelas = append(i.Janelas, Janela{Nome: "5h", Percentual: parseFloat(h.Get("anthropic-ratelimit-unified-5h-utilization")) * 100})
+		i.Janelas = append(i.Janelas, janelaCabecalho("5h", valor, headerValor(h, "anthropic-ratelimit-unified-5h-reset", "anthropic-ratelimit-5h-reset")))
 	}
-	if h.Get("anthropic-ratelimit-unified-7d-utilization") != "" {
+	if valor := headerValor(h, "anthropic-ratelimit-unified-7d-utilization", "anthropic-ratelimit-7d-utilization"); valor != "" {
 		i.Fonte = "cabeçalhos"
-		i.Janelas = append(i.Janelas, Janela{Nome: "semana", Percentual: parseFloat(h.Get("anthropic-ratelimit-unified-7d-utilization")) * 100})
+		i.Janelas = append(i.Janelas, janelaCabecalho("semana", valor, headerValor(h, "anthropic-ratelimit-unified-7d-reset", "anthropic-ratelimit-7d-reset")))
 	}
 	walkUso(v, &i)
 	return i
+}
+
+func headerValor(h http.Header, nomes ...string) string {
+	for _, nome := range nomes {
+		if valor := h.Get(nome); valor != "" {
+			return valor
+		}
+	}
+	return ""
+}
+
+func janelaCabecalho(nome, utilizacao, reset string) Janela {
+	percentual := parseFloat(utilizacao)
+	if percentual <= 1 {
+		percentual *= 100
+	}
+	j := Janela{Nome: nome, Percentual: percentual}
+	if valor := parseResetHeader(reset); valor != "" {
+		j = comVoltaEm(j, valor)
+	}
+	return j
+}
+
+func parseResetHeader(valor string) string {
+	valor = strings.TrimSpace(valor)
+	if valor == "" {
+		return ""
+	}
+	if f, err := strconv.ParseFloat(valor, 64); err == nil {
+		if f > 1e12 {
+			f /= 1000
+		}
+		return time.Unix(int64(f), 0).Format(time.RFC3339)
+	}
+	if t, err := http.ParseTime(valor); err == nil {
+		return t.Format(time.RFC3339)
+	}
+	if t, err := time.Parse(time.RFC3339, valor); err == nil {
+		return t.Format(time.RFC3339)
+	}
+	return ""
 }
 func walkUso(v interface{}, i *Instancia) {
 	if m, ok := v.(map[string]interface{}); ok {

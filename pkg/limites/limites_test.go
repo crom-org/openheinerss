@@ -90,7 +90,7 @@ func TestConsultaCodexWhamLêFixtureEEnviaAccountID(t *testing.T) {
 	if err := os.MkdirAll(codex, 0700); err != nil {
 		t.Fatal(err)
 	}
-	fixture, err := os.ReadFile(filepath.Join("testdata", "wham-usage.json"))
+	fixture, err := os.ReadFile(filepath.Join("testdata", "wham-usage-real.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,11 @@ func TestConsultaCodexWhamLêFixtureEEnviaAccountID(t *testing.T) {
 	if gotID != "acct-anonimo" {
 		t.Fatalf("account id não enviado: %q", gotID)
 	}
-	if len(codexResult.Janelas) != 2 || codexResult.Janelas[0].VoltaEm == "" || codexResult.Janelas[1].VoltaEm == "" {
+	porJanela := map[string]Janela{}
+	for _, janela := range codexResult.Janelas {
+		porJanela[janela.Nome] = janela
+	}
+	if len(porJanela) != 2 || porJanela["5h"].Percentual != 37 || porJanela["semana"].Percentual != 70 || porJanela["5h"].VoltaEm == "" || porJanela["semana"].VoltaEm == "" {
 		t.Fatalf("fixture wham não interpretado: %+v", codexResult)
 	}
 	if codexResult.ContaIDFonte != "id-real" {
@@ -243,6 +247,85 @@ func TestAtualizar429RespeitaRetryAfterEUsaCache(t *testing.T) {
 	_, err = Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: cache, HTTPClient: srv.Client()})
 	if err != nil || calls != chamadasDepoisDo429 {
 		t.Fatalf("repetiu antes do retry-after: chamadas=%d erro=%v", calls, err)
+	}
+}
+
+func TestAtualizar429ReservaClaudePelosCabecalhosUmaVez(t *testing.T) {
+	_, _ = prepararClaudeAtivo(t, `{"claudeAiOauth":{"accessToken":"bom"}}`)
+	var usageCalls, messageCalls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/usage":
+			usageCalls++
+			w.Header().Set("Retry-After", "3600")
+			w.WriteHeader(http.StatusTooManyRequests)
+		case "/messages":
+			messageCalls++
+			if r.Method != http.MethodPost || r.Header.Get("Authorization") == "" {
+				t.Fatalf("reserva não foi POST autenticado")
+			}
+			w.Header().Set("anthropic-ratelimit-unified-5h-utilization", "0.27")
+			w.Header().Set("anthropic-ratelimit-unified-7d-utilization", "0.41")
+			w.Header().Set("anthropic-ratelimit-unified-5h-reset", "4102444800")
+			_, _ = w.Write([]byte(`{"id":"msg-anonimo","content":[]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	t.Setenv("OPENHEINERSS_CLAUDE_USAGE_URL", srv.URL+"/usage")
+	t.Setenv("OPENHEINERSS_CLAUDE_MESSAGES_URL", srv.URL+"/messages")
+	cache := filepath.Join(t.TempDir(), "cache")
+	r, err := Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: cache, HTTPClient: srv.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got Instancia
+	for _, i := range r.Instancias {
+		if i.Nome == "claude-code" {
+			got = i
+		}
+	}
+	if got.Fonte != "cabeçalhos" || len(got.Janelas) != 2 || got.Janelas[0].Percentual != 27 || got.Janelas[1].Percentual != 41 {
+		t.Fatalf("reserva não virou limites: %+v", got)
+	}
+	if got.Janelas[0].VoltaEm == "" || !strings.Contains(got.Nota, "max_tokens=1") {
+		t.Fatalf("reserva sem data/custo documentado: %+v", got)
+	}
+	if _, err := Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: cache, HTTPClient: srv.Client()}); err != nil {
+		t.Fatal(err)
+	}
+	if usageCalls != 1 || messageCalls != 1 {
+		t.Fatalf("reserva repetida durante Retry-After: usage=%d messages=%d", usageCalls, messageCalls)
+	}
+}
+
+func TestAtualizar429RecalculaIdadeDoCache(t *testing.T) {
+	_, _ = prepararClaudeAtivo(t, `{"claudeAiOauth":{"accessToken":"bom"}}`)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "3600")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+	t.Setenv("OPENHEINERSS_CLAUDE_USAGE_URL", srv.URL)
+	cache := filepath.Join(t.TempDir(), "cache")
+	cachePath := filepath.Join(cache, nomeCache("claude-code"))
+	if err := os.MkdirAll(cache, 0700); err != nil {
+		t.Fatal(err)
+	}
+	dadoEm := time.Now().Add(-36 * time.Minute).Truncate(time.Second)
+	if err := gravarCache(cachePath, Instancia{Nome: "claude-code", Base: "claude-code", DadoEm: dadoEm.Format(time.RFC3339), Fonte: "consulta-ativa", Janelas: []Janela{{Nome: "5h", Percentual: 22}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := gravarRetryAte(retryPath(cachePath), time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: cache, HTTPClient: srv.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Instancias[0].IdadeSegundos < 35*60 || r.Instancias[0].IdadeSegundos > 37*60 {
+		t.Fatalf("idade do cache não recalculada: %+v", r.Instancias[0])
 	}
 }
 
