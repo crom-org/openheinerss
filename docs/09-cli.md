@@ -290,9 +290,9 @@ Aliases:
   limites, limits
 
 Flags:
-      --atualizar            Consulta ativamente cada conta, respeitando o intervalo mínimo
-      --forcar               Ignora o intervalo mínimo por conta
-      --intervalo duration   Intervalo mínimo entre consultas por conta (default 5m0s)
+      --atualizar            Consulta ativamente cada conta agora, sem usar cache
+      --forcar               Alias aceito de compatibilidade; --atualizar já ignora o intervalo
+      --intervalo duration   Intervalo interno para consultas que não são --atualizar (default 5m0s)
       --json                 Emite JSON
 
 Global Flags:

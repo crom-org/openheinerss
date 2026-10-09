@@ -324,9 +324,9 @@ func TestAtualizar429RespeitaRetryAfterEUsaCache(t *testing.T) {
 	if calls < 2 || r.Instancias[0].Fonte != "cache (429)" || len(r.Instancias[0].Janelas) != 1 {
 		t.Fatalf("429 não usou cache: chamadas=%d resultado=%+v", calls, r.Instancias)
 	}
-	_, err = Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: cache, HTTPClient: srv.Client()})
-	if err != nil || calls != chamadasDepoisDo429 {
-		t.Fatalf("repetiu antes do retry-after: chamadas=%d erro=%v", calls, err)
+	_, err = Atualizar(context.Background(), AtualizarOpcoes{CacheDir: cache, HTTPClient: srv.Client()})
+	if err != nil || calls <= chamadasDepoisDo429 {
+		t.Fatalf("consulta forçada não repetiu após 429: chamadas=%d antes=%d erro=%v", calls, chamadasDepoisDo429, err)
 	}
 }
 
@@ -375,8 +375,8 @@ func TestAtualizar429ReservaClaudePelosCabecalhosUmaVez(t *testing.T) {
 	if _, err := Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: cache, HTTPClient: srv.Client()}); err != nil {
 		t.Fatal(err)
 	}
-	if usageCalls != 1 || messageCalls != 1 {
-		t.Fatalf("reserva repetida durante Retry-After: usage=%d messages=%d", usageCalls, messageCalls)
+	if usageCalls != 2 || messageCalls != 2 {
+		t.Fatalf("--atualizar não consultou/reservou novamente: usage=%d messages=%d", usageCalls, messageCalls)
 	}
 }
 
@@ -413,7 +413,7 @@ func TestAtualizar429EmBloqueioTentaReservaClaudeSeCacheDeCabecalhosVenceu(t *te
 	if err := gravarRetryAte(retryPath(cachePath), time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	r, err := Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: cache, HTTPClient: srv.Client()})
+	r, err := Atualizar(context.Background(), AtualizarOpcoes{CacheDir: cache, HTTPClient: srv.Client()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -447,7 +447,7 @@ func TestAtualizar429RecalculaIdadeDoCache(t *testing.T) {
 	if err := gravarRetryAte(retryPath(cachePath), time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	r, err := Atualizar(context.Background(), AtualizarOpcoes{Forcar: true, CacheDir: cache, HTTPClient: srv.Client()})
+	r, err := Atualizar(context.Background(), AtualizarOpcoes{CacheDir: cache, HTTPClient: srv.Client()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -480,6 +480,13 @@ func TestAtualizarNomesEVoltaEm(t *testing.T) {
 	b, _ := json.Marshal(r)
 	if !strings.Contains(string(b), `"voltaEm"`) || strings.Contains(string(b), `"nome":"limite"`) {
 		t.Fatalf("JSON de janelas: %s", b)
+	}
+}
+
+func TestResetUsoAceitaTimestampRFC3339(t *testing.T) {
+	got, ok := resetUso(map[string]interface{}{"resets_at": "2026-10-09T12:34:56Z"})
+	if !ok || got != "2026-10-09T12:34:56Z" {
+		t.Fatalf("reset textual: %q (ok=%v)", got, ok)
 	}
 }
 

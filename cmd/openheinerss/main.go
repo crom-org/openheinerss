@@ -1035,8 +1035,8 @@ func newLimitesCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "limites", Aliases: []string{"limits"}, Short: "Mostra as cotas locais das instâncias Codex e Claude", RunE: func(cmd *cobra.Command, args []string) error {
 		resultado := limites.Obter()
 		var err error
-		if atualizar {
-			resultado, err = limites.Atualizar(cmd.Context(), limites.AtualizarOpcoes{Forcar: forcar, Intervalo: intervalo})
+		if atualizar || forcar {
+			resultado, err = limites.Atualizar(cmd.Context(), limites.AtualizarOpcoes{Forcar: true, Intervalo: intervalo})
 			if err != nil {
 				return err
 			}
@@ -1054,6 +1054,8 @@ func newLimitesCmd() *cobra.Command {
 			fmt.Printf("%s (%s)", i.Nome, i.Base)
 			if i.DadoEm != "" {
 				fmt.Printf(" — dado %s, idade %ds", i.DadoEm, i.IdadeSegundos)
+			} else {
+				fmt.Printf(" — idade desconhecida")
 			}
 			if i.Nota != "" {
 				fmt.Printf(" — %s", i.Nota)
@@ -1074,9 +1076,9 @@ func newLimitesCmd() *cobra.Command {
 		return nil
 	}}
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emite JSON")
-	cmd.Flags().BoolVar(&atualizar, "atualizar", false, "Consulta ativamente cada conta, respeitando o intervalo mínimo")
-	cmd.Flags().BoolVar(&forcar, "forcar", false, "Ignora o intervalo mínimo por conta")
-	cmd.Flags().DurationVar(&intervalo, "intervalo", 5*time.Minute, "Intervalo mínimo entre consultas por conta")
+	cmd.Flags().BoolVar(&atualizar, "atualizar", false, "Consulta ativamente cada conta agora, sem usar cache")
+	cmd.Flags().BoolVar(&forcar, "forcar", false, "Alias aceito de compatibilidade; --atualizar já ignora o intervalo")
+	cmd.Flags().DurationVar(&intervalo, "intervalo", 5*time.Minute, "Intervalo interno para consultas que não são --atualizar")
 	return cmd
 }
 

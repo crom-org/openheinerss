@@ -215,7 +215,7 @@ class Agent
         if ($encerrar !== null) $params['encerrar'] = $encerrar;
         $this->request('rodar.decidir', $params);
     }
-    public function getLimits(bool $atualizar = false, bool $forcar = false): array { return $this->request('limites.obter', $atualizar ? ['atualizar' => true, 'forcar' => $forcar] : []); }
+    public function getLimits(bool $atualizar = false, bool $forcar = false): array { return $this->request('limites.obter', ($atualizar || $forcar) ? ['atualizar' => true, 'forcar' => $forcar] : []); }
     /** Matriz de capacidades (instruções, skills, MCP, retomada, permissões); sem harness, as bases. */
     public function capacidades(?string $harness = null): array { return $this->request('harness.capacidades', $harness ? ['harness' => $harness] : []); }
     public function identidade(string $instancia): array { return $this->request('instancia.identidade', ['instancia' => $instancia]); }

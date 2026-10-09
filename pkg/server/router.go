@@ -306,8 +306,8 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (respo
 	case protocol.MethodLimits, protocol.MethodLimitesObter:
 		var p protocol.LimitsParams
 		_ = json.Unmarshal(req.Params, &p)
-		if p.Atualizar {
-			res, err := limites.Atualizar(ctx, limites.AtualizarOpcoes{Forcar: p.Forcar})
+		if p.Atualizar || p.Forcar {
+			res, err := limites.Atualizar(ctx, limites.AtualizarOpcoes{Forcar: true})
 			if err != nil {
 				return protocol.NewErrorResponse(req.ID, protocol.CodeInternalError, err.Error(), nil)
 			}
