@@ -446,7 +446,7 @@ func dirClaude(i Instancia) string {
 	if strings.HasPrefix(i.Nome, "claude-") && i.Nome != "claude-code" {
 		return filepath.Join(userHome(), "."+i.Nome)
 	}
-	return expandHome(os.Getenv("CLAUDE_CONFIG_DIR"), filepath.Join(userHome(), ".claude"))
+	return filepath.Join(userHome(), ".claude")
 }
 func dirCodex(i Instancia) string {
 	if i.Nome == "codex2" {

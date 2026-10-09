@@ -19,7 +19,7 @@ func init() {
 	harness.Register("agy", protocol.HarnessCatalogItem{
 		ID:                 "agy",
 		DisplayName:        "Google Antigravity (AGY Agent Suite)",
-		SupportedModes:     []string{"cli", "sdk"},
+		SupportedModes:     []string{"cli"},
 		SupportedProtocols: []string{"antigravity", "gemini"},
 		MCP:                "sem equivalente por execução: o agy só tem \"agy mcp add\", que edita a config do usuário",
 		DefaultProviders: []protocol.ProviderInfo{
@@ -27,11 +27,13 @@ func init() {
 				ID:          "google-deepmind",
 				Name:        "Google DeepMind / Gemini",
 				Endpoint:    "https://generativelanguage.googleapis.com",
-				Models:      []string{"gemini-2.5-pro", "gemini-2.5-flash", "gemini-3.8-flash"},
 				RequiresKey: true,
 			},
 		},
 	}, func(mode harness.Mode) (harness.Harness, error) {
+		if mode == harness.ModeSDK {
+			return nil, fmt.Errorf("modo agy sdk removido: use cli")
+		}
 		if mode == "" || mode == harness.ModeMock {
 			mode = harness.ModeCLI
 		}

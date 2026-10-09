@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/crom-org/openheinerss/pkg/checkpoint"
+	"github.com/crom-org/openheinerss/pkg/config"
 	"github.com/crom-org/openheinerss/pkg/harness"
 	"github.com/crom-org/openheinerss/pkg/identidade"
 	"github.com/crom-org/openheinerss/pkg/motor"
@@ -99,6 +100,9 @@ func (m *Manager) broadcast(notification protocol.Notification) {
 
 // CreateSession inicializa uma nova sessão com o harness e configurações solicitadas
 func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCreateParams) (*protocol.SessionCreateResult, error) {
+	if params.CWD == "" {
+		params.CWD, _ = os.Getwd()
+	}
 	if params.Papel != "" {
 		roles, path, err := motor.FindRoles(params.CWD)
 		if err != nil {
@@ -117,7 +121,14 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 		}
 	}
 	if params.Harness == "" {
-		params.Harness = "mock"
+		cfg, cfgErr := config.LoadProject(params.CWD)
+		if cfgErr != nil {
+			return nil, &protocol.RPCError{Code: protocol.CodeInvalidParams, Message: cfgErr.Error()}
+		}
+		params.Harness, params.Mode = cfg.DefaultHarness, cfg.DefaultMode
+		if params.Harness == "" {
+			return nil, &protocol.RPCError{Code: protocol.CodeInvalidParams, Message: "harness obrigatório: informe-o explicitamente ou configure default_harness em .openheinerss/config.yaml"}
+		}
 	}
 	ident, err := identidade.Para(params.Harness, params.Env)
 	if err != nil {
@@ -126,7 +137,7 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 
 	mode := harness.Mode(params.Mode)
 	if mode == "" {
-		mode = harness.ModeMock
+		mode = harness.ModeCLI
 	}
 
 	h, err := harness.Create(params.Harness, mode)

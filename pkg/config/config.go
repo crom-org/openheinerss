@@ -110,8 +110,8 @@ func InitWorkspace(cwd string) error {
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 		defaultConfig := `# Openheinerss Project Configuration
 version: "1.0"
-default_harness: "mock"
-default_mode: "sdk"
+default_harness: ""
+default_mode: ""
 permission_mode: "ask"
 `
 		if err := os.WriteFile(configFile, []byte(defaultConfig), 0644); err != nil {

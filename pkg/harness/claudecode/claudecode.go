@@ -30,24 +30,22 @@ func init() {
 			MCP:                "por execução: --mcp-config <arquivo temporário>",
 			DefaultProviders: []protocol.ProviderInfo{
 				{
-					ID:          "claude-native",
-					Name:        "Anthropic Oficial (Assinatura)",
-					Endpoint:    "https://api.anthropic.com",
-					Models:      []string{"claude-3-7-sonnet-latest", "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"},
+					ID:       "claude-native",
+					Name:     "Anthropic Oficial (Assinatura)",
+					Endpoint: "https://api.anthropic.com",
+					// Modelos são descobertos/configurados pelo CLI; não congelar uma lista.
 					RequiresKey: true,
 				},
 				{
 					ID:          "openrouter",
 					Name:        "OpenRouter AI",
 					Endpoint:    "https://openrouter.ai/api",
-					Models:      []string{"anthropic/claude-3.7-sonnet", "qwen/qwen-2.5-coder-32b-instruct"},
 					RequiresKey: true,
 				},
 				{
 					ID:          "opencode-zen",
 					Name:        "OpenCode Zen (Modelos Gratuitos)",
 					Endpoint:    "https://opencode.ai/zen",
-					Models:      []string{"space-bunny-free"},
 					RequiresKey: false,
 				},
 			},
@@ -143,6 +141,12 @@ func (c *ClaudeCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig
 	c.stopped = false
 
 	env := os.Environ()
+	// A instância principal é sempre a conta de ~/.claude. Não deixe o shell
+	// que iniciou o servidor selecionar silenciosamente outra conta.
+	if _, custom := cfg.Env["CLAUDE_CONFIG_DIR"]; !custom {
+		home, _ := os.UserHomeDir()
+		env = harness.SetEnv(env, "CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude"))
+	}
 	env = append(env,
 		"DISABLE_AUTOUPDATER=1",
 		"API_TIMEOUT_MS=600000",
@@ -164,6 +168,9 @@ func (c *ClaudeCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig
 		env = append(env, fmt.Sprintf("ANTHROPIC_MODEL=%s", cfg.Model))
 	}
 	for k, v := range cfg.Env {
+		if k == "CLAUDE_CONFIG_DIR" && harness.CanonicalName(cfg.Harness) == "claude-code" {
+			continue
+		}
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
 	if cfg.CWD != "" {

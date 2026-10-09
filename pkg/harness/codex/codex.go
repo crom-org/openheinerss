@@ -21,7 +21,10 @@ import (
 
 func init() {
 	register := func(name string) {
-		harness.Register(name, protocol.HarnessCatalogItem{ID: name, DisplayName: "OpenAI Codex / Assistant Engine", SupportedModes: []string{"cli", "api"}, SupportedProtocols: []string{"openai"}, MCP: "por execução: -c mcp_servers.<nome>.* (env e headers pelo ambiente)"}, func(mode harness.Mode) (harness.Harness, error) {
+		harness.Register(name, protocol.HarnessCatalogItem{ID: name, DisplayName: "OpenAI Codex / Assistant Engine", SupportedModes: []string{"cli"}, SupportedProtocols: []string{"openai"}, MCP: "por execução: -c mcp_servers.<nome>.* (env e headers pelo ambiente)"}, func(mode harness.Mode) (harness.Harness, error) {
+			if mode == harness.ModeAPI {
+				return nil, fmt.Errorf("modo Codex api removido: use cli com codex exec")
+			}
 			if mode == "" || mode == harness.ModeMock {
 				mode = harness.ModeCLI
 			}
@@ -113,11 +116,7 @@ func (c *CodexHarness) SendPrompt(ctx context.Context, text string, attachments 
 		return fmt.Errorf("harness codex não está ativo")
 	}
 	if c.mode == harness.ModeAPI {
-		go func() {
-			c.emit(harness.Event{Type: harness.EventText, Payload: protocol.TextParams{SessionID: c.cfg.SessionID, Delta: fmt.Sprintf("[Codex %s] %s", c.cfg.Model, text)}})
-			c.emit(harness.Event{Type: harness.EventComplete, Payload: protocol.CompleteParams{SessionID: c.cfg.SessionID, Reason: "completed"}})
-		}()
-		return nil
+		return fmt.Errorf("modo Codex api removido: use cli com codex exec")
 	}
 	if c.mode != harness.ModeCLI {
 		return fmt.Errorf("modo Codex não suportado: %s; use cli", c.mode)

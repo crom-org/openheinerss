@@ -4,6 +4,7 @@ package limites
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -65,7 +66,15 @@ func Obter() Resultado {
 	instancias := make([]Instancia, 0)
 	seen := map[string]bool{}
 	add := func(i Instancia) {
+		originais := len(i.Janelas)
 		i.Janelas = janelasVigentes(i.Janelas, agora)
+		if originais > 0 && len(i.Janelas) == 0 {
+			data := i.DadoEm
+			if data == "" {
+				data = "data desconhecida"
+			}
+			i.Nota = fmt.Sprintf("sem dado: todas as janelas venceram; última leitura %s", data)
+		}
 		if !seen[i.Nome] {
 			seen[i.Nome] = true
 			instancias = append(instancias, i)
@@ -99,7 +108,7 @@ func Obter() Resultado {
 	// todas as pastas ~/.claude-contaN. A existência da pasta é suficiente para
 	// listá-la; a ausência do statusline vira uma nota "sem dado".
 	if !seen["claude-code"] {
-		addClaude("claude-code", expandHome(os.Getenv("CLAUDE_CONFIG_DIR"), filepath.Join(userHome(), ".claude")), agora, add)
+		addClaude("claude-code", filepath.Join(userHome(), ".claude"), agora, add)
 	}
 	for _, conta := range contasClaudeLocais() {
 		addClaude(conta.nome, conta.dir, agora, add)
@@ -147,6 +156,28 @@ func Percentual(nome string) (float64, bool) {
 		if i.Nome == nome {
 			return maiorPercentual(i, agora)
 		}
+	}
+	return 0, false
+}
+
+// PercentualFresco garante uma tentativa ativa antes de autorizar uma decisão
+// baseada em cota. Sem dado recente, devolve false em vez de tratar o cache
+// velho como autorização para pular ou escolher uma instância.
+func PercentualFresco(ctx context.Context, nome string, maxAge time.Duration) (float64, bool) {
+	resultado, err := Atualizar(ctx, AtualizarOpcoes{Intervalo: maxAge})
+	if err != nil {
+		return 0, false
+	}
+	agora := time.Now()
+	for _, i := range resultado.Instancias {
+		if i.Nome != nome || i.DadoEm == "" {
+			continue
+		}
+		dado, err := time.Parse(time.RFC3339, i.DadoEm)
+		if err != nil || agora.Sub(dado) < 0 || agora.Sub(dado) > maxAge {
+			return 0, false
+		}
+		return maiorPercentual(i, agora)
 	}
 	return 0, false
 }
@@ -262,8 +293,14 @@ func lerCodex(nome, home string, agora time.Time) (Instancia, bool) {
 	if best == nil {
 		return Instancia{Nome: nome, Base: "codex", Nota: "sem dado: sem leitura de limite nos arquivos de sessão", Fonte: "log"}, true
 	}
-	em := parseTime(best.Timestamp, agora)
-	i := Instancia{Nome: nome, Base: "codex", DadoEm: em.Format(time.RFC3339), IdadeSegundos: int64(agora.Sub(em).Seconds())}
+	em, conhecido := parseTime(best.Timestamp)
+	i := Instancia{Nome: nome, Base: "codex", Fonte: "log"}
+	if conhecido {
+		i.DadoEm = em.Format(time.RFC3339)
+		i.IdadeSegundos = int64(agora.Sub(em).Seconds())
+	} else {
+		i.Nota = "sem dado: data da leitura desconhecida"
+	}
 	i.Fonte = "log"
 	for _, w := range []*rateWindow{best.Payload.RateLimits.Primary, best.Payload.RateLimits.Secondary} {
 		if w == nil {
@@ -353,12 +390,12 @@ func expandHome(value, fallback string) string {
 	return value
 }
 func userHome() string { h, _ := os.UserHomeDir(); return h }
-func parseTime(value string, fallback time.Time) time.Time {
+func parseTime(value string) (time.Time, bool) {
 	t, err := time.Parse(time.RFC3339Nano, value)
 	if err != nil {
-		return fallback
+		return time.Time{}, false
 	}
-	return t
+	return t, true
 }
 
 var reContaClaude = regexp.MustCompile(`^\.claude-(conta\d+)$`)

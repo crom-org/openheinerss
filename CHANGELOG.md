@@ -3,6 +3,13 @@
 Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 
+## Não publicado
+
+- Instância `claude-code` usa sempre `~/.claude`, sem herdar `CLAUDE_CONFIG_DIR` do shell; a identidade acompanha o ambiente efetivo do filho.
+- `rodar --cota-max` só decide com limite atualizado nos últimos cinco minutos e tenta consulta ativa quando o dado passivo está velho.
+- Removidos os modos falsos `codex api` e `agy sdk`; sessões sem harness explícito leem `default_harness`/`default_mode` do projeto e recusam a ausência de configuração em vez de cair no mock.
+- Limites informam janelas vencidas e datas desconhecidas; modelos de provedores não ficam congelados no catálogo; `--projeto` seleciona a configuração local nos comandos CLI.
+
 ## [1.4.1] — 2026-10-09
 
 - `limites --atualizar` renova o OAuth do Claude após HTTP 401, respeita `Retry-After` em HTTP 429 usando o último cache bom e nomeia as janelas com `voltaEm`.

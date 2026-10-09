@@ -483,7 +483,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 		candidate := candidates[i]
 		attempts = i + 1
 		if o.QuotaMax > 0 && turnoMsg == "" && !cx.pendente {
-			if percentual, ok := limites.Percentual(candidate); ok && percentual >= o.QuotaMax {
+			if percentual, ok := limites.PercentualFresco(ctx, candidate, 5*time.Minute); ok && percentual >= o.QuotaMax {
 				quotaSkipped = true
 				lastErr = fmt.Errorf("cota de %s em %.1f%% (limite %.1f%%)", candidate, percentual, o.QuotaMax)
 				write(fmt.Sprintf("pulando %s: %v\n", candidate, lastErr))

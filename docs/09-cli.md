@@ -33,6 +33,7 @@ Available Commands:
 Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 Use "openheinerss [command] --help" for more information about a command.
 
@@ -65,6 +66,7 @@ Flags:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 Use "openheinerss agentes [command] --help" for more information about a command.
 
@@ -96,6 +98,7 @@ Flags:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 Use "openheinerss comandos [command] --help" for more information about a command.
 
@@ -115,6 +118,7 @@ Available Commands:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 Use "openheinerss config [command] --help" for more information about a command.
 
@@ -141,6 +145,7 @@ Available Commands:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 Use "openheinerss contas [command] --help" for more information about a command.
 
@@ -163,6 +168,7 @@ Flags:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -183,6 +189,7 @@ Flags:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -202,6 +209,7 @@ Available Commands:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 Use "openheinerss harness [command] --help" for more information about a command.
 
@@ -224,6 +232,7 @@ Flags:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -241,6 +250,7 @@ Aliases:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -264,6 +274,7 @@ Flags:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -283,6 +294,7 @@ Available Commands:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 Use "openheinerss mcp [command] --help" for more information about a command.
 
@@ -302,6 +314,7 @@ Aliases:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -378,6 +391,7 @@ Flags:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -399,15 +413,15 @@ Flags:
       --effort string             Alias em inglês de --esforco
       --engine string             Alias em inglês de --motor
       --esforco string            Esforço de raciocínio do motor
-      --harness string            Nome do harness ('mock', 'claude-code', 'opencode') (default "mock")
+      --harness string            Nome do harness (obrigatório ou default_harness em config.yaml)
       --harness-arg stringArray   Argumento nativo extra para o harness, intacto e na ordem (repetível) (default [])
       --interactive               Alias em inglês de --interativo
   -i, --interativo                Sessão interativa: lê um prompt por linha; linhas com / vão literalmente ao harness
       --mcp strings               Entrega só estes servidores de mcp.json (repita ou separe por vírgula; padrão: todos)
-      --mode string               Modo do harness ('mock', 'sdk', 'cli') (default "mock")
+      --mode string               Modo do harness (cli ou sdk; a configuração pode definir default_mode)
       --model string              Nome do modelo
       --modelo string             Alias em português de --model
-      --modo string               Alias em português de --mode (default "mock")
+      --modo string               Alias em português de --mode
       --motor string              Harness base ou instância custom definida pelo usuário
       --no-mcp                    Alias em inglês de --sem-mcp
       --papel string              Papel definido em .openheinerss/motores.yaml
@@ -421,6 +435,7 @@ Flags:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -452,6 +467,7 @@ Flags:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -469,6 +485,7 @@ Aliases:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -486,6 +503,7 @@ Global Flags:
       --configuracao string    Alias de --config
       --json                   Emite JSON
       --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
+      --projeto string         Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -509,6 +527,7 @@ Global Flags:
       --configuracao string    Alias de --config
       --json                   Emite JSON
       --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
+      --projeto string         Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -529,6 +548,7 @@ Global Flags:
       --configuracao string    Alias de --config
       --json                   Emite JSON
       --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
+      --projeto string         Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -549,6 +569,7 @@ Global Flags:
       --configuracao string    Alias de --config
       --json                   Emite JSON
       --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
+      --projeto string         Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -569,6 +590,7 @@ Global Flags:
       --configuracao string    Alias de --config
       --json                   Emite JSON
       --pasta-agentes string   Pasta dos agentes (relativa à raiz do repositório) (default ".claude/agentes")
+      --projeto string         Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -588,6 +610,7 @@ Global Flags:
       --configuracao string   Alias de --config
       --cwd string            Pasta do projeto onde procurar comandos/skills do harness (padrão: pasta atual)
       --json                  Emite JSON
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -607,6 +630,7 @@ Global Flags:
       --configuracao string   Alias de --config
       --cwd string            Pasta do projeto onde procurar comandos/skills do harness (padrão: pasta atual)
       --json                  Emite JSON
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -628,6 +652,7 @@ Flags:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -669,6 +694,7 @@ Flags:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -686,6 +712,7 @@ Flags:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -707,6 +734,7 @@ Flags:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -724,6 +752,7 @@ Aliases:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -744,6 +773,7 @@ Flags:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -761,6 +791,7 @@ Aliases:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -792,6 +823,7 @@ Flags:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -809,6 +841,7 @@ Aliases:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -826,6 +859,7 @@ Aliases:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
@@ -843,6 +877,7 @@ Aliases:
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
       --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
 
 ```
 
