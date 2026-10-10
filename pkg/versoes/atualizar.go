@@ -16,13 +16,34 @@ import (
 const (
 	ResSeco        = "seco"
 	ResJaNaUltima  = "ja_na_ultima"
-	ResAtualizado  = "atualizado"
-	ResVoltou      = "voltou"       // o teste falhou e a versão anterior foi restaurada e confirmada
-	ResVoltaFalhou = "volta_falhou" // o teste falhou e a volta não pôde ser confirmada
-	ResFalhou      = "falhou"       // a instalação falhou (versão anterior mantida)
+	ResJaNaVersao  = "ja_na_versao" // harness voltar: já está na versão pedida
+	ResAtualizado  = "atualizado"   // instalou e o teste passou
+	ResVoltou      = "voltou"       // harness voltar: versão restaurada, confirmada e testada
+	ResTesteFalhou = "teste_falhou" // instalou, mas o teste falhou: veja Diagnostico/Recomendacao
+	ResFalhou      = "falhou"       // a instalação (ou a volta) falhou
 	ResOcupado     = "ocupado"
 	ResSemCLI      = "sem_cli"
 	ResDesconhec   = "desconhecida"
+)
+
+// Diagnósticos de uma falha de teste (Resultado.Diagnostico).
+const (
+	DiagVersaoNova = "versao_nova"   // flag/formato mudou, crash, erro de parse: a versão nova é a causa
+	DiagExterna    = "externa"       // login vencido, rede, cota/429: não é a versão
+	DiagIndefinido = "indeterminado" // sem como separar (e sem como comparar com a anterior)
+)
+
+// Recomendações (Resultado.Recomendacao). Quem decide voltar é o orquestrador, com `harness voltar`.
+const (
+	RecVoltar     = "voltar"
+	RecNaoEVersao = "nao_e_a_versao"
+	RecAvaliar    = "avaliar"
+)
+
+// Falhas simuladas aceitas por --simular-falha-teste.
+const (
+	SimVersao = "versao"
+	SimLogin  = "login"
 )
 
 // Opcoes de Atualizar.
@@ -35,10 +56,9 @@ type Opcoes struct {
 	Para string
 	// Forcar reinstala mesmo já na última.
 	Forcar bool
-	// SemVolta permite atualizar mesmo quando a volta automática não existe para o método.
-	SemVolta bool
-	// SimularFalhaTeste faz o teste pós-instalação contar como falho (exercita a volta).
-	SimularFalhaTeste bool
+	// SimularFalhaTeste faz o teste pós-instalação contar como falho: "versao" (flag/formato mudou)
+	// ou "login" (login vencido); exercita as duas classificações.
+	SimularFalhaTeste string
 	// TesteTimeout limita o harness test (padrão 3 min).
 	TesteTimeout time.Duration
 	// EventLog é o arquivo de log de eventos (eventos_log); vazio não grava linha.
@@ -57,15 +77,24 @@ type Teste struct {
 	Modo      string `json:"modo"` // real (harness test da instância) | fumaca (--version + --help)
 	Instancia string `json:"instancia,omitempty"`
 	OK        bool   `json:"ok"`
-	Detalhe   string `json:"detalhe,omitempty"`
-	TempoMS   int64  `json:"tempo_ms"`
-	Simulado  bool   `json:"simulado,omitempty"`
+	// Detalhe é a saída do teste (sem segredos).
+	Detalhe  string `json:"detalhe,omitempty"`
+	TempoMS  int64  `json:"tempo_ms"`
+	Simulado bool   `json:"simulado,omitempty"`
 }
 
-// Resultado é a saída de `harness atualizar` e do RPC harness.atualizar; também é o payload do
-// evento harness.atualizado.
+// Comparacao é o mesmo teste rodado na versão anterior, quando a falha não se separava pela saída.
+type Comparacao struct {
+	Versao  string `json:"versao"`
+	OK      bool   `json:"ok"`
+	Detalhe string `json:"detalhe,omitempty"`
+}
+
+// Resultado é a saída de `harness atualizar`/`harness voltar` e dos RPCs; também é o payload do
+// evento harness.atualizado. O openheinerss só executa e informa: nunca volta sozinho.
 type Resultado struct {
 	Harness    string `json:"harness"`
+	Acao       string `json:"acao"` // atualizar | voltar
 	CLI        string `json:"cli,omitempty"`
 	Instalacao string `json:"instalacao,omitempty"`
 	Pacote     string `json:"pacote,omitempty"`
@@ -73,17 +102,21 @@ type Resultado struct {
 	Disponivel string `json:"disponivel,omitempty"`
 	Alvo       string `json:"alvo,omitempty"`
 	Depois     string `json:"depois,omitempty"`
-	// Tentada é a versão que a instalação chegou a colocar antes de o teste falhar e a volta acontecer.
-	Tentada      string   `json:"tentada,omitempty"`
-	Resultado    string   `json:"resultado"`
-	Motivo       string   `json:"motivo,omitempty"`
-	Seco         bool     `json:"seco"`
-	Comando      string   `json:"comando,omitempty"`
-	Volta        string   `json:"volta,omitempty"` // automatica | manual
-	ComandoVolta string   `json:"comandoVolta,omitempty"`
-	Passos       []string `json:"passos"`
-	Ocupado      []Uso    `json:"ocupado,omitempty"`
-	Teste        *Teste   `json:"teste,omitempty"`
+	// Anterior é a versão guardada para `harness voltar` (a que estava antes da última troca).
+	Anterior  string `json:"anterior,omitempty"`
+	Resultado string `json:"resultado"`
+	Motivo    string `json:"motivo,omitempty"`
+	// Diagnostico/Recomendacao só existem quando o teste falhou.
+	Diagnostico  string      `json:"diagnostico,omitempty"`
+	Recomendacao string      `json:"recomendacao,omitempty"`
+	Comparacao   *Comparacao `json:"comparacao,omitempty"`
+	Seco         bool        `json:"seco"`
+	Comando      string      `json:"comando,omitempty"`
+	Volta        string      `json:"volta,omitempty"` // como voltar: automatica | manual
+	ComandoVolta string      `json:"comandoVolta,omitempty"`
+	Passos       []string    `json:"passos"`
+	Ocupado      []Uso       `json:"ocupado,omitempty"`
+	Teste        *Teste      `json:"teste,omitempty"`
 	// AjudaMudou: a ajuda do CLI mudou e o cache de `capacidades` foi recalculado.
 	AjudaMudou bool   `json:"ajudaMudou,omitempty"`
 	Em         string `json:"em"`
@@ -206,7 +239,7 @@ func (e Ambiente) Atualizar(ctx context.Context, base string, o Opcoes) (*Result
 	if !ok {
 		return nil, fmt.Errorf("harness %q não é uma base embutida (use: %s)", base, strings.Join(Bases(), ", "))
 	}
-	r := &Resultado{Harness: base, CLI: sp.cli, Seco: o.Seco, Passos: []string{}, Em: e.Agora().UTC().Format(time.RFC3339)}
+	r := &Resultado{Harness: base, Acao: "atualizar", CLI: sp.cli, Seco: o.Seco, Passos: []string{}, Em: e.Agora().UTC().Format(time.RFC3339)}
 	d, err := e.detectar(base)
 	if err != nil {
 		r.Resultado, r.Motivo = ResSemCLI, sp.cli+" não está no PATH"
@@ -257,10 +290,12 @@ func (e Ambiente) Atualizar(ctx context.Context, base string, o Opcoes) (*Result
 	r.Comando = strings.Join(cmd, " ")
 	r.ComandoVolta = strings.Join(volt, " ")
 	r.Passos = append(r.Passos, "atualizar: "+r.Comando)
-	if volta == "automatica" {
-		r.Passos = append(r.Passos, fmt.Sprintf("guardar a versão anterior (%s); se o teste falhar, voltar", antes))
-	} else {
-		r.Passos = append(r.Passos, "volta automática indisponível para este método ("+d.metodo+"): sem --sem-volta a atualização é recusada")
+	if g, ok := e.anteriorGuardada(base); ok {
+		r.Anterior = g
+	}
+	r.Passos = append(r.Passos, fmt.Sprintf("guardar a versão anterior (%s) para `harness voltar %s`", antes, base))
+	if volta != "automatica" {
+		r.Passos = append(r.Passos, "voltar neste método ("+d.metodo+") é manual: reinstale a versão anterior com o gerenciador")
 	}
 	inst := ""
 	if e.InstanciaGratis != nil {
@@ -280,30 +315,7 @@ func (e Ambiente) Atualizar(ctx context.Context, base string, o Opcoes) (*Result
 		}
 		return r, nil
 	}
-	if len(r.Ocupado) > 0 {
-		if !o.Esperar {
-			r.Resultado, r.Motivo = ResOcupado, fmt.Sprintf("%d agente(s)/sessão(ões) usam %s; termine-os ou use --esperar", len(r.Ocupado), base)
-			return r, nil
-		}
-		limite := e.Agora().Add(firstDur(o.Espera, 15*time.Minute))
-		for len(r.Ocupado) > 0 {
-			if e.Agora().After(limite) {
-				r.Resultado, r.Motivo = ResOcupado, "tempo de espera esgotado com processos ainda usando "+base
-				return r, nil
-			}
-			select {
-			case <-ctx.Done():
-				r.Resultado, r.Motivo = ResOcupado, "cancelado enquanto esperava"
-				return r, nil
-			default:
-			}
-			e.Dormir(2 * time.Second)
-			r.Ocupado = e.EmUso(base, d.caminho)
-		}
-		r.Passos = append(r.Passos, "espera concluída: ninguém mais usa o harness")
-	}
-	if volta != "automatica" && !o.SemVolta {
-		r.Resultado, r.Motivo = ResFalhou, "sem volta automática para o método "+d.metodo+"; repita com --sem-volta se aceita o risco"
+	if !e.aguardarLivre(ctx, r, base, d.caminho, o.Esperar, o.Espera) {
 		return r, nil
 	}
 
@@ -313,41 +325,91 @@ func (e Ambiente) Atualizar(ctx context.Context, base string, o Opcoes) (*Result
 	cancel()
 	depois, verr := e.versaoCLI(ctx, sp.cli)
 	if ierr != nil {
-		r.Motivo = "instalação falhou: " + ierr.Error() + ": " + trecho(saida)
+		r.Motivo = "instalação falhou: " + ierr.Error() + ": " + semSegredos(trecho(saida))
+		r.Resultado = ResFalhou
 		if verr == nil && depois == antes {
-			r.Resultado, r.Depois = ResFalhou, depois
+			r.Depois = depois
 			r.Passos = append(r.Passos, "a instalação falhou; a versão anterior continua instalada")
-			e.registrar(r, o)
-			return r, nil
+		} else {
+			// Instalação pela metade: informa; quem decide voltar é o orquestrador.
+			r.Depois = depois
+			r.Diagnostico, r.Recomendacao = DiagVersaoNova, RecVoltar
+			e.guardarAnterior(base, antes, depois)
+			r.Anterior = antes
+			r.Passos = append(r.Passos, "a instalação falhou e deixou o CLI em estado inesperado; versão anterior guardada: "+antes)
 		}
-		// Instalação pela metade: trata como falha de teste e tenta voltar.
-		return e.voltar(ctx, r, o, sp, d, volt, antes, "instalação falhou e deixou o CLI em estado inesperado"), nil
+		e.registrar(r, o)
+		return r, nil
 	}
 	if verr != nil {
-		return e.voltar(ctx, r, o, sp, d, volt, antes, "o CLI novo não responde a --version: "+verr.Error()), nil
+		r.Resultado = ResTesteFalhou
+		r.Motivo = "o CLI novo não responde a --version: " + verr.Error()
+		r.Teste = &Teste{Modo: "fumaca", Detalhe: semSegredos(r.Motivo)}
+		r.Diagnostico, r.Recomendacao = DiagVersaoNova, RecVoltar
+		e.guardarAnterior(base, antes, "")
+		r.Anterior = antes
+		e.registrar(r, o)
+		return r, nil
 	}
 	r.Depois = depois
 	if depois == antes && Comparar(antes, alvo) != 0 && alvo != "" {
 		r.Resultado = ResFalhou
-		r.Motivo = fmt.Sprintf("o comando terminou sem erro, mas o CLI continua em %s (esperado %s): %s", depois, alvo, trecho(saida))
-		r.Passos = append(r.Passos, "a versão não mudou; nada a testar nem a voltar")
+		r.Motivo = fmt.Sprintf("o comando terminou sem erro, mas o CLI continua em %s (esperado %s): %s", depois, alvo, semSegredos(trecho(saida)))
+		r.Passos = append(r.Passos, "a versão não mudou; nada a testar")
 		e.registrar(r, o)
 		return r, nil
 	}
-	r.Tentada = depois
+	if depois != antes {
+		e.guardarAnterior(base, antes, depois)
+		r.Anterior = antes
+	}
 	r.Passos = append(r.Passos, fmt.Sprintf("instalado: %s → %s", antes, depois))
 
-	// Testar.
-	t := e.testar(ctx, sp, inst, o)
+	// Testar e, se falhar, classificar (sem voltar).
+	t := e.testar(ctx, sp, inst, o.SimularFalhaTeste, o.TesteTimeout)
 	r.Teste = t
 	if !t.OK {
-		return e.voltar(ctx, r, o, sp, d, volt, antes, "teste falhou: "+t.Detalhe), nil
+		r.Resultado = ResTesteFalhou
+		r.Motivo = "teste falhou: " + t.Detalhe
+		e.diagnosticar(ctx, r, base, sp, d, inst, o, cmd, volt, antes, depois)
+		e.registrar(r, o)
+		return r, nil
 	}
 	r.Resultado = ResAtualizado
 	r.Passos = append(r.Passos, "teste OK ("+t.Modo+")")
 	e.recalcular(ctx, r, base, sp, depois)
 	e.registrar(r, o)
 	return r, nil
+}
+
+// aguardarLivre recusa (ou espera, com esperar) enquanto algum agente/sessão usa o harness.
+// Devolve false com r já preenchido quando não pode seguir.
+func (e Ambiente) aguardarLivre(ctx context.Context, r *Resultado, base, caminho string, esperar bool, espera time.Duration) bool {
+	r.Ocupado = e.EmUso(base, caminho)
+	if len(r.Ocupado) == 0 {
+		return true
+	}
+	if !esperar {
+		r.Resultado, r.Motivo = ResOcupado, fmt.Sprintf("%d agente(s)/sessão(ões) usam %s; termine-os ou use --esperar", len(r.Ocupado), base)
+		return false
+	}
+	limite := e.Agora().Add(firstDur(espera, 15*time.Minute))
+	for len(r.Ocupado) > 0 {
+		if e.Agora().After(limite) {
+			r.Resultado, r.Motivo = ResOcupado, "tempo de espera esgotado com processos ainda usando "+base
+			return false
+		}
+		select {
+		case <-ctx.Done():
+			r.Resultado, r.Motivo = ResOcupado, "cancelado enquanto esperava"
+			return false
+		default:
+		}
+		e.Dormir(2 * time.Second)
+		r.Ocupado = e.EmUso(base, caminho)
+	}
+	r.Passos = append(r.Passos, "espera concluída: ninguém mais usa o harness")
+	return true
 }
 
 func firstDur(a, b time.Duration) time.Duration {
@@ -357,12 +419,12 @@ func firstDur(a, b time.Duration) time.Duration {
 	return b
 }
 
-func (e Ambiente) testar(ctx context.Context, sp baseSpec, inst string, o Opcoes) *Teste {
+func (e Ambiente) testar(ctx context.Context, sp baseSpec, inst, simular string, timeout time.Duration) *Teste {
 	ini := e.Agora()
 	t := &Teste{Modo: "fumaca"}
 	if inst != "" && e.Testar != nil {
 		t.Modo, t.Instancia = "real", inst
-		t.OK, t.Detalhe = e.Testar(ctx, inst, firstDur(o.TesteTimeout, 3*time.Minute))
+		t.OK, t.Detalhe = e.Testar(ctx, inst, firstDur(timeout, 3*time.Minute))
 	} else {
 		c, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
@@ -382,49 +444,239 @@ func (e Ambiente) testar(ctx context.Context, sp baseSpec, inst string, o Opcoes
 		}
 	}
 	t.TempoMS = e.Agora().Sub(ini).Milliseconds()
-	if o.SimularFalhaTeste {
+	if simular != "" {
 		t.Simulado = true
-		t.Detalhe = fmt.Sprintf("falha simulada por --simular-falha-teste (teste verdadeiro: ok=%v)", t.OK)
+		verdadeiro := t.OK
 		t.OK = false
+		switch simular {
+		case SimLogin:
+			t.Detalhe = fmt.Sprintf("falha simulada (login): not authenticated, please login again [401 unauthorized] (teste verdadeiro: ok=%v)", verdadeiro)
+		default:
+			t.Detalhe = fmt.Sprintf("falha simulada (versão): error: unknown flag --output-format: formato mudou na versão nova (teste verdadeiro: ok=%v)", verdadeiro)
+		}
 	}
+	t.Detalhe = semSegredos(trecho(t.Detalhe))
 	return t
 }
 
-// voltar restaura a versão anterior e confirma com --version.
-func (e Ambiente) voltar(ctx context.Context, r *Resultado, o Opcoes, sp baseSpec, d detectado, volt []string, antes, motivo string) *Resultado {
-	r.Motivo = motivo
-	fim := func(res, passo string) *Resultado {
-		r.Resultado = res
-		r.Passos = append(r.Passos, passo)
-		e.registrar(r, o)
-		return r
+var (
+	padroesExterna = []string{
+		"login", "auth", "unauthorized", "401", "403", "não autentic", "not authenticated", "api key", "api_key", "token expired", "expired",
+		"quota", "cota", "rate limit", "rate_limit", "429", "too many requests", "more credits", "insufficient_quota", "usage limit", "billing",
+		"no such host", "dial tcp", "connection refused", "connection reset", "econn", "enotfound", "network", "timed out", "timeout",
+		"unreachable", "temporary failure in name resolution", "certificate", "502", "503", "overloaded", "sem modelo", "no llm model",
+	}
+	padroesVersao = []string{
+		"unknown flag", "unknown option", "unrecognized arguments", "unrecognized option", "no such option", "unexpected argument",
+		"invalid flag", "flag provided but not defined", "panic", "segmentation fault", "traceback", "stack trace", "sigsegv", "fatal error",
+		"parse", "unexpected token", "invalid json", "cannot unmarshal", "formato", "schema", "deprecated", "removed", "no longer supported",
+		"illegal instruction", "cannot find module", "modulenotfounderror", "importerror", "syntaxerror",
+	}
+)
+
+// Classificar separa a falha de um teste pela saída: versão nova (flag/formato mudou, crash,
+// parse), externa (login, rede, cota) ou indeterminado. A fumaça (--version/--help) é só do CLI,
+// então falhar nela é sempre a versão.
+func Classificar(t *Teste) string {
+	if t == nil || t.OK {
+		return ""
+	}
+	l := strings.ToLower(t.Detalhe)
+	tem := func(ps []string) bool {
+		for _, p := range ps {
+			if strings.Contains(l, p) {
+				return true
+			}
+		}
+		return false
+	}
+	switch {
+	case t.Modo == "fumaca":
+		return DiagVersaoNova
+	case tem(padroesExterna):
+		return DiagExterna
+	case tem(padroesVersao):
+		return DiagVersaoNova
+	}
+	return DiagIndefinido
+}
+
+// diagnosticar preenche Diagnostico/Recomendacao. Em dúvida roda o mesmo teste na versão
+// anterior (reinstalando-a e depois reinstalando a nova, para o estado final ser o da atualização).
+func (e Ambiente) diagnosticar(ctx context.Context, r *Resultado, base string, sp baseSpec, d detectado, inst string, o Opcoes, cmd, volt []string, antes, depois string) {
+	r.Diagnostico = Classificar(r.Teste)
+	if r.Diagnostico == DiagIndefinido {
+		if cmp := e.compararComAnterior(ctx, r, sp, d, inst, o, cmd, volt, antes, depois); cmp != nil {
+			r.Comparacao = cmp
+			if cmp.OK {
+				r.Diagnostico = DiagVersaoNova
+				r.Passos = append(r.Passos, fmt.Sprintf("o mesmo teste passou na %s: a falha é da versão nova", antes))
+			} else {
+				r.Diagnostico = DiagExterna
+				r.Passos = append(r.Passos, fmt.Sprintf("o mesmo teste também falhou na %s: a causa não é a versão", antes))
+			}
+		}
+	}
+	switch r.Diagnostico {
+	case DiagVersaoNova:
+		r.Recomendacao = RecVoltar
+		r.Passos = append(r.Passos, fmt.Sprintf("diagnóstico: versão nova; recomendado voltar (`openheinerss harness voltar %s`, anterior %s)", base, antes))
+	case DiagExterna:
+		r.Recomendacao = RecNaoEVersao
+		r.Passos = append(r.Passos, "diagnóstico: falhou por login/rede/cota, não pela versão; não é preciso voltar")
+	default:
+		r.Recomendacao = RecAvaliar
+		r.Passos = append(r.Passos, "diagnóstico: indeterminado (sem como comparar com a anterior); avalie a saída do teste antes de voltar")
+	}
+}
+
+func (e Ambiente) compararComAnterior(ctx context.Context, r *Resultado, sp baseSpec, d detectado, inst string, o Opcoes, cmd, volt []string, antes, depois string) *Comparacao {
+	if len(volt) == 0 {
+		r.Passos = append(r.Passos, "comparar com a anterior não é possível neste método ("+d.metodo+")")
+		return nil
+	}
+	c, cancel := context.WithTimeout(ctx, 15*time.Minute)
+	_, err := e.Executar(c, volt[0], volt[1:]...)
+	cancel()
+	if v, verr := e.versaoCLI(ctx, sp.cli); err != nil || verr != nil || v != antes {
+		r.Passos = append(r.Passos, "comparar com a anterior: não consegui instalar "+antes)
+		e.restaurarNova(ctx, r, sp, cmd, depois)
+		return nil
+	}
+	r.Passos = append(r.Passos, "comparação: instalada a "+antes+" só para repetir o teste")
+	t := e.testar(ctx, sp, inst, "", o.TesteTimeout)
+	e.restaurarNova(ctx, r, sp, cmd, depois)
+	return &Comparacao{Versao: antes, OK: t.OK, Detalhe: t.Detalhe}
+}
+
+// restaurarNova reinstala a versão nova depois da comparação, para o estado final ser o da atualização.
+func (e Ambiente) restaurarNova(ctx context.Context, r *Resultado, sp baseSpec, cmd []string, depois string) {
+	c, cancel := context.WithTimeout(ctx, 15*time.Minute)
+	defer cancel()
+	_, err := e.Executar(c, cmd[0], cmd[1:]...)
+	v, verr := e.versaoCLI(ctx, sp.cli)
+	if err != nil || verr != nil || v != depois {
+		r.Passos = append(r.Passos, fmt.Sprintf("AVISO: não consegui reinstalar a %s depois da comparação; o CLI está em %s", depois, v))
+		r.Depois = v
+		return
+	}
+	r.Passos = append(r.Passos, "versão nova reinstalada depois da comparação: "+depois)
+}
+
+// Voltar instala a versão guardada (ou a pedida em o.Para), confirma, testa e informa. É sempre
+// uma ação explícita de quem chama: o openheinerss nunca volta sozinho.
+func (e Ambiente) Voltar(ctx context.Context, base string, o Opcoes) (*Resultado, error) {
+	sp, ok := specs[base]
+	if !ok {
+		return nil, fmt.Errorf("harness %q não é uma base embutida (use: %s)", base, strings.Join(Bases(), ", "))
+	}
+	r := &Resultado{Harness: base, Acao: "voltar", CLI: sp.cli, Seco: o.Seco, Passos: []string{}, Em: e.Agora().UTC().Format(time.RFC3339)}
+	d, err := e.detectar(base)
+	if err != nil {
+		r.Resultado, r.Motivo = ResSemCLI, sp.cli+" não está no PATH"
+		return r, nil
+	}
+	r.Instalacao, r.Pacote = d.metodo, d.pacote
+	atual, err := e.versaoCLI(ctx, sp.cli)
+	if err != nil {
+		r.Resultado, r.Motivo = ResDesconhec, err.Error()
+		return r, nil
+	}
+	r.Antes = atual
+	alvo := o.Para
+	if alvo == "" {
+		g, ok := e.anteriorGuardada(base)
+		if !ok {
+			r.Resultado, r.Motivo = ResDesconhec, "não há versão anterior guardada para "+base+"; informe a versão: harness voltar "+base+" <versão>"
+			return r, nil
+		}
+		alvo = g
+	}
+	r.Alvo = alvo
+	if Comparar(atual, alvo) == 0 {
+		r.Resultado, r.Depois = ResJaNaVersao, atual
+		r.Passos = append(r.Passos, "já está em "+atual)
+		return r, nil
+	}
+	cmd, _, _, cerr := e.comandos(d, sp, alvo, "", "")
+	relink := ""
+	if cerr != nil {
+		if dir := ligacaoVersoes(d.caminho); dir != "" {
+			relink, cerr = dir, nil
+		}
+	}
+	if cerr != nil {
+		r.Resultado, r.Motivo = ResDesconhec, "voltar é manual neste método ("+d.metodo+"): "+cerr.Error()
+		return r, nil
+	}
+	if relink != "" {
+		r.Comando = "religar " + sp.cli + " → " + filepath.Join(relink, alvo)
+	} else {
+		r.Comando = strings.Join(cmd, " ")
+	}
+	r.Passos = append(r.Passos, "voltar: "+r.Comando)
+	inst := ""
+	if e.InstanciaGratis != nil {
+		inst = e.InstanciaGratis(base)
+	}
+	r.Ocupado = e.EmUso(base, d.caminho)
+	if o.Seco {
+		r.Resultado = ResSeco
+		if len(r.Ocupado) > 0 {
+			r.Motivo = fmt.Sprintf("%d processo(s) usam %s agora; a volta esperaria (--esperar) ou seria recusada", len(r.Ocupado), base)
+		}
+		return r, nil
+	}
+	if !e.aguardarLivre(ctx, r, base, d.caminho, o.Esperar, o.Espera) {
+		return r, nil
 	}
 	var saida string
-	var err error
-	if len(volt) > 0 {
-		c, cancel := context.WithTimeout(ctx, 15*time.Minute)
-		saida, err = e.Executar(c, volt[0], volt[1:]...)
-		cancel()
-		r.Passos = append(r.Passos, "voltar: "+strings.Join(volt, " "))
-	} else if dir := ligacaoVersoes(d.caminho); dir != "" {
-		err = e.religar(sp, dir, antes)
-		r.Passos = append(r.Passos, "voltar: religar "+sp.cli+" à versão "+antes)
+	var ierr error
+	if relink != "" {
+		ierr = e.religar(sp, relink, alvo)
 	} else {
-		return fim(ResVoltaFalhou, "volta automática indisponível: reinstale "+antes+" manualmente")
+		c, cancel := context.WithTimeout(ctx, 15*time.Minute)
+		saida, ierr = e.Executar(c, cmd[0], cmd[1:]...)
+		cancel()
 	}
 	v, verr := e.versaoCLI(ctx, sp.cli)
-	if err != nil && (verr != nil || v != antes) {
-		return fim(ResVoltaFalhou, "a volta falhou: "+err.Error()+": "+trecho(saida))
-	}
-	if verr != nil || v != antes {
-		got := v
-		if verr != nil {
-			got = verr.Error()
-		}
-		return fim(ResVoltaFalhou, fmt.Sprintf("a volta não foi confirmada (esperava %s, achei %s)", antes, got))
-	}
 	r.Depois = v
-	return fim(ResVoltou, fmt.Sprintf("volta confirmada: %s --version = %s", sp.cli, v))
+	switch {
+	case ierr != nil && (verr != nil || v != alvo):
+		r.Resultado, r.Motivo = ResFalhou, "a volta falhou: "+ierr.Error()+": "+semSegredos(trecho(saida))
+		e.registrar(r, o)
+		return r, nil
+	case verr != nil || v != alvo:
+		r.Resultado, r.Motivo = ResFalhou, fmt.Sprintf("a volta não foi confirmada (esperava %s, achei %q)", alvo, v)
+		e.registrar(r, o)
+		return r, nil
+	}
+	// A versão que se deixou passa a ser a "anterior": voltar de novo desfaz esta volta.
+	e.guardarAnterior(base, atual, v)
+	r.Anterior = atual
+	r.Passos = append(r.Passos, fmt.Sprintf("volta confirmada: %s --version = %s (anterior guardada: %s)", sp.cli, v, atual))
+	t := e.testar(ctx, sp, inst, "", o.TesteTimeout)
+	r.Teste = t
+	if !t.OK {
+		r.Resultado = ResTesteFalhou
+		r.Motivo = "teste falhou na versão " + v + ": " + t.Detalhe
+		r.Diagnostico = Classificar(t)
+		switch r.Diagnostico {
+		case DiagExterna:
+			r.Recomendacao = RecNaoEVersao
+		case DiagVersaoNova:
+			r.Recomendacao = RecVoltar
+		default:
+			r.Recomendacao = RecAvaliar
+		}
+		e.registrar(r, o)
+		return r, nil
+	}
+	r.Resultado = ResVoltou
+	r.Passos = append(r.Passos, "teste OK ("+t.Modo+")")
+	e.recalcular(ctx, r, base, sp, v)
+	e.registrar(r, o)
+	return r, nil
 }
 
 // religar aponta o link do CLI (instalador nativo) para a versão guardada ao lado da atual.

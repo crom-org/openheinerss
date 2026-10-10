@@ -39,6 +39,8 @@ $versoes = $agent->harnessVersions('codex')['harnesses'] ?? [];
 if (count($versoes) !== 1 || ($versoes[0]['harness'] ?? null) !== 'codex') throw new RuntimeException('harness.versoes ausente');
 $plano = $agent->updateHarness('codex', ['seco' => true]);
 if (($plano['seco'] ?? null) !== true || !in_array($plano['resultado'] ?? '', ['seco', 'ja_na_ultima', 'sem_cli', 'desconhecida', 'ocupado'], true)) throw new RuntimeException('harness.atualizar --seco inesperado');
+$volta = $agent->revertHarness('codex', null, ['seco' => true]);
+if (($volta['acao'] ?? null) !== 'voltar' || !in_array($volta['resultado'] ?? '', ['seco', 'ja_na_versao', 'sem_cli', 'desconhecida', 'ocupado'], true)) throw new RuntimeException('harness.voltar --seco inesperado');
 try {
     Openheinerss\Agent::session(['harness' => 'aider', 'retomar' => 'qualquer'], getenv('OPENHEINERSS_BIN') ?: 'openheinerss');
     throw new RuntimeException('retomar no aider deveria falhar');

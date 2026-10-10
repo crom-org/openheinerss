@@ -41,15 +41,23 @@ export interface HarnessVersion {
   comando?: string; volta?: "automatica" | "manual";
 }
 export interface HarnessUpdateOptions {
-  seco?: boolean; esperar?: boolean; esperaSeg?: number; para?: string; forcar?: boolean; semVolta?: boolean;
-  /** Trata o teste pós-instalação como falho (exercita a volta automática). */
-  simularFalhaTeste?: boolean;
+  seco?: boolean; esperar?: boolean; esperaSeg?: number; para?: string; forcar?: boolean;
+  /** Trata o teste pós-instalação como falho: "versao" (flag/formato mudou) ou "login" (login vencido). */
+  simularFalhaTeste?: "versao" | "login";
 }
+export interface HarnessRevertOptions { versao?: string; seco?: boolean; esperar?: boolean; esperaSeg?: number; }
 export interface HarnessUpdateResult {
   harness: string; cli?: string; instalacao?: string; pacote?: string; antes: string; disponivel?: string; alvo?: string;
-  depois?: string; tentada?: string;
-  /** seco | ja_na_ultima | atualizado | voltou | volta_falhou | falhou | ocupado | sem_cli | desconhecida */
-  resultado: string; motivo?: string; seco: boolean; comando?: string; volta?: string; comandoVolta?: string; passos: string[];
+  depois?: string; acao?: "atualizar" | "voltar";
+  /** Versão guardada para `voltar` (a que estava antes da última troca). */
+  anterior?: string;
+  /** seco | ja_na_ultima | ja_na_versao | atualizado | voltou | teste_falhou | falhou | ocupado | sem_cli | desconhecida */
+  resultado: string;
+  /** Só com teste_falhou: versao_nova | externa | indeterminado. */
+  diagnostico?: "versao_nova" | "externa" | "indeterminado";
+  /** voltar | nao_e_a_versao | avaliar. O openheinerss nunca volta sozinho: quem decide chama `revertHarness`. */
+  recomendacao?: "voltar" | "nao_e_a_versao" | "avaliar";
+  comparacao?: { versao: string; ok: boolean; detalhe?: string }; motivo?: string; seco: boolean; comando?: string; volta?: string; comandoVolta?: string; passos: string[];
   ocupado?: { pid: number; tipo: "rodar" | "serve" | "processo"; comando: string }[];
   teste?: { modo: "real" | "fumaca"; instancia?: string; ok: boolean; detalhe?: string; tempo_ms: number; simulado?: boolean };
   ajudaMudou?: boolean; em: string;

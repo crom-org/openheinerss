@@ -135,6 +135,14 @@ func TestHarnessVersoesEAtualizarSecoPeloServidor(t *testing.T) {
 	if res.Error != nil || !strings.Contains(string(b), `"resultado":"sem_cli"`) {
 		t.Fatalf("atualizar: %v %s", res.Error, b)
 	}
+	res = chamarRPC(r, protocol.MethodHarnessVoltar, protocol.HarnessVoltarParams{Harness: "codex", Seco: true})
+	b, _ = json.Marshal(res.Result)
+	if res.Error != nil || !strings.Contains(string(b), `"acao":"voltar"`) || !strings.Contains(string(b), `"resultado":"sem_cli"`) {
+		t.Fatalf("voltar: %v %s", res.Error, b)
+	}
+	if res := chamarRPC(r, protocol.MethodHarnessAtualizar, protocol.HarnessAtualizarParams{Harness: "codex", SimularFalhaTeste: "x"}); res.Error == nil {
+		t.Fatal("simularFalhaTeste inválido deveria falhar")
+	}
 	if res := chamarRPC(r, protocol.MethodHarnessAtualizar, protocol.HarnessAtualizarParams{Harness: "nao-existe"}); res.Error == nil {
 		t.Fatal("harness desconhecido deveria falhar")
 	}

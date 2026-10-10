@@ -226,10 +226,13 @@ class Agent
     /** Versão instalada, método de instalação e última versão oficial de cada base (harness.versoes). */
     public function harnessVersions(?string $harness = null): array { return $this->request('harness.versoes', $harness ? ['harness' => $harness] : []); }
     /**
-     * Atualiza um harness base, testa e volta sozinho se falhar (harness.atualizar). Opções: seco, esperar,
-     * esperaSeg, para, forcar, semVolta, simularFalhaTeste. A resposta chega ao fim da operação.
+     * Atualiza um harness base e testa (harness.atualizar); se o teste falhar devolve diagnostico/recomendacao
+     * sem voltar. Opções: seco, esperar, esperaSeg, para, forcar, simularFalhaTeste ("versao"|"login").
+     * A resposta chega ao fim da operação.
      */
     public function updateHarness(string $harness, array $options = []): array { return $this->request('harness.atualizar', array_merge($options, ['harness' => $harness])); }
+    /** Volta explícita (harness.voltar) para a versão anterior guardada ou para $versao; testa e informa. */
+    public function revertHarness(string $harness, ?string $versao = null, array $options = []): array { return $this->request('harness.voltar', array_merge($options, array_filter(['harness' => $harness, 'versao' => $versao]))); }
     public function identidade(string $instancia): array { return $this->request('instancia.identidade', ['instancia' => $instancia]); }
     public function listarContas(?string $cwd = null): array { return $this->request('contas.listar', array_filter(['cwd' => $cwd])); }
     public function adicionarConta(string $harness, string $nome, ?string $cwd = null, bool $iniciarLogin = false): array { return $this->request('contas.adicionar', array_filter(['harness' => $harness, 'nome' => $nome, 'cwd' => $cwd, 'iniciarLogin' => $iniciarLogin])); }

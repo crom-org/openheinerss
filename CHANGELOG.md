@@ -8,14 +8,19 @@ Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 - Adiciona `openheinerss harness versoes [harness] [--json]` e a RPC `harness.versoes`: por base (claude-code, codex,
   opencode, aider, agy) a versão instalada, como foi instalada (npm, uv, pipx, pip, brew, script/binário — pelo
   caminho real do executável) e a última pela fonte oficial (npm, PyPI, releases do GitHub); sem rede, `desconhecida`.
-- Adiciona `openheinerss harness atualizar <harness>|--todos [--seco] [--esperar] [--para <v>] [--sem-volta]
-  [--simular-falha-teste] [--json]` e a RPC `harness.atualizar`: prévia, recusa/espera quando `rodar`/`serve` usam o
-  harness, instala pelo mesmo gerenciador guardando a versão anterior, roda o `harness test` real (instância grátis
-  da base; senão `--version` + `--help`) e **volta sozinho** se o teste falhar, confirmando a versão. Registra o
-  evento `harness.atualizado`, uma linha no log de eventos e o histórico `harness-atualizacoes.jsonl`, e recalcula o
-  cache de `capacidades` quando a ajuda do CLI mudou (`capacidades` ganha `instalada` e `ajudaMudou`). SDKs:
-  `harnessVersions`/`updateHarness` (TypeScript), `harness_versions`/`update_harness` (Python), `harnessVersions`/
-  `updateHarness` (PHP).
+- Adiciona `openheinerss harness atualizar <harness>|--todos [--seco] [--esperar] [--para <v>]
+  [--simular-falha-teste versao|login] [--json]` e a RPC `harness.atualizar`: prévia, recusa/espera quando
+  `rodar`/`serve` usam o harness, instala pelo mesmo gerenciador guardando a versão anterior e roda o
+  `harness test` real (instância grátis da base; senão `--version` + `--help`). **Não volta sozinho:** se o teste
+  falhar, classifica a causa (versão nova × login/rede/cota; em dúvida compara com a anterior) e devolve
+  `diagnostico`, `recomendacao` (`voltar` | `nao_e_a_versao`), a saída do teste sem segredos e a `anterior`
+  guardada. Códigos de saída: 2 em uso, 3 versão nova, 4 externa, 5 indeterminada.
+- Adiciona `openheinerss harness voltar <harness> [versão] [--seco] [--esperar] [--json]` e a RPC `harness.voltar`:
+  volta explícita (decidida pelo orquestrador) para a anterior guardada ou a versão dada, confirma, testa e informa.
+- Registra o evento `harness.atualizado` (com `acao`), uma linha no log de eventos e o histórico
+  `harness-atualizacoes.jsonl`, e recalcula o cache de `capacidades` quando a ajuda do CLI mudou (`capacidades`
+  ganha `instalada` e `ajudaMudou`). SDKs: `harnessVersions`/`updateHarness`/`revertHarness` (TypeScript),
+  `harness_versions`/`update_harness`/`revert_harness` (Python), `harnessVersions`/`updateHarness`/`revertHarness` (PHP).
 - Corrige `atualizar --seco` no clone: a comparação do commit instalado com o HEAD local falhava porque o commit do
   binário vinha com vírgula (`<sha>,`) e o da fonte abreviado; agora compara o commit completo e diz "já está na
   última". Árvore com alterações não commitadas continua propondo compilar.

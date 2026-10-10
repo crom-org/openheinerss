@@ -84,7 +84,7 @@ Os SDKs TypeScript, Python e PHP usam JSON-RPC sobre STDIO por padrão e convers
 
 Todos expõem sessões, `registerHarness`/`harness.listar`, `rodar.iniciar`, `rodar.listar`,
 `rodar.parar`, `rodar.mensagem` (`sendMessage`/`send_message`), `rodar.decidir`, `limites.obter`, `harness.versoes`
-(`harnessVersions`/`harness_versions`), `harness.atualizar` (`updateHarness`/`update_harness`) e `eventos.assinar`. A assinatura aceita
+(`harnessVersions`/`harness_versions`), `harness.atualizar` (`updateHarness`/`update_harness`), `harness.voltar` (`revertHarness`/`revert_harness`) e `eventos.assinar`. A assinatura aceita
 `projeto`, `agente`, `cwd` e `pasta`; os callbacks recebem `orq.inicio`, `orq.progresso`,
 `orq.fim`, `orq.erro`, `orq.precisa_decisao`, `orq.mensagem` e `harness.atualizado`.
 

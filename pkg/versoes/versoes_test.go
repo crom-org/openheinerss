@@ -221,53 +221,175 @@ func TestAtualizarNPMTestaERegistra(t *testing.T) {
 	}
 }
 
-func TestAtualizarTesteFalhaVoltaEConfirma(t *testing.T) {
+// opencodeFalso instala um opencode 1.0.0 cujo "upgrade" leva à 2.0.0 (ou à versão pedida).
+func opencodeFalso(t *testing.T) *mundo {
+	t.Helper()
 	m := novoMundo(t)
 	m.caminhos["opencode"] = instalarFalso(t, ".opencode/bin/opencode")
 	m.clis["opencode"] = &cli{versao: "1.0.0", ajuda: "a"}
 	m.instalar = func(a []string) error {
-		m.clis["opencode"].versao = strings.TrimPrefix(a[len(a)-1], "v")
-		if a[len(a)-1] == "opencode" || a[len(a)-1] == "upgrade" {
+		if v := a[len(a)-1]; v != "upgrade" {
+			m.clis["opencode"].versao = v
+		} else {
 			m.clis["opencode"].versao = "2.0.0"
 		}
 		return nil
 	}
-	m.testar = func(string) (bool, string) { return false, "falha: modelo caiu" }
-	var log = filepath.Join(t.TempDir(), "eventos.log")
+	return m
+}
+
+func chamou(m *mundo, cmd string) bool {
+	for _, c := range m.chamadas {
+		if c == cmd {
+			return true
+		}
+	}
+	return false
+}
+
+func TestAtualizarTesteFalhaPelaVersaoRecomendaVoltarSemVoltar(t *testing.T) {
+	m := opencodeFalso(t)
+	m.testar = func(string) (bool, string) { return false, "falha: error: unknown flag --format" }
+	log := filepath.Join(t.TempDir(), "eventos.log")
 	r, err := m.env().Atualizar(context.Background(), "opencode", Opcoes{EventLog: log})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Resultado != ResVoltou || r.Depois != "1.0.0" || r.Teste == nil || r.Teste.Modo != "real" || r.Teste.Instancia != "opencode-gratis" {
+	if r.Resultado != ResTesteFalhou || r.Diagnostico != DiagVersaoNova || r.Recomendacao != RecVoltar || r.Anterior != "1.0.0" || r.Depois != "2.0.0" {
 		t.Fatalf("resultado: %+v", r)
 	}
-	if got := m.clis["opencode"].versao; got != "1.0.0" {
-		t.Fatalf("versão final %s", got)
+	if r.Teste == nil || r.Teste.Modo != "real" || r.Teste.Instancia != "opencode-gratis" || !strings.Contains(r.Teste.Detalhe, "unknown flag") {
+		t.Fatalf("teste: %+v", r.Teste)
+	}
+	if got := m.clis["opencode"].versao; got != "2.0.0" || chamou(m, "opencode upgrade 1.0.0") {
+		t.Fatalf("não pode voltar sozinho: versão %s chamadas %v", got, m.chamadas)
 	}
 	b, _ := os.ReadFile(log)
-	if !strings.Contains(string(b), "ATUALIZADO opencode 1.0.0 → 1.0.0 resultado voltou") {
+	if !strings.Contains(string(b), "resultado teste_falhou") {
 		t.Fatalf("log: %q", b)
+	}
+	h, _ := ArquivoHistorico()
+	hb, _ := os.ReadFile(h)
+	if !strings.Contains(string(hb), `"diagnostico":"versao_nova"`) || !strings.Contains(string(hb), `"recomendacao":"voltar"`) {
+		t.Fatalf("histórico: %s", hb)
 	}
 }
 
-func TestAtualizarSimularFalhaTesteForcaVolta(t *testing.T) {
-	m := novoMundo(t)
-	m.caminhos["opencode"] = instalarFalso(t, ".opencode/bin/opencode")
-	m.clis["opencode"] = &cli{versao: "1.0.0", ajuda: "a"}
-	m.instalar = func(a []string) error { m.clis["opencode"].versao = "2.0.0"; return nil }
-	var volt bool
-	e := m.env()
-	e.Executar = func(c context.Context, n string, a ...string) (string, error) {
-		if n == "opencode" && len(a) == 2 && a[1] == "1.0.0" {
-			volt = true
-			m.clis["opencode"].versao = "1.0.0"
-			return "", nil
+func TestAtualizarTesteFalhaExternaNaoEAVersao(t *testing.T) {
+	for _, falha := range []string{"falha: 429 rate limit exceeded", "no login: not authenticated", "falha: dial tcp: no such host", "cota: usage limit"} {
+		m := opencodeFalso(t)
+		m.testar = func(string) (bool, string) { return false, falha }
+		r, _ := m.env().Atualizar(context.Background(), "opencode", Opcoes{})
+		if r.Resultado != ResTesteFalhou || r.Diagnostico != DiagExterna || r.Recomendacao != RecNaoEVersao || r.Comparacao != nil {
+			t.Fatalf("%q: %+v", falha, r)
 		}
-		return m.env().Executar(c, n, a...)
+		if m.clis["opencode"].versao != "2.0.0" {
+			t.Fatalf("%q: não deve mexer na versão", falha)
+		}
 	}
-	r, _ := e.Atualizar(context.Background(), "opencode", Opcoes{SimularFalhaTeste: true})
-	if r.Resultado != ResVoltou || !volt || !r.Teste.Simulado {
-		t.Fatalf("resultado: %+v volt=%v", r, volt)
+}
+
+func TestAtualizarEmDuvidaCompararComAnterior(t *testing.T) {
+	// passa na anterior, falha na nova → versão nova; no fim a nova continua instalada.
+	m := opencodeFalso(t)
+	m.testar = func(string) (bool, string) {
+		if m.clis["opencode"].versao == "1.0.0" {
+			return true, "OK"
+		}
+		return false, "falha: o motor terminou sem texto"
+	}
+	r, _ := m.env().Atualizar(context.Background(), "opencode", Opcoes{})
+	if r.Diagnostico != DiagVersaoNova || r.Recomendacao != RecVoltar || r.Comparacao == nil || !r.Comparacao.OK || r.Comparacao.Versao != "1.0.0" {
+		t.Fatalf("comparação: %+v", r)
+	}
+	if m.clis["opencode"].versao != "2.0.0" || r.Depois != "2.0.0" {
+		t.Fatalf("a nova deve ser reinstalada após comparar: %s / %s", m.clis["opencode"].versao, r.Depois)
+	}
+	// falha igual na anterior → não é a versão.
+	m = opencodeFalso(t)
+	m.testar = func(string) (bool, string) { return false, "falha: o motor terminou sem texto" }
+	r, _ = m.env().Atualizar(context.Background(), "opencode", Opcoes{})
+	if r.Diagnostico != DiagExterna || r.Recomendacao != RecNaoEVersao || r.Comparacao == nil || r.Comparacao.OK {
+		t.Fatalf("igual nas duas: %+v", r)
+	}
+	if m.clis["opencode"].versao != "2.0.0" {
+		t.Fatal("a nova deve continuar instalada")
+	}
+}
+
+func TestAtualizarSimularFalhaTeste(t *testing.T) {
+	for sim, quero := range map[string][2]string{SimVersao: {DiagVersaoNova, RecVoltar}, SimLogin: {DiagExterna, RecNaoEVersao}} {
+		m := opencodeFalso(t)
+		r, _ := m.env().Atualizar(context.Background(), "opencode", Opcoes{SimularFalhaTeste: sim})
+		if r.Resultado != ResTesteFalhou || r.Teste == nil || !r.Teste.Simulado || r.Diagnostico != quero[0] || r.Recomendacao != quero[1] {
+			t.Fatalf("%s: %+v", sim, r)
+		}
+		if m.clis["opencode"].versao != "2.0.0" {
+			t.Fatalf("%s: não volta sozinho", sim)
+		}
+	}
+}
+
+func TestClassificarFumacaEhSempreAVersao(t *testing.T) {
+	if Classificar(&Teste{Modo: "fumaca", Detalhe: "--help vazio"}) != DiagVersaoNova {
+		t.Fatal("fumaça")
+	}
+	if Classificar(&Teste{Modo: "real", OK: true}) != "" || Classificar(&Teste{Modo: "real", Detalhe: "xyz"}) != DiagIndefinido {
+		t.Fatal("real")
+	}
+}
+
+func TestVoltarExplicitoUsaAnteriorGuardadaETesta(t *testing.T) {
+	m := opencodeFalso(t)
+	m.testar = func(string) (bool, string) { return false, "falha: unknown flag --format" }
+	e := m.env()
+	if r, _ := e.Voltar(context.Background(), "opencode", Opcoes{}); r.Resultado != ResDesconhec || !strings.Contains(r.Motivo, "anterior guardada") {
+		t.Fatalf("sem anterior: %+v", r)
+	}
+	if _, err := e.Atualizar(context.Background(), "opencode", Opcoes{}); err != nil {
+		t.Fatal(err)
+	}
+	m.testar = func(string) (bool, string) { return true, "OK" }
+	r, err := e.Voltar(context.Background(), "opencode", Opcoes{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Resultado != ResVoltou || r.Acao != "voltar" || r.Antes != "2.0.0" || r.Depois != "1.0.0" || r.Anterior != "2.0.0" || r.Teste == nil || !r.Teste.OK {
+		t.Fatalf("voltar: %+v", r)
+	}
+	if m.clis["opencode"].versao != "1.0.0" || !chamou(m, "opencode upgrade 1.0.0") {
+		t.Fatalf("versão %s chamadas %v", m.clis["opencode"].versao, m.chamadas)
+	}
+	// voltar de novo desfaz a volta; versão dada explicitamente também vale.
+	if r, _ = e.Voltar(context.Background(), "opencode", Opcoes{}); r.Resultado != ResVoltou || r.Depois != "2.0.0" {
+		t.Fatalf("desfazer: %+v", r)
+	}
+	if r, _ = e.Voltar(context.Background(), "opencode", Opcoes{Para: "2.0.0"}); r.Resultado != ResJaNaVersao {
+		t.Fatalf("já na versão: %+v", r)
+	}
+	if r, _ = e.Voltar(context.Background(), "opencode", Opcoes{Para: "0.5.0"}); r.Resultado != ResVoltou || r.Depois != "0.5.0" {
+		t.Fatalf("versão dada: %+v", r)
+	}
+}
+
+func TestVoltarTesteFalhaClassifica(t *testing.T) {
+	m := opencodeFalso(t)
+	e := m.env()
+	e.Atualizar(context.Background(), "opencode", Opcoes{})
+	m.testar = func(string) (bool, string) { return false, "falha: 401 unauthorized" }
+	r, _ := e.Voltar(context.Background(), "opencode", Opcoes{})
+	if r.Resultado != ResTesteFalhou || r.Diagnostico != DiagExterna || r.Recomendacao != RecNaoEVersao || r.Depois != "1.0.0" {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestSemSegredos(t *testing.T) {
+	in := "falha: api_key=sk-abcdef1234567890 e Authorization: Bearer abcdefghijkl1234 token: xyz12345678"
+	out := semSegredos(in)
+	for _, s := range []string{"sk-abcdef", "abcdefghijkl1234", "xyz12345678"} {
+		if strings.Contains(out, s) {
+			t.Fatalf("vazou %s: %s", s, out)
+		}
 	}
 }
 
@@ -356,13 +478,17 @@ func TestAtualizarFalhaDeInstalacaoMantemAnterior(t *testing.T) {
 	}
 }
 
-func TestAtualizarBrewSemVoltaExigeFlag(t *testing.T) {
+func TestAtualizarBrewVoltaEManual(t *testing.T) {
 	m := novoMundo(t)
 	m.caminhos["codex"] = instalarFalso(t, "Cellar/codex/1.0.0/bin/codex")
-	m.clis["codex"] = &cli{versao: "1.0.0"}
-	m.instalar = func([]string) error { t.Fatal("não deveria instalar"); return nil }
-	r, _ := m.env().Atualizar(context.Background(), "codex", Opcoes{})
-	if r.Resultado != ResFalhou || r.Volta != "manual" || !strings.Contains(r.Motivo, "--sem-volta") {
+	m.clis["codex"] = &cli{versao: "1.0.0", ajuda: "a"}
+	m.instalar = func([]string) error { m.clis["codex"].versao = "2.0.0"; return nil }
+	e := m.env()
+	r, _ := e.Atualizar(context.Background(), "codex", Opcoes{})
+	if r.Resultado != ResAtualizado || r.Volta != "manual" || r.Anterior != "1.0.0" {
 		t.Fatalf("%+v", r)
+	}
+	if v, _ := e.Voltar(context.Background(), "codex", Opcoes{}); v.Resultado != ResDesconhec || !strings.Contains(v.Motivo, "manual") {
+		t.Fatalf("voltar brew: %+v", v)
 	}
 }

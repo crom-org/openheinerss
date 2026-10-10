@@ -258,12 +258,20 @@ class Agent:
         return self._request("harness.versoes", {"harness": harness} if harness else {})
 
     def update_harness(self, harness: str, seco: bool = False, esperar: bool = False, espera_seg: Optional[int] = None,
-                       para: Optional[str] = None, forcar: bool = False, sem_volta: bool = False,
-                       simular_falha_teste: bool = False) -> Dict[str, Any]:
-        """Atualiza um harness base, testa e volta sozinho se falhar; a resposta chega ao fim (seco=True só dá o plano)."""
+                       para: Optional[str] = None, forcar: bool = False,
+                       simular_falha_teste: Optional[str] = None) -> Dict[str, Any]:
+        """Atualiza um harness base e testa; se o teste falhar, devolve diagnostico/recomendacao sem voltar.
+
+        A resposta chega ao fim (seco=True só dá o plano). simular_falha_teste: "versao" ou "login"."""
         params: Dict[str, Any] = {"harness": harness, "seco": seco, "esperar": esperar, "esperaSeg": espera_seg,
-                                  "para": para, "forcar": forcar, "semVolta": sem_volta, "simularFalhaTeste": simular_falha_teste}
+                                  "para": para, "forcar": forcar, "simularFalhaTeste": simular_falha_teste}
         return self._request("harness.atualizar", {k: v for k, v in params.items() if v})
+
+    def revert_harness(self, harness: str, versao: Optional[str] = None, seco: bool = False, esperar: bool = False,
+                       espera_seg: Optional[int] = None) -> Dict[str, Any]:
+        """Volta explícita (harness.voltar) para a versão anterior guardada ou para `versao`; testa e informa."""
+        params: Dict[str, Any] = {"harness": harness, "versao": versao, "seco": seco, "esperar": esperar, "esperaSeg": espera_seg}
+        return self._request("harness.voltar", {k: v for k, v in params.items() if v})
 
     def identidade(self, instancia: str) -> Dict[str, Any]:
         return self._request("instancia.identidade", {"instancia": instancia})

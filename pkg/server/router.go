@@ -352,26 +352,45 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (respo
 		}
 		return protocol.NewResponse(req.ID, map[string]interface{}{"harnesses": versoes.Padrao().Versoes(ctx, bases...)})
 
-	case protocol.MethodHarnessAtualizar:
+	case protocol.MethodHarnessAtualizar, protocol.MethodHarnessVoltar:
 		var p protocol.HarnessAtualizarParams
-		if err := json.Unmarshal(req.Params, &p); err != nil || p.Harness == "" {
-			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para harness.atualizar: informe harness", nil)
+		var v protocol.HarnessVoltarParams
+		var err error
+		if req.Method == protocol.MethodHarnessVoltar {
+			err = json.Unmarshal(req.Params, &v)
+			p.Harness, p.Seco, p.Esperar, p.EsperaSeg, p.Para = v.Harness, v.Seco, v.Esperar, v.EsperaSeg, v.Versao
+		} else {
+			err = json.Unmarshal(req.Params, &p)
+		}
+		if err != nil || p.Harness == "" {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para "+req.Method+": informe harness", nil)
 		}
 		b := versoes.BaseDe(p.Harness)
 		if b == "" {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "harness não é uma base nem instância de base conhecida: "+p.Harness, nil)
 		}
-		res, err := versoes.Padrao().Atualizar(ctx, b, versoes.Opcoes{
+		switch p.SimularFalhaTeste {
+		case "", versoes.SimVersao, versoes.SimLogin:
+		default:
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "simularFalhaTeste aceita \"versao\" ou \"login\"", nil)
+		}
+		o := versoes.Opcoes{
 			Seco: p.Seco, Esperar: p.Esperar, Espera: time.Duration(p.EsperaSeg) * time.Second, Para: p.Para,
-			Forcar: p.Forcar, SemVolta: p.SemVolta, SimularFalhaTeste: p.SimularFalhaTeste,
+			Forcar: p.Forcar, SimularFalhaTeste: p.SimularFalhaTeste,
 			EventLog: os.Getenv("OPENHEINERSS_EVENTOS_LOG"),
-		})
+		}
+		var res *versoes.Resultado
+		if req.Method == protocol.MethodHarnessVoltar {
+			res, err = versoes.Padrao().Voltar(ctx, b, o)
+		} else {
+			res, err = versoes.Padrao().Atualizar(ctx, b, o)
+		}
 		if err != nil {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, err.Error(), nil)
 		}
 		if !res.Seco {
 			switch res.Resultado {
-			case versoes.ResAtualizado, versoes.ResVoltou, versoes.ResVoltaFalhou, versoes.ResFalhou:
+			case versoes.ResAtualizado, versoes.ResVoltou, versoes.ResTesteFalhou, versoes.ResFalhou:
 				r.orq.emitir(protocol.EventHarnessAtualizado, "", "", res)
 			}
 		}

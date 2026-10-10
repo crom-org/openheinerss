@@ -67,12 +67,26 @@ func imprimirVersoes(w io.Writer, infos []versoes.Info) {
 	}
 }
 
-// Códigos de saída de `harness atualizar`.
+// Códigos de saída de `harness atualizar` e `harness voltar`. O openheinerss nunca volta sozinho:
+// 3 e 4 só informam o diagnóstico do teste que falhou.
 const (
-	saidaOcupado    = 2 // há agente/sessão usando o harness
-	saidaVoltou     = 3 // o teste falhou e a versão anterior foi restaurada
-	saidaVoltaFalha = 4 // o teste falhou e a volta não foi confirmada
+	saidaOcupado       = 2 // há agente/sessão usando o harness
+	saidaTesteVersao   = 3 // instalou, o teste falhou e a causa é a versão nova (recomendado voltar)
+	saidaTesteExterna  = 4 // instalou, o teste falhou por login/rede/cota (não é a versão)
+	saidaTesteIndefino = 5 // instalou, o teste falhou e não deu para separar a causa
 )
+
+func harnessLogDeEventos() string {
+	if p := os.Getenv("OPENHEINERSS_EVENTOS_LOG"); p != "" {
+		return p
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		if cfg, err := config.LoadProject(cwd); err == nil {
+			return cfg.EventosLog
+		}
+	}
+	return ""
+}
 
 func newHarnessAtualizarCmd() *cobra.Command {
 	var (
@@ -83,14 +97,18 @@ func newHarnessAtualizarCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "atualizar <harness>|--todos",
 		Aliases: []string{"update", "upgrade"},
-		Short:   "Atualiza um harness base pelo mesmo gerenciador que o instalou, testa e volta sozinho se falhar",
+		Short:   "Atualiza um harness base pelo mesmo gerenciador que o instalou, testa e informa (não volta sozinho)",
 		Long: `Fluxo: prévia (--seco) → recusa/espera se algum 'rodar' ou 'serve' usa o harness → instala pelo
 mesmo gerenciador que instalou (npm i -g, uv tool, pipx, pip --user, autoatualização do CLI) guardando
-a versão anterior → roda 'harness test' REAL com a instância grátis da base (sem ela, --version + --help)
-→ se o teste falhar, volta à versão anterior e confirma. Registra o evento harness.atualizado.
+a versão anterior → roda 'harness test' REAL com a instância grátis da base (sem ela, --version + --help).
+Se o teste falhar, classifica a causa pela saída: "versão nova" (flag/formato mudou, crash) → recomendação
+"voltar"; "externa" (login vencido, rede, cota/429) → "não é a versão"; em dúvida roda o mesmo teste na
+versão anterior para comparar. NUNCA volta sozinho: quem decide é quem chama, com 'harness voltar'.
+Registra o evento harness.atualizado.
 
-Códigos de saída: 0 ok/já na última/prévia · 1 erro · 2 em uso (sem --esperar) · 3 testou, falhou e
-VOLTOU · 4 testou, falhou e a volta não foi confirmada.`,
+Códigos de saída: 0 ok/já na última/prévia · 1 erro · 2 em uso (sem --esperar) · 3 teste falhou pela
+versão nova (recomendado voltar) · 4 teste falhou por login/rede/cota (não é a versão) · 5 teste falhou,
+causa indeterminada.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args: func(cmd *cobra.Command, args []string) error {
@@ -103,18 +121,16 @@ VOLTOU · 4 testou, falhou e a volta não foi confirmada.`,
 			if todos && o.Para != "" {
 				return fmt.Errorf("--para vale para um harness só")
 			}
+			switch o.SimularFalhaTeste {
+			case "", versoes.SimVersao, versoes.SimLogin:
+			default:
+				return fmt.Errorf("--simular-falha-teste aceita versao ou login")
+			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			env := versoes.Padrao()
-			o.EventLog = os.Getenv("OPENHEINERSS_EVENTOS_LOG")
-			if o.EventLog == "" {
-				if cwd, err := os.Getwd(); err == nil {
-					if cfg, err := config.LoadProject(cwd); err == nil {
-						o.EventLog = cfg.EventosLog
-					}
-				}
-			}
+			o.EventLog = harnessLogDeEventos()
 			var bases []string
 			if todos {
 				bases = versoes.Bases()
@@ -141,25 +157,7 @@ VOLTOU · 4 testou, falhou e a volta não foi confirmada.`,
 					codigo = c
 				}
 			}
-			if jsonO {
-				var v interface{} = rels
-				if !todos {
-					v = rels[0]
-				}
-				enc := json.NewEncoder(cmd.OutOrStdout())
-				enc.SetIndent("", "  ")
-				if err := enc.Encode(v); err != nil {
-					return err
-				}
-			} else {
-				for _, r := range rels {
-					imprimirAtualizarHarness(cmd.OutOrStdout(), r)
-				}
-			}
-			if codigo != 0 {
-				return codigoSaida(codigo)
-			}
-			return nil
+			return saidaHarness(cmd, rels, !todos, jsonO, codigo)
 		},
 	}
 	f := cmd.Flags()
@@ -167,23 +165,94 @@ VOLTOU · 4 testou, falhou e a volta não foi confirmada.`,
 	f.BoolVar(&todos, "todos", false, "Atualiza todas as bases instaladas, uma por vez")
 	f.BoolVar(&o.Esperar, "esperar", false, "Espera os agentes/sessões que usam o harness terminarem em vez de recusar")
 	f.DurationVar(&o.Espera, "espera", 15*time.Minute, "Quanto esperar com --esperar")
-	f.StringVar(&o.Para, "para", "", "Instala esta versão em vez da última (também serve para voltar de propósito)")
+	f.StringVar(&o.Para, "para", "", "Instala esta versão em vez da última")
 	f.BoolVar(&o.Forcar, "forcar", false, "Reinstala mesmo já estando na versão alvo")
-	f.BoolVar(&o.SemVolta, "sem-volta", false, "Aceita atualizar métodos sem volta automática (brew, instalador sem versões guardadas)")
-	f.BoolVar(&o.SimularFalhaTeste, "simular-falha-teste", false, "Trata o teste pós-instalação como falho (exercita a volta automática)")
+	f.StringVar(&o.SimularFalhaTeste, "simular-falha-teste", "", "Trata o teste pós-instalação como falho: versao (flag/formato mudou) ou login (login vencido)")
 	f.DurationVar(&o.TesteTimeout, "timeout", 3*time.Minute, "Tempo máximo do harness test")
 	f.BoolVar(&jsonO, "json", false, "Saída em JSON")
 	return cmd
+}
+
+func newHarnessVoltarCmd() *cobra.Command {
+	var (
+		o     versoes.Opcoes
+		jsonO bool
+	)
+	cmd := &cobra.Command{
+		Use:   "voltar <harness> [versão]",
+		Short: "Volta um harness base para a versão anterior guardada (ou a dada), testa e informa",
+		Long: `Comando explícito: o openheinerss nunca volta sozinho. Sem [versão], usa a versão que estava
+instalada antes da última troca (guardada por 'harness atualizar'). Recusa/espera como o atualizar
+se algum agente usa o harness; reinstala pelo mesmo gerenciador, confirma com --version e roda o
+mesmo teste. Registra o evento harness.atualizado (acao "voltar").
+
+Códigos de saída: 0 voltou e o teste passou/prévia · 1 erro · 2 em uso · 3/4/5 como em 'harness atualizar'.`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Args:          cobra.RangeArgs(1, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			b := versoes.BaseDe(args[0])
+			if b == "" {
+				return fmt.Errorf("harness %q não é uma base nem uma instância de base conhecida (bases: %v)", args[0], versoes.Bases())
+			}
+			if len(args) == 2 {
+				o.Para = args[1]
+			}
+			o.EventLog = harnessLogDeEventos()
+			r, err := versoes.Padrao().Voltar(cmd.Context(), b, o)
+			if err != nil {
+				return err
+			}
+			c := codigoAtualizar(r)
+			if r.Resultado == versoes.ResSemCLI {
+				c = 1
+			}
+			return saidaHarness(cmd, []*versoes.Resultado{r}, true, jsonO, c)
+		},
+	}
+	f := cmd.Flags()
+	f.BoolVar(&o.Seco, "seco", false, "Mostra o plano sem alterar nada")
+	f.BoolVar(&o.Esperar, "esperar", false, "Espera os agentes/sessões que usam o harness terminarem em vez de recusar")
+	f.DurationVar(&o.Espera, "espera", 15*time.Minute, "Quanto esperar com --esperar")
+	f.DurationVar(&o.TesteTimeout, "timeout", 3*time.Minute, "Tempo máximo do harness test")
+	f.BoolVar(&jsonO, "json", false, "Saída em JSON")
+	return cmd
+}
+
+func saidaHarness(cmd *cobra.Command, rels []*versoes.Resultado, unico, jsonO bool, codigo int) error {
+	if jsonO {
+		var v interface{} = rels
+		if unico {
+			v = rels[0]
+		}
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(v); err != nil {
+			return err
+		}
+	} else {
+		for _, r := range rels {
+			imprimirAtualizarHarness(cmd.OutOrStdout(), r)
+		}
+	}
+	if codigo != 0 {
+		return codigoSaida(codigo)
+	}
+	return nil
 }
 
 func codigoAtualizar(r *versoes.Resultado) int {
 	switch r.Resultado {
 	case versoes.ResOcupado:
 		return saidaOcupado
-	case versoes.ResVoltou:
-		return saidaVoltou
-	case versoes.ResVoltaFalhou:
-		return saidaVoltaFalha
+	case versoes.ResTesteFalhou:
+		switch r.Diagnostico {
+		case versoes.DiagVersaoNova:
+			return saidaTesteVersao
+		case versoes.DiagExterna:
+			return saidaTesteExterna
+		}
+		return saidaTesteIndefino
 	case versoes.ResFalhou, versoes.ResDesconhec:
 		return 1
 	}
@@ -192,6 +261,9 @@ func codigoAtualizar(r *versoes.Resultado) int {
 
 func imprimirAtualizarHarness(w io.Writer, r *versoes.Resultado) {
 	titulo := "Atualização de " + r.Harness
+	if r.Acao == "voltar" {
+		titulo = "Volta de " + r.Harness
+	}
 	if r.Seco {
 		titulo += " (seco: nada foi alterado)"
 	}
@@ -213,16 +285,35 @@ func imprimirAtualizarHarness(w io.Writer, r *versoes.Resultado) {
 	if t := r.Teste; t != nil {
 		fmt.Fprintf(w, "  teste (%s%s): ok=%v %s\n", t.Modo, instSufixo(t.Instancia), t.OK, t.Detalhe)
 	}
+	if c := r.Comparacao; c != nil {
+		fmt.Fprintf(w, "  comparação na %s: ok=%v %s\n", c.Versao, c.OK, c.Detalhe)
+	}
 	if r.Motivo != "" {
 		fmt.Fprintf(w, "  motivo: %s\n", r.Motivo)
 	}
+	if r.Diagnostico != "" {
+		fmt.Fprintf(w, "  diagnóstico: %s   recomendação: %s\n", r.Diagnostico, textoRecomendacao(r.Recomendacao))
+	}
+	if r.Anterior != "" && !r.Seco {
+		fmt.Fprintf(w, "  versão anterior guardada: %s (para voltar: openheinerss harness voltar %s)\n", r.Anterior, r.Harness)
+	}
 	fmt.Fprintf(w, "  resultado: %s", r.Resultado)
-	if r.Resultado == versoes.ResVoltou {
-		fmt.Fprintf(w, "   instalou %s, testou, falhou e voltou a %s", r.Tentada, r.Depois)
-	} else if r.Depois != "" && !r.Seco {
+	if r.Depois != "" && !r.Seco && r.Depois != r.Antes {
 		fmt.Fprintf(w, "   %s → %s", r.Antes, r.Depois)
 	}
 	fmt.Fprintln(w)
+}
+
+func textoRecomendacao(r string) string {
+	switch r {
+	case versoes.RecVoltar:
+		return "recomendado voltar"
+	case versoes.RecNaoEVersao:
+		return "não é a versão (falhou por login/rede/cota)"
+	case versoes.RecAvaliar:
+		return "avaliar (causa indeterminada)"
+	}
+	return r
 }
 
 func valorOu(v, def string) string {

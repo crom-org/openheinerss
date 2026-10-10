@@ -15,6 +15,7 @@ const (
 	MethodHarnessCapacidades       = "harness.capacidades"
 	MethodHarnessVersoes           = "harness.versoes"
 	MethodHarnessAtualizar         = "harness.atualizar"
+	MethodHarnessVoltar            = "harness.voltar"
 	MethodHarnessComandos          = "harness.comandos"
 	MethodHarnessComandosAnotar    = "harness.comandos.anotar"
 	MethodHarnessComandosConfirmar = "harness.comandos.confirmar"
@@ -32,7 +33,8 @@ type HarnessVersoesParams struct {
 
 // HarnessAtualizarParams pede a atualização de uma base (ou instância dela). Seco só mostra o plano.
 // Esperar espera os usos terminarem (até EsperaSeg segundos); Para fixa a versão; SimularFalhaTeste
-// força a falha do teste para exercitar a volta automática. A resposta chega quando tudo termina.
+// ("versao" ou "login") força a falha do teste para exercitar o diagnóstico. A resposta chega quando
+// tudo termina e traz diagnostico/recomendacao; o openheinerss nunca volta sozinho (veja harness.voltar).
 type HarnessAtualizarParams struct {
 	Harness           string `json:"harness"`
 	Seco              bool   `json:"seco,omitempty"`
@@ -40,8 +42,17 @@ type HarnessAtualizarParams struct {
 	EsperaSeg         int    `json:"esperaSeg,omitempty"`
 	Para              string `json:"para,omitempty"`
 	Forcar            bool   `json:"forcar,omitempty"`
-	SemVolta          bool   `json:"semVolta,omitempty"`
-	SimularFalhaTeste bool   `json:"simularFalhaTeste,omitempty"`
+	SimularFalhaTeste string `json:"simularFalhaTeste,omitempty"`
+}
+
+// HarnessVoltarParams pede a volta explícita de uma base para a versão anterior guardada (ou para
+// Versao). Roda o teste depois e informa o resultado.
+type HarnessVoltarParams struct {
+	Harness   string `json:"harness"`
+	Versao    string `json:"versao,omitempty"`
+	Seco      bool   `json:"seco,omitempty"`
+	Esperar   bool   `json:"esperar,omitempty"`
+	EsperaSeg int    `json:"esperaSeg,omitempty"`
 }
 
 // HarnessComandosParams pede os comandos nativos de um harness ou instância. CWD (opcional) é a
@@ -64,8 +75,9 @@ const (
 	EventOrqFilhosOrfaos   = "orq.filhos_orfaos"
 	EventOrqMensagem       = "orq.mensagem"
 	EventLimitesAtualizado = "limites.atualizado"
-	// EventHarnessAtualizado é emitido ao fim de cada harness.atualizar real (não na prévia);
-	// o payload é o próprio resultado (antes, depois, resultado, teste).
+	// EventHarnessAtualizado é emitido ao fim de cada harness.atualizar/harness.voltar real (não na
+	// prévia); o payload é o próprio resultado (acao, antes, depois, resultado, teste, diagnostico,
+	// recomendacao, anterior).
 	EventHarnessAtualizado = "harness.atualizado"
 )
 

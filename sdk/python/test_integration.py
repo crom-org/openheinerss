@@ -49,6 +49,9 @@ class SDKIntegrationTest(unittest.TestCase):
             self.assertIn(plano["resultado"], ("seco", "ja_na_ultima", "sem_cli", "desconhecida", "ocupado"))
             with self.assertRaises(Exception):
                 agent.update_harness("nao-existe", seco=True)
+            volta = agent.revert_harness("codex", seco=True)
+            self.assertEqual(volta["acao"], "voltar")
+            self.assertIn(volta["resultado"], ("seco", "ja_na_versao", "sem_cli", "desconhecida", "ocupado"))
         finally:
             agent.close()
         with self.assertRaisesRegex(RuntimeError, "retomada nativa não suportada"):

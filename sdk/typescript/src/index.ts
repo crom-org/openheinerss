@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { spawn, type ChildProcess } from "node:child_process";
-import type { SessionOptions, HarnessRegistration, PermissionRequest, ToolCall, ToolResult, RawLine, RunOptions, RunStarted, RunList, MessageReceipt, Limits, EventFilter, OrchestrationEventName, OrchestrationCallback, HarnessCommand, HarnessCommandList, Identity, Conta, HarnessCapabilities, HarnessVersion, HarnessUpdateOptions, HarnessUpdateResult, DryRunResult } from "./types.js";
+import type { SessionOptions, HarnessRegistration, PermissionRequest, ToolCall, ToolResult, RawLine, RunOptions, RunStarted, RunList, MessageReceipt, Limits, EventFilter, OrchestrationEventName, OrchestrationCallback, HarnessCommand, HarnessCommandList, Identity, Conta, HarnessCapabilities, HarnessVersion, HarnessUpdateOptions, HarnessRevertOptions, HarnessUpdateResult, DryRunResult } from "./types.js";
 
 export * from "./types.js";
 export * from "./react.js";
@@ -63,8 +63,10 @@ export class Openheinerss extends EventEmitter {
   async capacidades(harness?: string): Promise<HarnessCapabilities | { harnesses: HarnessCapabilities[] }> { await this.ensureTransport(); return this.sendRPC("harness.capacidades", harness ? { harness } : {}); }
   /** Versão instalada, método de instalação e última versão oficial de cada harness base (ou de um só). */
   async harnessVersions(harness?: string): Promise<{ harnesses: HarnessVersion[] }> { await this.ensureTransport(); return this.sendRPC("harness.versoes", harness ? { harness } : {}); }
-  /** Atualiza um harness base, testa e volta sozinho se falhar (a resposta chega ao fim; com `seco`, só o plano). */
+  /** Atualiza um harness base e testa; se o teste falhar, devolve `diagnostico`/`recomendacao` sem voltar (a resposta chega ao fim; com `seco`, só o plano). */
   async updateHarness(harness: string, options: HarnessUpdateOptions = {}): Promise<HarnessUpdateResult> { await this.ensureTransport(); return this.sendRPC("harness.atualizar", { ...options, harness } as Record<string, unknown>); }
+  /** Volta explícita (`harness.voltar`) para a versão anterior guardada ou para `versao`; testa e informa. */
+  async revertHarness(harness: string, options: HarnessRevertOptions = {}): Promise<HarnessUpdateResult> { await this.ensureTransport(); return this.sendRPC("harness.voltar", { ...options, harness } as Record<string, unknown>); }
   async identidade(instancia: string): Promise<Identity> { await this.ensureTransport(); return this.sendRPC("instancia.identidade", { instancia }); }
   async listarContas(cwd?: string): Promise<Conta[]> { await this.ensureTransport(); return this.sendRPC("contas.listar", cwd ? { cwd } : {}).then((r: Conta[]) => r); }
   async adicionarConta(harness: string, nome: string, cwd?: string, iniciarLogin = false): Promise<any> { await this.ensureTransport(); return this.sendRPC("contas.adicionar", { harness, nome, cwd, iniciarLogin }); }
