@@ -594,7 +594,12 @@ func typedArgs(cfg harness.SessionConfig) []string {
 	for _, m := range harness.OptionStrings(cfg.Options, "mcp_config") {
 		args = append(args, "--mcp-config", m)
 	}
-	if tools := harness.OptionStrings(cfg.Options, "allowed_tools"); len(tools) > 0 {
+	// --permitir-leitura: libera só Read (sem --add-dir, que daria escrita); //caminho é absoluto na regra do claude.
+	tools := harness.OptionStrings(cfg.Options, "allowed_tools")
+	for _, dir := range harness.OptionStrings(cfg.Options, "pastas_leitura") {
+		tools = append(tools, "Read(/"+strings.TrimRight(dir, "/")+"/**)")
+	}
+	if len(tools) > 0 {
 		args = append(args, "--allowed-tools", strings.Join(tools, ","))
 	}
 	if tools := harness.OptionStrings(cfg.Options, "disallowed_tools"); len(tools) > 0 {

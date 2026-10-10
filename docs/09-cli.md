@@ -393,6 +393,7 @@ Flags:
       --account string              Alias em inglês de --conta
       --agentes string              Alias de --pasta-agentes
       --agents-dir string           Alias em inglês de --pasta-agentes
+      --allow-read-dir strings      Alias em inglês de --permitir-leitura
       --allowed-dir strings         Alias em inglês de --permitir-pasta
       --arg stringArray             Alias de --harness-arg (default [])
       --arquivo-chaves string       Arquivo opcional de variáveis secretas (não imprime valores)
@@ -429,6 +430,7 @@ Flags:
       --parado-aviso duration       Avisa se log, worktree e último evento ficarem parados por este tempo (0 desliga; padrão 10m); vence parado: do config.yaml
       --parado-parar duration       Interrompe (SIGTERM no motor, código 5, retomável) depois deste tempo parado (0 desliga; padrão 20m); vence parado: do config.yaml
       --pasta-agentes string        Pasta dos agentes (padrão .claude/agentes)
+      --permitir-leitura strings    Pasta liberada só para leitura, além das de sistema (/proc, /sys, /etc, /usr, /bin, /lib, /opt); repetível
       --permitir-pasta strings      Pasta externa permitida (repetível)
       --prompt string               Arquivo de prompt alternativo
       --quando-carga-abaixo float   Só começa quando a carga numérica ficar abaixo deste valor
@@ -472,32 +474,34 @@ Aliases:
   run, executar
 
 Flags:
-      --allowed-dir strings       Alias em inglês de --permitir-pasta
-      --arg stringArray           Alias de --harness-arg (default [])
-      --classificar-risco         Acrescenta risco (baixo|medio|alto) e motivo a tool_call e permission_request; só informa, nunca bloqueia
-      --classify-risk             Alias em inglês de --classificar-risco
-      --effort string             Alias em inglês de --esforco
-      --engine string             Alias em inglês de --motor
-      --esforco string            Esforço de raciocínio do motor
-      --harness string            Nome do harness (obrigatório ou default_harness em config.yaml)
-      --harness-arg stringArray   Argumento nativo extra para o harness, intacto e na ordem (repetível) (default [])
-      --interactive               Alias em inglês de --interativo
-  -i, --interativo                Sessão interativa: lê um prompt por linha; linhas com / vão literalmente ao harness
-      --mcp strings               Entrega só estes servidores de mcp.json (repita ou separe por vírgula; padrão: todos)
-      --mode string               Modo do harness (cli ou sdk; a configuração pode definir default_mode)
-      --model string              Nome do modelo
-      --modelo string             Alias em português de --model
-      --modo string               Alias em português de --mode
-      --motor string              Harness base ou instância custom definida pelo usuário
-      --no-mcp                    Alias em inglês de --sem-mcp
-      --papel string              Papel definido em .openheinerss/motores.yaml
-      --permitir-pasta strings    Pasta externa permitida (repetível)
-      --provedor string           Alias em português de --provider
-      --provider string           Provedor do modelo
-      --resume string             Alias em inglês de --retomar
-      --retomar string            Retoma pelo ID: sessão persistida do openheinerss ou id nativo da conversa (com --harness/--motor)
-      --role string               Alias em inglês de --papel
-      --sem-mcp                   Não entrega ao harness os servidores de mcp.json (global e do projeto)
+      --allow-read-dir strings     Alias em inglês de --permitir-leitura
+      --allowed-dir strings        Alias em inglês de --permitir-pasta
+      --arg stringArray            Alias de --harness-arg (default [])
+      --classificar-risco          Acrescenta risco (baixo|medio|alto) e motivo a tool_call e permission_request; só informa, nunca bloqueia
+      --classify-risk              Alias em inglês de --classificar-risco
+      --effort string              Alias em inglês de --esforco
+      --engine string              Alias em inglês de --motor
+      --esforco string             Esforço de raciocínio do motor
+      --harness string             Nome do harness (obrigatório ou default_harness em config.yaml)
+      --harness-arg stringArray    Argumento nativo extra para o harness, intacto e na ordem (repetível) (default [])
+      --interactive                Alias em inglês de --interativo
+  -i, --interativo                 Sessão interativa: lê um prompt por linha; linhas com / vão literalmente ao harness
+      --mcp strings                Entrega só estes servidores de mcp.json (repita ou separe por vírgula; padrão: todos)
+      --mode string                Modo do harness (cli ou sdk; a configuração pode definir default_mode)
+      --model string               Nome do modelo
+      --modelo string              Alias em português de --model
+      --modo string                Alias em português de --mode
+      --motor string               Harness base ou instância custom definida pelo usuário
+      --no-mcp                     Alias em inglês de --sem-mcp
+      --papel string               Papel definido em .openheinerss/motores.yaml
+      --permitir-leitura strings   Pasta liberada só para leitura, além das de sistema (/proc, /sys, /etc, /usr, /bin, /lib, /opt); repetível
+      --permitir-pasta strings     Pasta externa permitida (repetível)
+      --provedor string            Alias em português de --provider
+      --provider string            Provedor do modelo
+      --resume string              Alias em inglês de --retomar
+      --retomar string             Retoma pelo ID: sessão persistida do openheinerss ou id nativo da conversa (com --harness/--motor)
+      --role string                Alias em inglês de --papel
+      --sem-mcp                    Não entrega ao harness os servidores de mcp.json (global e do projeto)
 
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual

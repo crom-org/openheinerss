@@ -11,6 +11,12 @@ vale a branch atual/HEAD; sem commits ou com `--branch-base` inexistente o
 
 Use `--permitir-pasta <dir>` repetidamente (ou `--allowed-dir`). Os caminhos são expandidos e canonizados e também podem vir de `pastas_permitidas` na configuração global, do projeto ou da instância. `--seco` mostra a lista e os argumentos nativos. Claude, Codex e agy recebem `--add-dir`; OpenCode recebe `permission.external_directory` em `OPENCODE_CONFIG_CONTENT`; aider não tem sandbox por pasta. Uma pasta não liberada gera `pasta fora da worktree não liberada: <dir>; use --permitir-pasta` no log e no FIM.
 
+**Leitura de pastas do sistema (padrão).** `/proc`, `/sys`, `/etc`, `/usr`, `/bin`, `/sbin`, `/lib`, `/lib64` e `/opt` já vêm liberadas **só para leitura**; escrita fora da worktree continua exigindo `--permitir-pasta`. `~/.openheinerss` (cache de cota, dados de conta) **não** é liberada: use `--permitir-leitura <dir>` (`--allow-read-dir`, repetível; RPC `pastasLeitura`). `rodar --seco` lista as pastas permitidas e as de leitura (`pastasLeitura` no JSON).
+
+- **opencode:** `permission.external_directory` aceita padrões por caminho, mas não separa leitura de escrita (o portão vale para as duas). Por isso as pastas de leitura entram em `external_directory` e a escrita é negada por `permission.edit` (`"../**": "deny"`, relativo à worktree, que é como o opencode casa o caminho de edição; as pastas de `--permitir-pasta` são reabertas depois, porque vale a última regra). Limite: comandos de `bash` não passam pelo `edit` e ficam sujeitos só às permissões do SO.
+- **claude-code:** o `rodar` usa `bypassPermissions`, e a leitura do sistema já é livre; `--permitir-leitura` vira `--allowed-tools Read(//dir/**)` (só leitura, sem `--add-dir`).
+- **codex:** sem `--sandbox` o `rodar` usa bypass e lê o sistema livremente; com sandbox `read-only`/`workspace-write` a leitura em todo o disco já é padrão do codex, então `--permitir-leitura` não muda nada.
+
 **Raiz do repositório.** A pasta de agentes, os logs, os limites e o nome do
 projeto são sempre os do REPOSITÓRIO (`git rev-parse --git-common-dir`), mesmo
 quando o `rodar` (ou `agentes`) é chamado de dentro de uma worktree, inclusive
