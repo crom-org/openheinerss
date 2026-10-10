@@ -3,7 +3,7 @@
 Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 
-## Não publicado
+## [1.12.0] — 2026-10-10
 
 - Leitura de pastas do sistema (`/proc`, `/sys`, `/etc`, `/usr`, `/bin`, `/sbin`, `/lib`, `/lib64`, `/opt`) liberada por
   padrão, só para leitura, nos agentes opencode (antes abortavam com "pasta fora da worktree não liberada: /proc/*").
