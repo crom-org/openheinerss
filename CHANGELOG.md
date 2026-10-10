@@ -3,7 +3,7 @@
 Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 
-## Não publicado
+## [1.11.0] — 2026-10-10
 
 - Adiciona `openheinerss harness versoes [harness] [--json]` e a RPC `harness.versoes`: por base (claude-code, codex,
   opencode, aider, agy) a versão instalada, como foi instalada (npm, uv, pipx, pip, brew, script/binário — pelo
