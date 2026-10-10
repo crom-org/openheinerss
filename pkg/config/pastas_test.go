@@ -51,12 +51,15 @@ func TestPastasLeituraEfetivasInclui(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var proc, extra, home bool
+	dr, _ := filepath.EvalSymlinks(d)
+	_, errProc := os.Stat("/proc")
+	proc := errProc != nil // sem /proc (macOS/Windows) não há o que conferir
+	var extra, home bool
 	for _, p := range got {
 		switch {
 		case p == "/proc":
 			proc = true
-		case p == d:
+		case p == d || p == dr:
 			extra = true
 		}
 		if h, _ := os.UserHomeDir(); h != "" && strings.HasPrefix(p, filepath.Join(h, ".openheinerss")) {
