@@ -34,6 +34,8 @@ type SecoResult struct {
 	Limites          SecoLimites       `json:"limites"`
 	TrocaConta       SecoTrocaConta    `json:"trocaConta"`
 	PastasPermitidas []string          `json:"pastasPermitidas,omitempty"`
+	// PastasLeitura: pastas liberadas só para leitura (sistema por padrão + --permitir-leitura).
+	PastasLeitura []string `json:"pastasLeitura,omitempty"`
 }
 
 type SecoLimites struct {
@@ -126,8 +128,14 @@ func Seco(ctx context.Context, cwd string, opts Options) (SecoResult, error) {
 			argv = append(argv[:len(argv)-1], "--add-dir", dir, argv[len(argv)-1])
 		}
 	}
-	if baseHarnessName == "opencode" && len(permitidas) > 0 {
-		b, _ := json.Marshal(map[string]interface{}{"permission": map[string]interface{}{"external_directory": mapaPermissoes(permitidas)}})
+	leitura, err := config.PastasLeituraEfetivas(o.PastasLeitura)
+	if err != nil {
+		return SecoResult{}, err
+	}
+	if baseHarnessName == "opencode" {
+		root := map[string]interface{}{}
+		harness.AplicarPermissoesPastasOpenCode(root, work, permitidas, leitura)
+		b, _ := json.Marshal(root)
 		env["OPENCODE_CONFIG_CONTENT"] = string(b)
 	}
 	id, err := identidade.Para(o.Motor, env)
@@ -170,17 +178,9 @@ func Seco(ctx context.Context, cwd string, opts Options) (SecoResult, error) {
 		}
 	}
 	return SecoResult{Seco: true, Nome: o.Name, Instancia: o.Motor, Identidade: id, Base: baseHarnessName, Modelo: model, Esforco: effort,
-		Worktree: work, Branch: "agente/" + o.Name, Prompt: prompt, Argv: argv, Env: env, PastasPermitidas: permitidas,
+		Worktree: work, Branch: "agente/" + o.Name, Prompt: prompt, Argv: argv, Env: env, PastasPermitidas: permitidas, PastasLeitura: leitura,
 		Limites:    SecoLimites{MaxAgentes: o.MaxAgents, Tentativas: o.Attempts, CargaMaxima: o.MaxLoad, QuandoCargaAbaixo: o.WhenLoadBelow, CotaMax: o.QuotaMax, LimiteContexto: contexto.LimiteTokens, AcaoContexto: contexto.Acao},
 		TrocaConta: SecoTrocaConta{Decisao: decisao, Fonte: "cache local; sem consulta ativa", Instancia: o.Motor, Percentual: percentual, Cache: cache.Instancias}}, nil
-}
-
-func mapaPermissoes(dirs []string) map[string]string {
-	out := map[string]string{}
-	for _, d := range dirs {
-		out[strings.TrimRight(d, "/")+"/**"] = "allow"
-	}
-	return out
 }
 
 func secoComando(o Options) (string, string, string, map[string]string, []string) {

@@ -61,6 +61,8 @@ type SessionOptions struct {
 	SemMCP           bool     `json:"semMcp,omitempty"`
 	MCP              []string `json:"mcp,omitempty"`
 	PastasPermitidas []string `json:"pastasPermitidas,omitempty"`
+	// PastasLeitura libera pastas só para leitura (além das de sistema, liberadas por padrão).
+	PastasLeitura []string `json:"pastasLeitura,omitempty"`
 	// ClassificarRisco liga (true) ou desliga (false) o classificador de risco nesta sessão;
 	// ausente segue o padrão do servidor (desligado, salvo serve --classificar-risco).
 	ClassificarRisco *bool `json:"classificarRisco,omitempty"`
@@ -272,6 +274,8 @@ type RunParams struct {
 	// HarnessArgs vai intacto, na ordem, para o processo do harness.
 	HarnessArgs      []string `json:"harnessArgs,omitempty"`
 	PastasPermitidas []string `json:"pastasPermitidas,omitempty"`
+	// PastasLeitura libera pastas só para leitura (além das de sistema, liberadas por padrão).
+	PastasLeitura []string `json:"pastasLeitura,omitempty"`
 	// FilhosObrigatorios: o pai termina com código 4 ("filho falhou") se um filho falhar.
 	FilhosObrigatorios bool   `json:"filhosObrigatorios,omitempty"`
 	CWD                string `json:"cwd,omitempty"`

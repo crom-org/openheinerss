@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -41,5 +42,28 @@ func TestPastasPermitidasMesclaExpandeECano(t *testing.T) {
 		if !found {
 			t.Errorf("não encontrou %q em %v", want, got)
 		}
+	}
+}
+
+func TestPastasLeituraEfetivasInclui(t *testing.T) {
+	d := t.TempDir()
+	got, err := PastasLeituraEfetivas([]string{d})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var proc, extra, home bool
+	for _, p := range got {
+		switch {
+		case p == "/proc":
+			proc = true
+		case p == d:
+			extra = true
+		}
+		if h, _ := os.UserHomeDir(); h != "" && strings.HasPrefix(p, filepath.Join(h, ".openheinerss")) {
+			home = true
+		}
+	}
+	if !proc || !extra || home {
+		t.Fatalf("proc=%v extra=%v home=%v lista=%v", proc, extra, home, got)
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/crom-org/openheinerss/pkg/config"
 	"github.com/crom-org/openheinerss/pkg/harness"
 	"github.com/crom-org/openheinerss/pkg/harness/process"
 	"github.com/crom-org/openheinerss/pkg/mcp"
@@ -151,19 +152,22 @@ func (o *OpenCodeHarness) Start(ctx context.Context, cfg harness.SessionConfig) 
 		}
 		env = harness.SetEnv(env, "OPENCODE_CONFIG_CONTENT", string(data))
 	}
-	if dirs := harness.OpcaoLista(cfg.Options, "pastas_permitidas"); len(dirs) > 0 {
-		data, err := opencodeExternalDirectoryConfig(env, dirs)
-		if err != nil {
-			return fmt.Errorf("permissões de pasta: %w", err)
-		}
-		env = harness.SetEnv(env, "OPENCODE_CONFIG_CONTENT", string(data))
+	// Leitura de pastas do sistema liberada por padrão; escrita fora da worktree só nas permitidas.
+	leitura, err := config.PastasLeituraEfetivas(harness.OpcaoLista(cfg.Options, "pastas_leitura"))
+	if err != nil {
+		return fmt.Errorf("permissões de pasta: %w", err)
 	}
+	data, err := opencodeExternalDirectoryConfig(env, cfg.CWD, harness.OpcaoLista(cfg.Options, "pastas_permitidas"), leitura)
+	if err != nil {
+		return fmt.Errorf("permissões de pasta: %w", err)
+	}
+	env = harness.SetEnv(env, "OPENCODE_CONFIG_CONTENT", string(data))
 	o.env = env
 
 	return nil
 }
 
-func opencodeExternalDirectoryConfig(env []string, dirs []string) ([]byte, error) {
+func opencodeExternalDirectoryConfig(env []string, cwd string, escrita, leitura []string) ([]byte, error) {
 	var root map[string]interface{}
 	for _, item := range env {
 		if strings.HasPrefix(item, "OPENCODE_CONFIG_CONTENT=") {
@@ -179,19 +183,7 @@ func opencodeExternalDirectoryConfig(env []string, dirs []string) ([]byte, error
 	if root == nil {
 		root = map[string]interface{}{}
 	}
-	perm, _ := root["permission"].(map[string]interface{})
-	if perm == nil {
-		perm = map[string]interface{}{}
-		root["permission"] = perm
-	}
-	ext, _ := perm["external_directory"].(map[string]interface{})
-	if ext == nil {
-		ext = map[string]interface{}{}
-		perm["external_directory"] = ext
-	}
-	for _, d := range dirs {
-		ext[strings.TrimRight(d, "/")+"/**"] = "allow"
-	}
+	harness.AplicarPermissoesPastasOpenCode(root, cwd, escrita, leitura)
 	return json.Marshal(root)
 }
 

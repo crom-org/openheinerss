@@ -89,3 +89,38 @@ func arquivosConfigGlobais() []string {
 
 // separado para manter o parser YAML e o arquivo de resolução pequenos.
 func unmarshalYAML(b []byte, v interface{}) error { return yaml.Unmarshal(b, v) }
+
+// PastasLeituraSistema são as pastas do sistema liberadas por padrão, só para leitura, aos agentes
+// (/proc, /sys, /etc, /usr, /bin, /lib, /opt). ~/.openheinerss fica de fora de propósito: guarda
+// cache de cota e dados de conta; para lê-lo use --permitir-leitura explícito.
+var PastasLeituraSistema = []string{"/proc", "/sys", "/etc", "/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/opt"}
+
+// PastasLeituraEfetivas junta as pastas de sistema padrão com as pedidas por --permitir-leitura.
+// Cada padrão entra literal e, se for link simbólico (/bin → /usr/bin), também resolvido.
+func PastasLeituraEfetivas(extras []string) ([]string, error) {
+	seen := map[string]bool{}
+	var out []string
+	add := func(p string) {
+		if !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	for _, p := range PastasLeituraSistema {
+		if _, err := os.Stat(p); err != nil {
+			continue
+		}
+		add(p)
+		if real, err := filepath.EvalSymlinks(p); err == nil {
+			add(filepath.Clean(real))
+		}
+	}
+	for _, p := range extras {
+		n, err := NormalizarPasta(p)
+		if err != nil {
+			return nil, err
+		}
+		add(n)
+	}
+	return out, nil
+}

@@ -201,6 +201,9 @@ func (m *Manager) CreateSession(ctx context.Context, params protocol.SessionCrea
 		options["pastas_permitidas"] = permitidas
 		options["add_dirs"] = permitidas
 	}
+	if len(params.Options.PastasLeitura) > 0 {
+		options["pastas_leitura"] = append([]string(nil), params.Options.PastasLeitura...)
+	}
 	if params.Options.SemMCP {
 		options[harness.OptionSemMCP] = true
 	} else if len(params.Options.MCP) > 0 {

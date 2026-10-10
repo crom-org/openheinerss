@@ -55,9 +55,10 @@ func TestMCPEntregueAoOpenCodePorConfigContent(t *testing.T) {
 
 	// Quem chama já definiu OPENCODE_CONFIG_CONTENT: a ponte respeita.
 	o2 := NewOpenCodeHarness(harness.ModeCLI)
-	_ = o2.Start(context.Background(), harness.SessionConfig{CWD: cwd, Env: map[string]string{"OPENCODE_CONFIG_CONTENT": "{}"}})
+	_ = o2.Start(context.Background(), harness.SessionConfig{CWD: cwd, Env: map[string]string{"OPENCODE_CONFIG_CONTENT": `{"model":"x","mcp":{"meu":{}}}`}})
 	for _, kv := range o2.env {
-		if strings.HasPrefix(kv, "OPENCODE_CONFIG_CONTENT=") && kv != "OPENCODE_CONFIG_CONTENT={}" {
+		// só as regras de pasta são mescladas; o que quem chamou definiu (e o MCP do projeto) fica.
+		if strings.HasPrefix(kv, "OPENCODE_CONFIG_CONTENT=") && (!strings.Contains(kv, `"model":"x"`) || !strings.Contains(kv, `"meu"`) || strings.Contains(kv, `"fs"`)) {
 			t.Fatalf("sobrescreveu a config de quem chamou: %s", kv)
 		}
 	}

@@ -63,9 +63,11 @@ type Options struct {
 	// HarnessArgs vai intacto, na ordem, para o processo do harness (--arg/--harness-arg).
 	HarnessArgs      []string
 	PastasPermitidas []string
-	Load             func() (float64, error)
-	Sleep            func(time.Duration)
-	Now              func() time.Time
+	// PastasLeitura são pastas extras liberadas só para leitura (--permitir-leitura), além das de sistema.
+	PastasLeitura []string
+	Load          func() (float64, error)
+	Sleep         func(time.Duration)
+	Now           func() time.Time
 	// OnEvent recebe os eventos de orquestração (opcional; o CLI não usa).
 	OnEvent func(Evento)
 	// ViaServidor marca execuções lançadas por `serve`: o PID do meta.json é o do servidor.
@@ -371,7 +373,8 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			dirs = append(dirs, s.PastasPermitidas...)
 		}
 		if permitidas, e := config.PastasPermitidasEfetivas(repo, dirs); e == nil {
-			fmt.Printf("SECO: %s\n", dryRunCommand(o)+" [pastas permitidas: "+strings.Join(permitidas, ", ")+"]")
+			leitura, _ := config.PastasLeituraEfetivas(o.PastasLeitura)
+			fmt.Printf("SECO: %s\n", dryRunCommand(o)+" [pastas permitidas: "+strings.Join(permitidas, ", ")+"] [pastas só de leitura: "+strings.Join(leitura, ", ")+"]")
 		} else {
 			fmt.Printf("SECO: %s\n", dryRunCommand(o))
 		}
@@ -650,6 +653,9 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 			options["pastas_permitidas"] = permitidas
 			options["add_dirs"] = permitidas
 		}
+		if len(o.PastasLeitura) > 0 {
+			options["pastas_leitura"] = append([]string(nil), o.PastasLeitura...)
+		}
 		if resumeID != "" && resumeMotor == candidate {
 			options["codex_session_id"] = resumeID
 			options["claude_session_id"] = resumeID
@@ -760,7 +766,7 @@ func Run(ctx context.Context, cwd string, opts Options) (Result, error) {
 				}
 				if erroPastaExterna(line) {
 					pastaNegada = true
-					errMsg = "pasta fora da worktree não liberada: " + pastaNoErro(line) + "; use --permitir-pasta"
+					errMsg = "pasta fora da worktree não liberada: " + pastaNoErro(line) + "; use --permitir-pasta (escrita e leitura) ou --permitir-leitura (só leitura)"
 					write("ERRO: " + errMsg + "\n")
 				}
 				// Harness custom já detecta a cota pelo próprio regex e avisa com este erro.

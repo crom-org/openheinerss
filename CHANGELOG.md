@@ -3,6 +3,15 @@
 Todas as mudanças relevantes do Openheinerss desde a v1.0.0. O formato segue o
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 
+## Não publicado
+
+- Leitura de pastas do sistema (`/proc`, `/sys`, `/etc`, `/usr`, `/bin`, `/sbin`, `/lib`, `/lib64`, `/opt`) liberada por
+  padrão, só para leitura, nos agentes opencode (antes abortavam com "pasta fora da worktree não liberada: /proc/*").
+  No opencode a escrita fora da worktree passa a ser negada por `permission.edit` e só `--permitir-pasta` a reabre.
+- Adiciona `--permitir-leitura <dir>` (`--allow-read-dir`; RPC `pastasLeitura`) em `rodar` e `run` para liberar mais
+  pastas só para leitura (ex.: `~/.openheinerss`, que não é liberada por padrão). `rodar --seco` mostra as pastas de
+  leitura. O erro de pasta não liberada cita `--permitir-pasta` e `--permitir-leitura`.
+
 ## [1.11.0] — 2026-10-10
 
 - Adiciona `openheinerss harness versoes [harness] [--json]` e a RPC `harness.versoes`: por base (claude-code, codex,
