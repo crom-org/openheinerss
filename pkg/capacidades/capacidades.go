@@ -197,6 +197,13 @@ func Todas() []Capacidades {
 // Linhas formata a matriz para o terminal.
 func Linhas(c Capacidades) []string {
 	linhas := []string{fmt.Sprintf("%s (base %s, conferido com %s)", c.Harness, c.Base, c.ConferidoCom)}
+	if c.Instalada != "" && c.Instalada != c.ConferidoCom && !strings.HasSuffix(c.ConferidoCom, " "+c.Instalada) {
+		aviso := "  CLI instalado: " + c.Instalada + " (as células foram conferidas com " + c.ConferidoCom + ")"
+		if c.AjudaMudou {
+			aviso += "; a ajuda do CLI mudou na última atualização: reconfira"
+		}
+		linhas = append(linhas, aviso)
+	}
 	if c.ContaDir != "" {
 		linhas = append(linhas, "  conta: "+c.ContaDir)
 	}
