@@ -2,6 +2,7 @@
 
 ## Não publicado
 
+- `harness_versions(harness=None)` (`harness.versoes`) e `update_harness(harness, seco=…, esperar=…, para=…, simular_falha_teste="versao"|"login")` (`harness.atualizar`; devolve `diagnostico`/`recomendacao`, sem voltar sozinho) e `revert_harness(harness, versao=None)` (`harness.voltar`); `subscribe_events` também recebe `harness.atualizado`.
 - `send_message(agente, texto)` / `sendMessage` (`rodar.mensagem`): entrega um recado ao agente vivo; o evento `orq.mensagem` passa a ser repassado.
 
 ## 1.7.0 — 2026-10-09

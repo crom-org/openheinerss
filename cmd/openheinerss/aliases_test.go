@@ -85,10 +85,10 @@ func TestAliasesDeFlagsCompartilhamVariavel(t *testing.T) {
 		{"rodar regras", newRodarCmd, "regras", "rules", "regras.md"},
 		{"rodar sem regras", newRodarCmd, "sem-regras", "no-rules", "true"},
 		{"rodar chaves", newRodarCmd, "arquivo-chaves", "keys-file", "chaves.env"},
-		{"harness test todos", func() *cobra.Command { return newHarnessCmd().Commands()[2] }, "todos", "all", "true"},
-		{"harness test pular", func() *cobra.Command { return newHarnessCmd().Commands()[2] }, "pular", "skip", "codex"},
-		{"harness test retomar", func() *cobra.Command { return newHarnessCmd().Commands()[2] }, "retomar", "resume", "true"},
-		{"harness test modo", func() *cobra.Command { return newHarnessCmd().Commands()[2] }, "modo", "mode", "sdk"},
+		{"harness test todos", harnessTestCmd, "todos", "all", "true"},
+		{"harness test pular", harnessTestCmd, "pular", "skip", "codex"},
+		{"harness test retomar", harnessTestCmd, "retomar", "resume", "true"},
+		{"harness test modo", harnessTestCmd, "modo", "mode", "sdk"},
 	}
 
 	for _, tc := range tests {
@@ -107,4 +107,14 @@ func TestAliasesDeFlagsCompartilhamVariavel(t *testing.T) {
 			}
 		})
 	}
+}
+
+// harnessTestCmd acha o subcomando "test" (o cobra ordena os subcomandos por nome).
+func harnessTestCmd() *cobra.Command {
+	for _, c := range newHarnessCmd().Commands() {
+		if c.Name() == "test" {
+			return c
+		}
+	}
+	return nil
 }

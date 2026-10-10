@@ -253,6 +253,26 @@ class Agent:
         """Matriz de capacidades (instruções, skills, MCP, retomada, permissões); sem harness, as bases."""
         return self._request("harness.capacidades", {"harness": harness} if harness else {})
 
+    def harness_versions(self, harness: Optional[str] = None) -> Dict[str, Any]:
+        """Versão instalada, método de instalação e última versão oficial de cada base ({"harnesses": [...]})."""
+        return self._request("harness.versoes", {"harness": harness} if harness else {})
+
+    def update_harness(self, harness: str, seco: bool = False, esperar: bool = False, espera_seg: Optional[int] = None,
+                       para: Optional[str] = None, forcar: bool = False,
+                       simular_falha_teste: Optional[str] = None) -> Dict[str, Any]:
+        """Atualiza um harness base e testa; se o teste falhar, devolve diagnostico/recomendacao sem voltar.
+
+        A resposta chega ao fim (seco=True só dá o plano). simular_falha_teste: "versao" ou "login"."""
+        params: Dict[str, Any] = {"harness": harness, "seco": seco, "esperar": esperar, "esperaSeg": espera_seg,
+                                  "para": para, "forcar": forcar, "simularFalhaTeste": simular_falha_teste}
+        return self._request("harness.atualizar", {k: v for k, v in params.items() if v})
+
+    def revert_harness(self, harness: str, versao: Optional[str] = None, seco: bool = False, esperar: bool = False,
+                       espera_seg: Optional[int] = None) -> Dict[str, Any]:
+        """Volta explícita (harness.voltar) para a versão anterior guardada ou para `versao`; testa e informa."""
+        params: Dict[str, Any] = {"harness": harness, "versao": versao, "seco": seco, "esperar": esperar, "esperaSeg": espera_seg}
+        return self._request("harness.voltar", {k: v for k, v in params.items() if v})
+
     def identidade(self, instancia: str) -> Dict[str, Any]:
         return self._request("instancia.identidade", {"instancia": instancia})
 
@@ -267,7 +287,7 @@ class Agent:
 
     def subscribe_events(self, callback: Optional[Callable[[Dict[str, Any]], None]] = None, **filter: str) -> None:
         if callback:
-            for name in ("orq.inicio", "orq.progresso", "orq.fim", "orq.erro", "orq.precisa_decisao", "orq.filhos_orfaos", "orq.mensagem", "limites.atualizado"):
+            for name in ("orq.inicio", "orq.progresso", "orq.fim", "orq.erro", "orq.precisa_decisao", "orq.filhos_orfaos", "orq.mensagem", "harness.atualizado", "limites.atualizado"):
                 self.callbacks[name] = callback
         self._request("eventos.assinar", filter)
 
@@ -277,6 +297,8 @@ class Agent:
     confirmCommand = confirm_command
     listRuns = list_runs
     sendMessage = send_message
+    harnessVersions = harness_versions
+    updateHarness = update_harness
     dryRun = dry_run
     stopRun = stop_run
     decideRun = decide_run

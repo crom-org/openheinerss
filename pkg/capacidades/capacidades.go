@@ -36,6 +36,10 @@ type Capacidades struct {
 	ContaDir string `json:"contaDir,omitempty"`
 	// ConferidoCom diz com qual versão do CLI as células foram conferidas.
 	ConferidoCom string `json:"conferidoCom"`
+	// Instalada é a versão do CLI vista na última `harness atualizar`/`harness versoes`; AjudaMudou
+	// avisa que a ajuda do CLI mudou nessa atualização e as células merecem nova conferência.
+	Instalada  string `json:"instalada,omitempty"`
+	AjudaMudou bool   `json:"ajudaMudou,omitempty"`
 	// Instrucoes lista os arquivos de instrução que o CLI lê sozinho.
 	Instrucoes []Item `json:"instrucoes"`
 	// ImportaArquivo: o arquivo de instrução aceita incluir outro (@arquivo).
@@ -161,6 +165,9 @@ func Para(nome string) (Capacidades, error) {
 		return c, nil
 	}
 	c.ConferidoCom = f.versao
+	if e, ok := DoCache(base); ok {
+		c.Instalada, c.AjudaMudou = e.Versao, e.AjudaMudou
+	}
 	c.Instrucoes = append([]Item(nil), f.instrucoes...)
 	c.ImportaArquivo, c.Skills, c.AceitaSkills = f.importa, append([]Item(nil), f.skills...), f.aceitaSkills
 	c.MCP, c.Retomar, c.Permissoes = f.mcp, f.retomar, f.permissoes
@@ -190,6 +197,13 @@ func Todas() []Capacidades {
 // Linhas formata a matriz para o terminal.
 func Linhas(c Capacidades) []string {
 	linhas := []string{fmt.Sprintf("%s (base %s, conferido com %s)", c.Harness, c.Base, c.ConferidoCom)}
+	if c.Instalada != "" && c.Instalada != c.ConferidoCom && !strings.HasSuffix(c.ConferidoCom, " "+c.Instalada) {
+		aviso := "  CLI instalado: " + c.Instalada + " (as células foram conferidas com " + c.ConferidoCom + ")"
+		if c.AjudaMudou {
+			aviso += "; a ajuda do CLI mudou na última atualização: reconfira"
+		}
+		linhas = append(linhas, aviso)
+	}
 	if c.ContaDir != "" {
 		linhas = append(linhas, "  conta: "+c.ContaDir)
 	}

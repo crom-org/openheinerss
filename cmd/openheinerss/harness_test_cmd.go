@@ -10,6 +10,7 @@ import (
 
 	"github.com/crom-org/openheinerss/pkg/harness"
 	"github.com/crom-org/openheinerss/pkg/protocol"
+	"github.com/crom-org/openheinerss/pkg/versoes"
 	"github.com/spf13/cobra"
 )
 
@@ -108,84 +109,8 @@ func runHarnessTodos(cmd *cobra.Command, prompt string, jsonOutput bool, skip st
 }
 
 func runHarnessTest(parent context.Context, tc harnessTestCase, prompt string, timeout time.Duration) harnessTestResult {
-	started := time.Now()
-	result := harnessTestResult{Nome: tc.Name, Base: tc.Base, Modo: string(tc.Mode)}
-	h, err := harness.Create(tc.Name, tc.Mode)
-	if err != nil {
-		result.Resultado, result.Motivo = "falha", err.Error()
-		result.TempoMS = time.Since(started).Milliseconds()
-		return result
-	}
-	ctx, cancel := context.WithTimeout(parent, timeout)
-	defer cancel()
-	if prereq := h.ValidatePrerequisites(ctx); !prereq.Satisfied {
-		result.Resultado = "sem CLI"
-		result.Motivo = strings.Join(prereq.MissingItems, ", ")
-		if prereq.SuggestedFix != "" {
-			result.Motivo += ": " + prereq.SuggestedFix
-		}
-		result.TempoMS = time.Since(started).Milliseconds()
-		return result
-	}
-	cwd := "."
-	if err := h.Start(ctx, harness.SessionConfig{SessionID: "harness-test", CWD: cwd}); err != nil {
-		result.Resultado, result.Motivo = classifyHarnessFailure(err.Error())
-		result.TempoMS = time.Since(started).Milliseconds()
-		return result
-	}
-	defer stopHarnessWithLimit(h)
-	if err := h.SendPrompt(ctx, prompt, nil); err != nil {
-		result.Resultado, result.Motivo = classifyHarnessFailure(err.Error())
-		result.TempoMS = time.Since(started).Milliseconds()
-		return result
-	}
-	gotText, gotComplete := false, false
-	var failure string
-	for !gotComplete {
-		select {
-		case event := <-h.Events():
-			switch event.Type {
-			case harness.EventText:
-				if text, ok := event.Payload.(protocol.TextParams); ok && strings.TrimSpace(text.Delta) != "" {
-					gotText = true
-				}
-			case harness.EventUsage:
-				if usage, ok := event.Payload.(protocol.UsageParams); ok {
-					result.Tokens += usage.TotalTokens
-					if result.Tokens == 0 {
-						result.Tokens = usage.InputTokens + usage.OutputTokens
-					}
-				}
-			case harness.EventError:
-				if failure == "" {
-					if e, ok := event.Payload.(protocol.ErrorParams); ok {
-						failure = e.Message
-					} else {
-						failure = fmt.Sprint(event.Payload)
-					}
-				}
-			case harness.EventPermission:
-				if p, ok := event.Payload.(protocol.PermissionRequestParams); ok {
-					_ = h.RespondPermission(ctx, p.RequestID, false, "harness test não autoriza ferramentas")
-				}
-			case harness.EventComplete:
-				gotComplete = true
-			}
-		case <-ctx.Done():
-			result.Resultado, result.Motivo = "falha", "tempo esgotado"
-			result.TempoMS = time.Since(started).Milliseconds()
-			return result
-		}
-	}
-	if failure != "" {
-		result.Resultado, result.Motivo = classifyHarnessFailure(failure)
-	} else if !gotText {
-		result.Resultado, result.Motivo = "falha", "o motor terminou sem texto"
-	} else {
-		result.Resultado, result.Motivo = "OK", "texto e fim de sucesso confirmados"
-	}
-	result.TempoMS = time.Since(started).Milliseconds()
-	return result
+	r := versoes.TesteReal(parent, tc.Name, tc.Mode, prompt, timeout)
+	return harnessTestResult{Nome: tc.Name, Base: tc.Base, Modo: string(tc.Mode), Resultado: r.Resultado, TempoMS: r.TempoMS, Tokens: r.Tokens, Motivo: r.Motivo}
 }
 
 func stopHarnessWithLimit(h harness.Harness) {

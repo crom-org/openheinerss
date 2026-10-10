@@ -1433,6 +1433,7 @@ func newHarnessCmd() *cobra.Command {
 	test.Flags().StringVar(&modo, "modo", "cli", "Modo do teste individual (cli ou sdk)")
 	test.Flags().StringVar(&modo, "mode", "cli", "Alias em inglês de --modo")
 	root.AddCommand(test)
+	root.AddCommand(newHarnessVersoesCmd(), newHarnessAtualizarCmd(), newHarnessVoltarCmd())
 	return root
 }
 

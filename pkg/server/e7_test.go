@@ -120,3 +120,33 @@ func TestRunParamsRetomarAceitaBoolOuString(t *testing.T) {
 		t.Fatalf("%s", b)
 	}
 }
+
+func TestHarnessVersoesEAtualizarSecoPeloServidor(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir()) // sem nenhum CLI: tudo "ausente"/"sem_cli", sem rede
+	r := server.NewRouter(session.NewManager())
+	res := chamarRPC(r, protocol.MethodHarnessVersoes, protocol.HarnessVersoesParams{Harness: "codex"})
+	b, _ := json.Marshal(res.Result)
+	if res.Error != nil || !strings.Contains(string(b), `"harness":"codex"`) || !strings.Contains(string(b), `"estado":"ausente"`) {
+		t.Fatalf("versoes: %v %s", res.Error, b)
+	}
+	res = chamarRPC(r, protocol.MethodHarnessAtualizar, protocol.HarnessAtualizarParams{Harness: "codex", Seco: true})
+	b, _ = json.Marshal(res.Result)
+	if res.Error != nil || !strings.Contains(string(b), `"resultado":"sem_cli"`) {
+		t.Fatalf("atualizar: %v %s", res.Error, b)
+	}
+	res = chamarRPC(r, protocol.MethodHarnessVoltar, protocol.HarnessVoltarParams{Harness: "codex", Seco: true})
+	b, _ = json.Marshal(res.Result)
+	if res.Error != nil || !strings.Contains(string(b), `"acao":"voltar"`) || !strings.Contains(string(b), `"resultado":"sem_cli"`) {
+		t.Fatalf("voltar: %v %s", res.Error, b)
+	}
+	if res := chamarRPC(r, protocol.MethodHarnessAtualizar, protocol.HarnessAtualizarParams{Harness: "codex", SimularFalhaTeste: "x"}); res.Error == nil {
+		t.Fatal("simularFalhaTeste inválido deveria falhar")
+	}
+	if res := chamarRPC(r, protocol.MethodHarnessAtualizar, protocol.HarnessAtualizarParams{Harness: "nao-existe"}); res.Error == nil {
+		t.Fatal("harness desconhecido deveria falhar")
+	}
+	if res := chamarRPC(r, protocol.MethodHarnessVersoes, protocol.HarnessVersoesParams{Harness: "nao-existe"}); res.Error == nil {
+		t.Fatal("harness desconhecido deveria falhar")
+	}
+}

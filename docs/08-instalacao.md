@@ -36,6 +36,35 @@ ambiente e pasta, e o comando confere que a porta voltou a responder; `--sem-rei
 não é reiniciado (depende do processo pai). Em outros sistemas não há reinício automático. `--json` devolve o
 plano/resultado para a Central.
 
+## Atualizar os harnesses (claude, codex, opencode, aider, agy)
+
+```bash
+openheinerss harness versoes [--json]      # instalada, como foi instalada e a última oficial
+openheinerss harness atualizar aider --seco  # prévia
+openheinerss harness atualizar aider         # instala, testa e informa (diagnóstico + recomendação)
+openheinerss harness atualizar --todos --esperar
+openheinerss harness voltar aider            # volta explícita para a versão anterior guardada
+```
+
+`versoes` lê `<cli> --version`, descobre o gerenciador pelo caminho real do executável (npm global, `uv tool`,
+pipx, pip `--user`, brew ou o instalador/autoatualização do próprio CLI) e consulta a fonte oficial (npm, PyPI ou
+releases do GitHub); sem rede a última vira `desconhecida`, com o motivo. `atualizar` usa o **mesmo gerenciador**
+(`npm install -g <pkg>@<versão>`, `uv tool install --force <pkg>`, `pipx install --force`, `pip install --user`,
+`<cli> update|upgrade`), guarda a versão anterior e roda o `harness test` real com a instância grátis da base
+(nome com `gratis`/`free`; sem ela, `--version` + `--help`). **O openheinerss não volta sozinho.** Se o teste
+falhar, classifica a causa pela saída: *versão nova* (flag/formato mudou, crash, erro de parse) → recomendação
+`voltar`; *externa* (login vencido, rede, cota/429) → `não é a versão`; em dúvida roda o mesmo teste na versão
+anterior para comparar. A saída do teste (sem segredos), o diagnóstico, a recomendação e a versão anterior
+guardada ficam no resultado e no evento. Quem decide voltar (orquestrador/central) chama `harness voltar <nome>
+[versão]` (RPC `harness.voltar`), que reinstala, confirma com `--version`, testa e informa. Se algum
+`rodar`/`serve`/sessão usa o harness, recusa e lista (código 2) ou espera com `--esperar`; vale também para
+`voltar`. `--para <versão>` fixa uma versão; `--simular-falha-teste versao|login` força a falha do teste para
+exercitar as duas classificações. Saída: `0` ok/já na última/prévia, `1` erro, `2` em uso, `3` teste falhou pela
+versão nova (recomendado voltar), `4` teste falhou por login/rede/cota (não é a versão), `5` causa
+indeterminada. Cada atualização ou volta real vira o evento `harness.atualizado` (RPC), uma linha em
+`<config do usuário>/openheinerss/harness-atualizacoes.jsonl` e, se a ajuda do CLI mudou, o cache de
+`capacidades` é recalculado (`capacidades` passa a mostrar `instalada` e `ajudaMudou`).
+
 ## Go
 
 Quem já usa o toolchain Go pode instalar a versão publicada do módulo:
