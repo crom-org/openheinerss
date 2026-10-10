@@ -28,6 +28,31 @@ export interface HarnessCapabilities {
   harness: string; base: string; cadeia: string[]; contaDir?: string; conferidoCom: string;
   instrucoes: CapabilityItem[]; importaArquivo: CapabilityItem; skills: CapabilityItem[]; aceitaSkills: CapabilityItem;
   mcp: CapabilityItem; retomar: CapabilityItem; permissoes: CapabilityItem;
+  /** Versão do CLI vista na última `harness atualizar`; ajudaMudou pede reconferir as células. */
+  instalada?: string; ajudaMudou?: boolean;
+}
+export interface HarnessVersion {
+  harness: string; cli: string; caminho?: string; instalada?: string;
+  /** npm | uv | pipx | pip | brew | script | binario | nenhum */
+  instalacao: string; pacote?: string;
+  /** Última versão pela fonte oficial; "desconhecida" sem rede (veja `motivo`). */
+  disponivel: string; fonte?: string;
+  estado: "atualizada" | "desatualizada" | "desconhecida" | "ausente"; motivo?: string;
+  comando?: string; volta?: "automatica" | "manual";
+}
+export interface HarnessUpdateOptions {
+  seco?: boolean; esperar?: boolean; esperaSeg?: number; para?: string; forcar?: boolean; semVolta?: boolean;
+  /** Trata o teste pós-instalação como falho (exercita a volta automática). */
+  simularFalhaTeste?: boolean;
+}
+export interface HarnessUpdateResult {
+  harness: string; cli?: string; instalacao?: string; pacote?: string; antes: string; disponivel?: string; alvo?: string;
+  depois?: string; tentada?: string;
+  /** seco | ja_na_ultima | atualizado | voltou | volta_falhou | falhou | ocupado | sem_cli | desconhecida */
+  resultado: string; motivo?: string; seco: boolean; comando?: string; volta?: string; comandoVolta?: string; passos: string[];
+  ocupado?: { pid: number; tipo: "rodar" | "serve" | "processo"; comando: string }[];
+  teste?: { modo: "real" | "fumaca"; instancia?: string; ok: boolean; detalhe?: string; tempo_ms: number; simulado?: boolean };
+  ajudaMudou?: boolean; em: string;
 }
 export interface Identity { instancia: string; base: string; contaId: string; contaIdFonte?: string; configFonte?: string; contaDir: string; }
 export interface Conta { instancia: string; base: string; contaId: string; contaIdFonte?: string; contaDir: string; temLogin: boolean; }
@@ -80,7 +105,7 @@ export type CommandRelay = "literal" | "traduzido" | "sem_equivalente";
 /** Comando nativo do harness (harness.comandos), já mesclado com a anotação do usuário. */
 export interface HarnessCommand { nome: string; descricao: string; repasse: CommandRelay; detalhe?: string; origem: "embutido" | "descoberto" | "usuario"; anotacao?: string; confirmado: boolean; }
 export interface HarnessCommandList { harness: string; base: string; cadeia: string[]; desconhecido: CommandRelay; arquivo: string; comandos: HarnessCommand[]; }
-export type OrchestrationEventName = "orq.inicio" | "orq.progresso" | "orq.fim" | "orq.erro" | "orq.precisa_decisao" | "orq.filhos_orfaos" | "orq.mensagem" | "limites.atualizado";
+export type OrchestrationEventName = "orq.inicio" | "orq.progresso" | "orq.fim" | "orq.erro" | "orq.precisa_decisao" | "orq.filhos_orfaos" | "orq.mensagem" | "harness.atualizado" | "limites.atualizado";
 export type OrchestrationEvent = { method: OrchestrationEventName; params: Record<string, unknown> & { geracao: string }; };
 export type OrchestrationCallback = (params: Record<string, unknown>) => void;
 
@@ -138,4 +163,5 @@ export interface OpenheinerssEvents {
   "orq.precisa_decisao": OrchestrationCallback;
   "orq.filhos_orfaos": OrchestrationCallback;
   "orq.mensagem": OrchestrationCallback;
+  "harness.atualizado": OrchestrationCallback;
 }

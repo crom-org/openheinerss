@@ -253,6 +253,18 @@ class Agent:
         """Matriz de capacidades (instruções, skills, MCP, retomada, permissões); sem harness, as bases."""
         return self._request("harness.capacidades", {"harness": harness} if harness else {})
 
+    def harness_versions(self, harness: Optional[str] = None) -> Dict[str, Any]:
+        """Versão instalada, método de instalação e última versão oficial de cada base ({"harnesses": [...]})."""
+        return self._request("harness.versoes", {"harness": harness} if harness else {})
+
+    def update_harness(self, harness: str, seco: bool = False, esperar: bool = False, espera_seg: Optional[int] = None,
+                       para: Optional[str] = None, forcar: bool = False, sem_volta: bool = False,
+                       simular_falha_teste: bool = False) -> Dict[str, Any]:
+        """Atualiza um harness base, testa e volta sozinho se falhar; a resposta chega ao fim (seco=True só dá o plano)."""
+        params: Dict[str, Any] = {"harness": harness, "seco": seco, "esperar": esperar, "esperaSeg": espera_seg,
+                                  "para": para, "forcar": forcar, "semVolta": sem_volta, "simularFalhaTeste": simular_falha_teste}
+        return self._request("harness.atualizar", {k: v for k, v in params.items() if v})
+
     def identidade(self, instancia: str) -> Dict[str, Any]:
         return self._request("instancia.identidade", {"instancia": instancia})
 
@@ -267,7 +279,7 @@ class Agent:
 
     def subscribe_events(self, callback: Optional[Callable[[Dict[str, Any]], None]] = None, **filter: str) -> None:
         if callback:
-            for name in ("orq.inicio", "orq.progresso", "orq.fim", "orq.erro", "orq.precisa_decisao", "orq.filhos_orfaos", "orq.mensagem", "limites.atualizado"):
+            for name in ("orq.inicio", "orq.progresso", "orq.fim", "orq.erro", "orq.precisa_decisao", "orq.filhos_orfaos", "orq.mensagem", "harness.atualizado", "limites.atualizado"):
                 self.callbacks[name] = callback
         self._request("eventos.assinar", filter)
 
@@ -277,6 +289,8 @@ class Agent:
     confirmCommand = confirm_command
     listRuns = list_runs
     sendMessage = send_message
+    harnessVersions = harness_versions
+    updateHarness = update_harness
     dryRun = dry_run
     stopRun = stop_run
     decideRun = decide_run

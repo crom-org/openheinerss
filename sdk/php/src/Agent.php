@@ -223,6 +223,13 @@ class Agent
     public function getLimits(bool $atualizar = false, bool $forcar = false): array { return $this->request('limites.obter', ($atualizar || $forcar) ? ['atualizar' => true, 'forcar' => $forcar] : []); }
     /** Matriz de capacidades (instruções, skills, MCP, retomada, permissões); sem harness, as bases. */
     public function capacidades(?string $harness = null): array { return $this->request('harness.capacidades', $harness ? ['harness' => $harness] : []); }
+    /** Versão instalada, método de instalação e última versão oficial de cada base (harness.versoes). */
+    public function harnessVersions(?string $harness = null): array { return $this->request('harness.versoes', $harness ? ['harness' => $harness] : []); }
+    /**
+     * Atualiza um harness base, testa e volta sozinho se falhar (harness.atualizar). Opções: seco, esperar,
+     * esperaSeg, para, forcar, semVolta, simularFalhaTeste. A resposta chega ao fim da operação.
+     */
+    public function updateHarness(string $harness, array $options = []): array { return $this->request('harness.atualizar', array_merge($options, ['harness' => $harness])); }
     public function identidade(string $instancia): array { return $this->request('instancia.identidade', ['instancia' => $instancia]); }
     public function listarContas(?string $cwd = null): array { return $this->request('contas.listar', array_filter(['cwd' => $cwd])); }
     public function adicionarConta(string $harness, string $nome, ?string $cwd = null, bool $iniciarLogin = false): array { return $this->request('contas.adicionar', array_filter(['harness' => $harness, 'nome' => $nome, 'cwd' => $cwd, 'iniciarLogin' => $iniciarLogin])); }

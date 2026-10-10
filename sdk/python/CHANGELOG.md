@@ -2,6 +2,7 @@
 
 ## Não publicado
 
+- `harness_versions(harness=None)` (`harness.versoes`) e `update_harness(harness, seco=…, esperar=…, para=…)` (`harness.atualizar`); `subscribe_events` também recebe `harness.atualizado`.
 - `send_message(agente, texto)` / `sendMessage` (`rodar.mensagem`): entrega um recado ao agente vivo; o evento `orq.mensagem` passa a ser repassado.
 
 ## 1.7.0 — 2026-10-09

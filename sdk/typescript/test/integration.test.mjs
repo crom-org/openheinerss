@@ -31,6 +31,13 @@ test("SDK TypeScript conversa com o servidor real", async () => {
     assert.equal(cap.retomar.estado, "sim");
     assert.ok(cap.instrucoes.some((i) => i.nome === "AGENTS.md" && i.estado === "sim"));
     assert.equal((await client.capacidades()).harnesses.length, 5);
+    const versoes = (await client.harnessVersions("codex")).harnesses;
+    assert.equal(versoes.length, 1);
+    assert.equal(versoes[0].harness, "codex");
+    const plano = await client.updateHarness("codex", { seco: true });
+    assert.equal(plano.seco, true);
+    assert.ok(["seco", "ja_na_ultima", "sem_cli", "desconhecida", "ocupado"].includes(plano.resultado));
+    await assert.rejects(client.updateHarness("nao-existe", { seco: true }));
     const identidade = await client.identidade("mock");
     assert.equal(identidade.instancia, "mock");
     const run = await client.run({ nome: "teste-ts", motor: "mock", texto: "responda OK", cwd: await repoTemporario(), projeto: "teste-ts" });

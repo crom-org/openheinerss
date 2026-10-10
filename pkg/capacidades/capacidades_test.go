@@ -3,6 +3,7 @@ package capacidades
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/crom-org/openheinerss/pkg/harness"
 	_ "github.com/crom-org/openheinerss/pkg/harness/agy"
@@ -103,5 +104,23 @@ func TestLinhasMostraEstadoEFonte(t *testing.T) {
 		if !strings.Contains(txt, parte) {
 			t.Errorf("faltou %q em:\n%s", parte, txt)
 		}
+	}
+}
+
+func TestCacheDeAjudaMarcaMudanca(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	agora := time.Now()
+	if mudou, err := RegistrarAjuda("codex", "1.0.0", "ajuda A", agora); err != nil || mudou {
+		t.Fatalf("primeira vez não é mudança: %v %v", mudou, err)
+	}
+	if mudou, _ := RegistrarAjuda("codex", "1.0.0", "ajuda A", agora); mudou {
+		t.Fatal("mesma ajuda não mudou")
+	}
+	if mudou, _ := RegistrarAjuda("codex", "1.1.0", "ajuda B", agora); !mudou {
+		t.Fatal("ajuda diferente deveria marcar mudança")
+	}
+	c, err := Para("codex")
+	if err != nil || c.Instalada != "1.1.0" || !c.AjudaMudou {
+		t.Fatalf("capacidades: %+v %v", c, err)
 	}
 }

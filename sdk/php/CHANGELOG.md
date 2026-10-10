@@ -2,6 +2,7 @@
 
 ## Não publicado
 
+- `harnessVersions(?string $harness)` (`harness.versoes`) e `updateHarness(string $harness, array $options)` (`harness.atualizar`).
 - `sendMessage($agente, $texto)` (`rodar.mensagem`): entrega um recado ao agente vivo; o evento `orq.mensagem` passa a ser repassado.
 
 ## 1.7.0 — 2026-10-09

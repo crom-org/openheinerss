@@ -352,6 +352,16 @@ Entrega `texto` ao agente **vivo** lançado por `rodar` (CLI ou `rodar.iniciar`)
 {"jsonrpc":"2.0","id":5,"result":{"id":"msg-20261009T111826.346-faed0f54","agente":"etapa-1","projeto":"exemplo","status":"entregue","recibo":"entregue","modo":"vivo","em":"2026-10-09T08:18:26-03:00"}}
 ```
 
+### `harness.versoes`
+`{"harness"?}` (base ou instância; sem ele, as cinco bases). Responde `{"harnesses":[…]}`; cada item traz `harness`, `cli`, `caminho` (real, sem symlinks), `instalada` (`<cli> --version`), `instalacao` (`npm`, `uv`, `pipx`, `pip`, `brew`, `script`, `binario` ou `nenhum`, detectada pelo caminho real), `pacote`, `disponivel` (última pela fonte oficial: npm, PyPI ou releases do GitHub; `"desconhecida"` sem rede, com `motivo`), `fonte`, `estado` (`atualizada`, `desatualizada`, `desconhecida`, `ausente`), `comando` (o que `harness.atualizar` executaria) e `volta` (`automatica` ou `manual`). Não altera nada.
+
+### `harness.atualizar`
+`{"harness", "seco"?, "esperar"?, "esperaSeg"?, "para"?, "forcar"?, "semVolta"?, "simularFalhaTeste"?}`. Prévia (`seco`), recusa quando há `rodar`/`serve`/sessão usando o harness (`resultado: "ocupado"`, com `ocupado: [{pid, tipo, comando}]`; `esperar` aguarda até `esperaSeg`), instala pelo mesmo gerenciador que instalou guardando a versão anterior, roda o `harness test` real com a instância grátis da base (sem ela, `--version` + `--help`) e, se o teste falhar, **volta sozinho** à versão anterior e confirma com `--version`. A resposta só chega ao fim do fluxo (pode levar minutos; use outra conexão para eventos). `resultado`: `seco`, `ja_na_ultima`, `atualizado`, `voltou`, `volta_falhou`, `falhou`, `ocupado`, `sem_cli`, `desconhecida`; traz `antes`, `disponivel`, `depois`, `tentada` (versão que chegou a ser instalada antes da volta), `passos`, `teste` e `ajudaMudou` (a ajuda do CLI mudou e o cache de `capacidades` foi recalculado). Além do evento `harness.atualizado`, cada atualização real é gravada em `<config do usuário>/openheinerss/harness-atualizacoes.jsonl` e, com `eventos_log`/`OPENHEINERSS_EVENTOS_LOG`, numa linha `[harness] ATUALIZADO <base> <antes> → <depois> resultado <r>`.
+
+```json
+{"jsonrpc":"2.0","id":6,"method":"harness.atualizar","params":{"harness":"aider","seco":true}}
+```
+
 ### `rodar.decidir`
 Responde um `orq.precisa_decisao`. `resposta`: `"permitir"` ou `"negar"` (aceita também `sim`/`não`, `allow`/`deny`); `mensagem` é opcional. O agente fica parado até a resposta (ou até `rodar.parar`). `run` (id da execução) e `geracao` são opcionais; se enviados e não baterem com os da decisão/servidor, a resposta é recusada (`-32602`) e a decisão continua pendente. `rodar.listar` mostra as decisões ainda pendentes para quem conectar depois. Rodando pelo CLI (sem servidor) as permissões são aprovadas automaticamente, como antes.
 
@@ -415,6 +425,7 @@ Notificações sem `id`. Os eventos de execuções lançadas por `rodar.iniciar`
 | `orq.fim` | missão terminou (também após erro ou parada) | `geracao`, `agente`, `projeto`, `codigo`, `tentativas`, `duracao` (segundos), `relatorio` (caminho do `RELATORIO-AGENTE.md`, se existir), `motivo` (`"negado"` quando uma negação encerrou; `"filho falhou"` com `filhosObrigatorios`; `"filhos órfãos"` quando o pai terminou com filhos vivos; ausente nos demais), `filhos` (lista dos filhos que explicam o motivo) |
 | `orq.filhos_orfaos` | o pai terminou (FIM) com agentes filhos ainda rodando; vem antes do `orq.fim` | `geracao`, `agente`, `projeto`, `filhos` (nomes), `mensagem` |
 | `orq.mensagem` | uma mensagem de `rodar.mensagem` chegou ao runner (`recebida`), foi entregue (`entregue`, com `modo`) ou o agente terminou antes (`nao_entregue`) | `geracao`, `agente`, `projeto`, `mensagem` (id), `estado`, `modo` |
+| `harness.atualizado` | terminou um `harness.atualizar` real (não a prévia) | o próprio resultado: `harness`, `antes`, `depois`, `tentada`, `resultado`, `teste`, `ajudaMudou`, `em` |
 
 Ordem garantida por agente: `orq.inicio` → (`orq.progresso` | `orq.precisa_decisao` | `orq.erro` | `orq.mensagem`)* → `orq.filhos_orfaos`? → `orq.fim`; nenhum progresso depois do fim. Com reservas ou novas tentativas há um `orq.inicio` por tentativa e um só `orq.fim`.
 

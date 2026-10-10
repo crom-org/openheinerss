@@ -258,8 +258,10 @@ Usage:
 
 Available Commands:
   add         Valida e copia um arquivo de harness para o projeto ou global
+  atualizar   Atualiza um harness base pelo mesmo gerenciador que o instalou, testa e volta sozinho se falhar
   list        Lista harnesses embutidos e custom
   test        Executa um prompt curto e mostra eventos
+  versoes     Mostra a versão instalada de cada harness base, como foi instalada e a última publicada
 
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
@@ -862,6 +864,42 @@ Global Flags:
 
 ```
 
+## `openheinerss harness atualizar --help`
+
+```text
+Fluxo: prévia (--seco) → recusa/espera se algum 'rodar' ou 'serve' usa o harness → instala pelo
+mesmo gerenciador que instalou (npm i -g, uv tool, pipx, pip --user, autoatualização do CLI) guardando
+a versão anterior → roda 'harness test' REAL com a instância grátis da base (sem ela, --version + --help)
+→ se o teste falhar, volta à versão anterior e confirma. Registra o evento harness.atualizado.
+
+Códigos de saída: 0 ok/já na última/prévia · 1 erro · 2 em uso (sem --esperar) · 3 testou, falhou e
+VOLTOU · 4 testou, falhou e a volta não foi confirmada.
+
+Usage:
+  openheinerss harness atualizar <harness>|--todos [flags]
+
+Aliases:
+  atualizar, update, upgrade
+
+Flags:
+      --espera duration       Quanto esperar com --esperar (default 15m0s)
+      --esperar               Espera os agentes/sessões que usam o harness terminarem em vez de recusar
+      --forcar                Reinstala mesmo já estando na versão alvo
+      --json                  Saída em JSON
+      --para string           Instala esta versão em vez da última (também serve para voltar de propósito)
+      --seco                  Mostra o plano sem alterar nada
+      --sem-volta             Aceita atualizar métodos sem volta automática (brew, instalador sem versões guardadas)
+      --simular-falha-teste   Trata o teste pós-instalação como falho (exercita a volta automática)
+      --timeout duration      Tempo máximo do harness test (default 3m0s)
+      --todos                 Atualiza todas as bases instaladas, uma por vez
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
+
+```
+
 ## `openheinerss harness list --help`
 
 ```text
@@ -904,6 +942,30 @@ Flags:
       --skip string         Alias em inglês de --pular
       --timeout duration    Tempo máximo de cada teste (default 2m0s)
       --todos               Testa todos os harnesses e instâncias em sequência
+
+Global Flags:
+      --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual
+      --configuracao string   Alias de --config
+      --projeto string        Pasta do projeto cuja configuração deve ser lida (em vez da pasta atual)
+
+```
+
+## `openheinerss harness versoes --help`
+
+```text
+Para cada base (claude-code, codex, opencode, aider, agy): a versão de '<cli> --version',
+o método de instalação (npm, uv, pipx, pip, brew, script, binario — pelo caminho real do executável)
+e a última versão pela fonte oficial (npm, PyPI ou releases do GitHub). Sem rede a última vira
+"desconhecida", com o motivo. Não altera nada.
+
+Usage:
+  openheinerss harness versoes [harness] [flags]
+
+Aliases:
+  versoes, versions, versões
+
+Flags:
+      --json   Saída em JSON
 
 Global Flags:
       --config string         Pasta de configuração (harnesses/ e motores.yaml, ou um projeto com .openheinerss/); vence OPENHEINERSS_CONFIG e a busca pela pasta atual

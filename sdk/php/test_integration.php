@@ -35,6 +35,10 @@ if (!isset($agent->getLimits()['instancias'])) throw new RuntimeException('limit
 $capCodex = $agent->capacidades('codex');
 if (($capCodex['base'] ?? null) !== 'codex' || ($capCodex['retomar']['estado'] ?? null) !== 'sim') throw new RuntimeException('capacidades do codex ausentes');
 if (count($agent->capacidades()['harnesses'] ?? []) !== 5) throw new RuntimeException('capacidades das bases ausentes');
+$versoes = $agent->harnessVersions('codex')['harnesses'] ?? [];
+if (count($versoes) !== 1 || ($versoes[0]['harness'] ?? null) !== 'codex') throw new RuntimeException('harness.versoes ausente');
+$plano = $agent->updateHarness('codex', ['seco' => true]);
+if (($plano['seco'] ?? null) !== true || !in_array($plano['resultado'] ?? '', ['seco', 'ja_na_ultima', 'sem_cli', 'desconhecida', 'ocupado'], true)) throw new RuntimeException('harness.atualizar --seco inesperado');
 try {
     Openheinerss\Agent::session(['harness' => 'aider', 'retomar' => 'qualquer'], getenv('OPENHEINERSS_BIN') ?: 'openheinerss');
     throw new RuntimeException('retomar no aider deveria falhar');

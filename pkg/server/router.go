@@ -21,6 +21,7 @@ import (
 	"github.com/crom-org/openheinerss/pkg/orchestrator"
 	"github.com/crom-org/openheinerss/pkg/protocol"
 	"github.com/crom-org/openheinerss/pkg/session"
+	"github.com/crom-org/openheinerss/pkg/versoes"
 )
 
 func novaGeracao() string {
@@ -331,6 +332,48 @@ func (r *Router) HandleRequest(ctx context.Context, req protocol.Request) (respo
 		res, err := capacidades.Para(p.Harness)
 		if err != nil {
 			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, err.Error(), nil)
+		}
+		return protocol.NewResponse(req.ID, res)
+
+	case protocol.MethodHarnessVersoes:
+		var p protocol.HarnessVersoesParams
+		if len(req.Params) > 0 {
+			if err := json.Unmarshal(req.Params, &p); err != nil {
+				return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para harness.versoes", nil)
+			}
+		}
+		var bases []string
+		if p.Harness != "" {
+			b := versoes.BaseDe(p.Harness)
+			if b == "" {
+				return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "harness não é uma base nem instância de base conhecida: "+p.Harness, nil)
+			}
+			bases = []string{b}
+		}
+		return protocol.NewResponse(req.ID, map[string]interface{}{"harnesses": versoes.Padrao().Versoes(ctx, bases...)})
+
+	case protocol.MethodHarnessAtualizar:
+		var p protocol.HarnessAtualizarParams
+		if err := json.Unmarshal(req.Params, &p); err != nil || p.Harness == "" {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "Parâmetros inválidos para harness.atualizar: informe harness", nil)
+		}
+		b := versoes.BaseDe(p.Harness)
+		if b == "" {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, "harness não é uma base nem instância de base conhecida: "+p.Harness, nil)
+		}
+		res, err := versoes.Padrao().Atualizar(ctx, b, versoes.Opcoes{
+			Seco: p.Seco, Esperar: p.Esperar, Espera: time.Duration(p.EsperaSeg) * time.Second, Para: p.Para,
+			Forcar: p.Forcar, SemVolta: p.SemVolta, SimularFalhaTeste: p.SimularFalhaTeste,
+			EventLog: os.Getenv("OPENHEINERSS_EVENTOS_LOG"),
+		})
+		if err != nil {
+			return protocol.NewErrorResponse(req.ID, protocol.CodeInvalidParams, err.Error(), nil)
+		}
+		if !res.Seco {
+			switch res.Resultado {
+			case versoes.ResAtualizado, versoes.ResVoltou, versoes.ResVoltaFalhou, versoes.ResFalhou:
+				r.orq.emitir(protocol.EventHarnessAtualizado, "", "", res)
+			}
 		}
 		return protocol.NewResponse(req.ID, res)
 

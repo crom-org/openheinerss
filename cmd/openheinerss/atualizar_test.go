@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -320,5 +321,62 @@ func TestAtualizarForcarReinstalaMesmoNaMesmaVersao(t *testing.T) {
 	rel, err := executarAtualizar(opcoesAtualizar{Forcar: true, DeFonte: true, Destino: dest, Repo: repo}, env)
 	if err != nil || chamadas != 1 || !strings.HasPrefix(rel.Depois, "2.0.0") {
 		t.Fatalf("forçar: err=%v chamadas=%d relatório=%+v", err, chamadas, rel)
+	}
+}
+
+func TestMesmaVersaoFonteAceitaCommitAbreviadoEIgnoraSoArvoreSuja(t *testing.T) {
+	completo := "bc35abbaf4dadc7da8d072e6706085159ca55177"
+	if !mesmaVersaoFonte("v1.10.0 (commit "+completo+", data y)", "v1.10.0 (main local, commit "+completo+")") {
+		t.Fatal("commit completo igual deveria ser a última")
+	}
+	if !mesmaVersaoFonte("v1.10.0 (commit bc35abb, data y)", "v1.10.0 (main local, commit "+completo+")") {
+		t.Fatal("commit abreviado do binário antigo deveria casar com o completo")
+	}
+	if mesmaVersaoFonte("v1.10.0 (commit "+completo+", data y)", "v1.10.0-dirty (main local, commit "+completo+")") {
+		t.Fatal("árvore suja nunca é a última instalada")
+	}
+}
+
+func TestAtualizarSecoDeFonteDizJaNaUltimaComCommitCompleto(t *testing.T) {
+	pular(t)
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("sem git")
+	}
+	repo := t.TempDir()
+	os.MkdirAll(filepath.Join(repo, "cmd", "openheinerss"), 0o755)
+	os.WriteFile(filepath.Join(repo, "go.mod"), []byte("module github.com/crom-org/openheinerss\n"), 0o644)
+	git := func(args ...string) {
+		t.Helper()
+		c := exec.Command("git", append([]string{"-C", repo, "-c", "user.name=t", "-c", "user.email=t@t"}, args...)...)
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q")
+	git("add", ".")
+	git("commit", "-q", "-m", "x")
+	commit := gitSaida(repo, "rev-parse", "HEAD")
+	dest := filepath.Join(t.TempDir(), "openheinerss")
+	script := "#!/bin/sh\nif [ \"$1\" = version ]; then echo 'openheinerss dev (commit " + commit + ", data y)'; fi\n"
+	if err := os.WriteFile(dest, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	env := ambienteAtualizar{ProcRoot: t.TempDir(), GOOS: "linux", GOARCH: "amd64",
+		Compilar: func(_, _ string) error { t.Fatal("não deveria compilar"); return nil }}
+	rel, err := executarAtualizar(opcoesAtualizar{Seco: true, DeFonte: true, Destino: dest, Repo: repo}, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(rel.Passos, " "), "já está na última") {
+		t.Fatalf("plano: %+v", rel.Passos)
+	}
+	// Árvore suja (arquivo rastreado alterado): volta a propor compilar.
+	os.WriteFile(filepath.Join(repo, "go.mod"), []byte("module github.com/crom-org/openheinerss\n// x\n"), 0o644)
+	rel, err = executarAtualizar(opcoesAtualizar{Seco: true, DeFonte: true, Destino: dest, Repo: repo}, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(rel.Passos, " "), "compilar") {
+		t.Fatalf("árvore suja deveria propor compilar: %+v", rel.Passos)
 	}
 }

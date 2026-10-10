@@ -13,6 +13,8 @@ const (
 	MethodEventosAssinar = "eventos.assinar"
 
 	MethodHarnessCapacidades       = "harness.capacidades"
+	MethodHarnessVersoes           = "harness.versoes"
+	MethodHarnessAtualizar         = "harness.atualizar"
 	MethodHarnessComandos          = "harness.comandos"
 	MethodHarnessComandosAnotar    = "harness.comandos.anotar"
 	MethodHarnessComandosConfirmar = "harness.comandos.confirmar"
@@ -21,6 +23,25 @@ const (
 // HarnessCapacidadesParams pede a matriz de capacidades de um harness ou instância; sem Harness, devolve as bases.
 type HarnessCapacidadesParams struct {
 	Harness string `json:"harness,omitempty"`
+}
+
+// HarnessVersoesParams pede a versão instalada/disponível de uma base; sem Harness, devolve todas.
+type HarnessVersoesParams struct {
+	Harness string `json:"harness,omitempty"`
+}
+
+// HarnessAtualizarParams pede a atualização de uma base (ou instância dela). Seco só mostra o plano.
+// Esperar espera os usos terminarem (até EsperaSeg segundos); Para fixa a versão; SimularFalhaTeste
+// força a falha do teste para exercitar a volta automática. A resposta chega quando tudo termina.
+type HarnessAtualizarParams struct {
+	Harness           string `json:"harness"`
+	Seco              bool   `json:"seco,omitempty"`
+	Esperar           bool   `json:"esperar,omitempty"`
+	EsperaSeg         int    `json:"esperaSeg,omitempty"`
+	Para              string `json:"para,omitempty"`
+	Forcar            bool   `json:"forcar,omitempty"`
+	SemVolta          bool   `json:"semVolta,omitempty"`
+	SimularFalhaTeste bool   `json:"simularFalhaTeste,omitempty"`
 }
 
 // HarnessComandosParams pede os comandos nativos de um harness ou instância. CWD (opcional) é a
@@ -43,6 +64,9 @@ const (
 	EventOrqFilhosOrfaos   = "orq.filhos_orfaos"
 	EventOrqMensagem       = "orq.mensagem"
 	EventLimitesAtualizado = "limites.atualizado"
+	// EventHarnessAtualizado é emitido ao fim de cada harness.atualizar real (não na prévia);
+	// o payload é o próprio resultado (antes, depois, resultado, teste).
+	EventHarnessAtualizado = "harness.atualizado"
 )
 
 // OrqInicioParams payload de orq.inicio (um por tentativa).

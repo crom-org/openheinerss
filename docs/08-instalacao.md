@@ -36,6 +36,29 @@ ambiente e pasta, e o comando confere que a porta voltou a responder; `--sem-rei
 não é reiniciado (depende do processo pai). Em outros sistemas não há reinício automático. `--json` devolve o
 plano/resultado para a Central.
 
+## Atualizar os harnesses (claude, codex, opencode, aider, agy)
+
+```bash
+openheinerss harness versoes [--json]      # instalada, como foi instalada e a última oficial
+openheinerss harness atualizar aider --seco  # prévia
+openheinerss harness atualizar aider         # instala, testa e volta sozinho se o teste falhar
+openheinerss harness atualizar --todos --esperar
+```
+
+`versoes` lê `<cli> --version`, descobre o gerenciador pelo caminho real do executável (npm global, `uv tool`,
+pipx, pip `--user`, brew ou o instalador/autoatualização do próprio CLI) e consulta a fonte oficial (npm, PyPI ou
+releases do GitHub); sem rede a última vira `desconhecida`, com o motivo. `atualizar` usa o **mesmo gerenciador**
+(`npm install -g <pkg>@<versão>`, `uv tool install --force <pkg>`, `pipx install --force`, `pip install --user`,
+`<cli> update|upgrade`), guarda a versão anterior e roda o `harness test` real com a instância grátis da base
+(nome com `gratis`/`free`; sem ela, `--version` + `--help`). Se o teste falhar, volta à versão anterior e confirma
+com `--version`. Se algum `rodar`/`serve`/sessão usa o harness, recusa e lista (código 2) ou espera com
+`--esperar`. Métodos sem volta automática (brew, instalador sem versões guardadas) exigem `--sem-volta`.
+`--para <versão>` fixa uma versão; `--simular-falha-teste` força a falha do teste para exercitar a volta.
+Saída: `0` ok/já na última/prévia, `1` erro, `2` em uso, `3` falhou e **voltou**, `4` falhou e a volta não foi
+confirmada. Cada atualização real vira o evento `harness.atualizado` (RPC), uma linha em
+`<config do usuário>/openheinerss/harness-atualizacoes.jsonl` e, se a ajuda do CLI mudou, o cache de
+`capacidades` é recalculado (`capacidades` passa a mostrar `instalada` e `ajudaMudou`).
+
 ## Go
 
 Quem já usa o toolchain Go pode instalar a versão publicada do módulo:

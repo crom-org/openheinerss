@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { spawn, type ChildProcess } from "node:child_process";
-import type { SessionOptions, HarnessRegistration, PermissionRequest, ToolCall, ToolResult, RawLine, RunOptions, RunStarted, RunList, MessageReceipt, Limits, EventFilter, OrchestrationEventName, OrchestrationCallback, HarnessCommand, HarnessCommandList, Identity, Conta, HarnessCapabilities, DryRunResult } from "./types.js";
+import type { SessionOptions, HarnessRegistration, PermissionRequest, ToolCall, ToolResult, RawLine, RunOptions, RunStarted, RunList, MessageReceipt, Limits, EventFilter, OrchestrationEventName, OrchestrationCallback, HarnessCommand, HarnessCommandList, Identity, Conta, HarnessCapabilities, HarnessVersion, HarnessUpdateOptions, HarnessUpdateResult, DryRunResult } from "./types.js";
 
 export * from "./types.js";
 export * from "./react.js";
@@ -61,6 +61,10 @@ export class Openheinerss extends EventEmitter {
   async getLimits(atualizar = false, forcar = false): Promise<Limits> { await this.ensureTransport(); return this.sendRPC("limites.obter", atualizar || forcar ? { atualizar: true, forcar } : {}); }
   /** Matriz de capacidades (instruções, skills, MCP, retomada, permissões); sem harness, devolve as bases. */
   async capacidades(harness?: string): Promise<HarnessCapabilities | { harnesses: HarnessCapabilities[] }> { await this.ensureTransport(); return this.sendRPC("harness.capacidades", harness ? { harness } : {}); }
+  /** Versão instalada, método de instalação e última versão oficial de cada harness base (ou de um só). */
+  async harnessVersions(harness?: string): Promise<{ harnesses: HarnessVersion[] }> { await this.ensureTransport(); return this.sendRPC("harness.versoes", harness ? { harness } : {}); }
+  /** Atualiza um harness base, testa e volta sozinho se falhar (a resposta chega ao fim; com `seco`, só o plano). */
+  async updateHarness(harness: string, options: HarnessUpdateOptions = {}): Promise<HarnessUpdateResult> { await this.ensureTransport(); return this.sendRPC("harness.atualizar", { ...options, harness } as Record<string, unknown>); }
   async identidade(instancia: string): Promise<Identity> { await this.ensureTransport(); return this.sendRPC("instancia.identidade", { instancia }); }
   async listarContas(cwd?: string): Promise<Conta[]> { await this.ensureTransport(); return this.sendRPC("contas.listar", cwd ? { cwd } : {}).then((r: Conta[]) => r); }
   async adicionarConta(harness: string, nome: string, cwd?: string, iniciarLogin = false): Promise<any> { await this.ensureTransport(); return this.sendRPC("contas.adicionar", { harness, nome, cwd, iniciarLogin }); }
@@ -271,7 +275,7 @@ export class Openheinerss extends EventEmitter {
         case "agent.error":
           this.emit("error", p);
           break;
-        case "orq.inicio": case "orq.progresso": case "orq.fim": case "orq.erro": case "orq.precisa_decisao": case "orq.filhos_orfaos": case "orq.mensagem":
+        case "orq.inicio": case "orq.progresso": case "orq.fim": case "orq.erro": case "orq.precisa_decisao": case "orq.filhos_orfaos": case "orq.mensagem": case "harness.atualizado":
           this.emit(msg.method, p);
           break;
       }

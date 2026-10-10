@@ -83,9 +83,10 @@ Os SDKs TypeScript, Python e PHP usam JSON-RPC sobre STDIO por padrão e convers
 `OPENHEINERSS_PORTA` (ou `port`/`wsEndpoint` no TypeScript) quando usar o transporte WebSocket.
 
 Todos expõem sessões, `registerHarness`/`harness.listar`, `rodar.iniciar`, `rodar.listar`,
-`rodar.parar`, `rodar.mensagem` (`sendMessage`/`send_message`), `rodar.decidir`, `limites.obter` e `eventos.assinar`. A assinatura aceita
+`rodar.parar`, `rodar.mensagem` (`sendMessage`/`send_message`), `rodar.decidir`, `limites.obter`, `harness.versoes`
+(`harnessVersions`/`harness_versions`), `harness.atualizar` (`updateHarness`/`update_harness`) e `eventos.assinar`. A assinatura aceita
 `projeto`, `agente`, `cwd` e `pasta`; os callbacks recebem `orq.inicio`, `orq.progresso`,
-`orq.fim`, `orq.erro`, `orq.precisa_decisao` e `orq.mensagem`.
+`orq.fim`, `orq.erro`, `orq.precisa_decisao`, `orq.mensagem` e `harness.atualizado`.
 
 `decideRun(id, resposta, mensagem, run, encerrar)` (Python: `decide_run(..., encerrar=True)`) aceita
 `encerrar` opcional: numa negação, termina a execução com `orq.fim` código 3 e `motivo` `"negado"`,

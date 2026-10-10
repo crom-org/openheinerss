@@ -496,7 +496,8 @@ func versaoDaFonte(repo string) string {
 	if v == "" {
 		v = "dev"
 	}
-	c := gitSaida(repo, "rev-parse", "--short", "HEAD")
+	// Commit completo: é o que o binário instalado grava em `version`, e a comparação é exata.
+	c := gitSaida(repo, "rev-parse", "HEAD")
 	return fmt.Sprintf("%s (main local, commit %s)", v, c)
 }
 
@@ -515,13 +516,29 @@ func commitDaVersao(v string) string {
 	if i < 0 {
 		return ""
 	}
-	return strings.Fields(v[i+len(marcador):])[0]
+	// "(commit <sha>, data ...)" do binário instalado e "commit <sha>)" da fonte: tira a pontuação.
+	f := strings.Fields(v[i+len(marcador):])
+	if len(f) == 0 {
+		return ""
+	}
+	return strings.Trim(f[0], ",)(")
+}
+
+// arvoreSuja diz se a versão da fonte veio de uma árvore com alterações não commitadas
+// ("git describe --dirty"): o binário compilado dela nunca é igual ao do commit instalado.
+func arvoreSuja(disponivel string) bool {
+	v, _, _ := strings.Cut(disponivel, " (")
+	return strings.HasSuffix(strings.TrimSpace(v), "-dirty")
 }
 
 func mesmaVersaoFonte(instalada, disponivel string) bool {
+	if arvoreSuja(disponivel) {
+		return false
+	}
 	ci, cd := commitDaVersao(instalada), commitDaVersao(disponivel)
 	if ci != "" && cd != "" {
-		return ci == cd
+		// Aceita abreviação de um dos lados (binários antigos gravavam o commit curto).
+		return ci == cd || (len(ci) >= 7 && len(cd) >= 7 && (strings.HasPrefix(ci, cd) || strings.HasPrefix(cd, ci)))
 	}
 	return mesmaVersaoRelease(instalada, disponivel)
 }
